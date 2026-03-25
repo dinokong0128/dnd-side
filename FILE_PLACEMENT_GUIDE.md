@@ -87,7 +87,7 @@ dnd-multiplayer/                          ← Your GitHub repo root
 
 | File I Created | Where It Goes | New Filename |
 |---|---|---|
-| `DND_ARCHITECTURE.md` | Root: `dnd-multiplayer/` | `ARCHITECTURE.md` |
+| `DND_ARCHITECTURE.md` | `dnd-multiplayer/docs/` | `ARCHITECTURE.md` |
 | `backend_main.py` | `backend/` | `main.py` |
 | `backend_config.py` | `backend/` | `config.py` |
 | `backend_redis_broker.py` | `backend/` | `redis_broker.py` |
@@ -139,7 +139,7 @@ cp frontend_actions_route.ts frontend/app/api/games/\[gameId\]/actions/route.ts
 
 ### 4. Copy architecture doc
 ```bash
-cp DND_ARCHITECTURE.md ARCHITECTURE.md
+cp DND_ARCHITECTURE.md docs/ARCHITECTURE.md
 ```
 
 ---
@@ -210,7 +210,7 @@ After copying + creating stubs, you'll have the **skeleton**. Then you fill in t
    cp backend_actions_route.py backend/api/routes/actions.py
    cp backend_dm_tasks.py backend/tasks/dm_tasks.py
    cp frontend_actions_route.ts frontend/app/api/games/\[gameId\]/actions/route.ts
-   cp DND_ARCHITECTURE.md ARCHITECTURE.md
+   cp DND_ARCHITECTURE.md docs/ARCHITECTURE.md
    ```
 
 3. **Create empty __init__.py files** so Python recognizes folders as packages:
