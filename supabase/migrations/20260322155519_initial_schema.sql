@@ -132,7 +132,12 @@ begin
   insert into public.profiles (id, username)
   values (
     new.id,
-    coalesce(new.raw_user_meta_data->>'username', split_part(new.email, '@', 1))
+    -- Prefer explicit username from metadata; fall back to email local-part + first 8 chars
+    -- of the user UUID to guarantee uniqueness (e.g. alex_a1b2c3d4 vs alex_e5f6g7h8).
+    coalesce(
+      nullif(trim(new.raw_user_meta_data->>'username'), ''),
+      split_part(new.email, '@', 1) || '_' || substr(replace(new.id::text, '-', ''), 1, 8)
+    )
   );
   return new;
 end;
@@ -209,9 +214,14 @@ create policy "inventory: own player" on public.player_inventory for all
     )
   );
 
--- game_messages: readable by all players in the game; insert by authenticated users in the game
-drop policy if exists "messages: read game"          on public.game_messages;
-drop policy if exists "messages: insert game member" on public.game_messages;
+-- game_messages: readable by all players in the game
+-- Insert is split by role:
+--   • Players may only insert their own messages (role='player', profile_id = caller)
+--   • DM / system messages are written by the FastAPI backend via the service role,
+--     which bypasses RLS entirely — no insert policy is created for those roles.
+drop policy if exists "messages: read game"           on public.game_messages;
+drop policy if exists "messages: insert game member"  on public.game_messages;
+drop policy if exists "messages: insert player"       on public.game_messages;
 create policy "messages: read game" on public.game_messages for select
   using (
     exists (
@@ -220,9 +230,12 @@ create policy "messages: read game" on public.game_messages for select
         and p.profile_id = auth.uid()
     )
   );
-create policy "messages: insert game member" on public.game_messages for insert
+-- Players can only post as themselves with role = 'player'
+create policy "messages: insert player" on public.game_messages for insert
   with check (
-    exists (
+    role = 'player'
+    and profile_id = auth.uid()
+    and exists (
       select 1 from public.players p
       where p.game_id = game_messages.game_id
         and p.profile_id = auth.uid()
