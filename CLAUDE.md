@@ -3,7 +3,7 @@
 **Last Updated:** March 22, 2026  
 **Status:** Architected and ready for implementation  
 **Repository:** Single monorepo (`dnd-side` on GitHub)  
-**Detailed Architecture:** See `ARCHITECTURE.md` (complete design doc)
+**Detailed Architecture:** See `docs/ARCHITECTURE.md` (complete design doc)
 
 ---
 
@@ -25,7 +25,7 @@ A multiplayer D&D app where Claude acts as the Dungeon Master. Players send acti
 | LLM | Claude 3.5 Sonnet | Anthropic API |
 | Embeddings | OpenAI `text-embedding-3-small` | OpenAI API |
 
-**→ Full rationale in ARCHITECTURE.md § "Final Tech Stack"**
+**→ Full rationale in docs/ARCHITECTURE.md § "Final Tech Stack"**
 
 ---
 
@@ -39,7 +39,7 @@ A multiplayer D&D app where Claude acts as the Dungeon Master. Players send acti
 - ✅ Separation of concerns (frontend = UI, backend = logic)
 - ✅ Real async Python backend (learning opportunity)
 
-**→ Detailed flow in ARCHITECTURE.md § "Architecture Decision: Scenario A"**
+**→ Detailed flow in docs/ARCHITECTURE.md § "Architecture Decision: Scenario A"**
 
 ---
 
@@ -47,7 +47,7 @@ A multiplayer D&D app where Claude acts as the Dungeon Master. Players send acti
 
 Monorepo with `/frontend` (Next.js) and `/backend` (FastAPI).
 
-**→ Complete directory tree in ARCHITECTURE.md § "Monorepo Structure"**  
+**→ Complete directory tree in docs/ARCHITECTURE.md § "Monorepo Structure"**  
 **→ File placement guide in FILE_PLACEMENT_GUIDE.md**
 
 ---
@@ -65,7 +65,7 @@ Six tables in Supabase (`ytxncykyfbhoyvxkocrs`):
 | `game_messages` | Chat log, Realtime broadcast |
 | `game_events` | Events with pgvector embeddings (1536-dim) |
 
-**→ Schema details & extensions in original CLAUDE.md**
+**→ Full schema details in `docs/DATA_MODEL.md`**
 
 ---
 
@@ -79,7 +79,7 @@ Six tables in Supabase (`ytxncykyfbhoyvxkocrs`):
 | Monorepo | Single repo | One place for both services |
 | Realtime | Supabase Changes | Native to Postgres, easy broadcast |
 
-**→ Full rationale in ARCHITECTURE.md § "Architecture Decision" sections**
+**→ Full rationale in docs/ARCHITECTURE.md § "Architecture Decision" sections**
 
 ---
 
@@ -102,7 +102,7 @@ Six tables in Supabase (`ytxncykyfbhoyvxkocrs`):
 - Real-time broadcasting
 - Vector search (pgvector)
 
-**→ Detailed boundaries in ARCHITECTURE.md § "Service Boundaries"**
+**→ Detailed boundaries in docs/ARCHITECTURE.md § "Service Boundaries"**
 
 ---
 
@@ -112,7 +112,7 @@ Six tables in Supabase (`ytxncykyfbhoyvxkocrs`):
 - **Backend:** Render (auto-deploy on git push)
 - **All services on free tier**
 
-**→ Deployment details & cost breakdown in ARCHITECTURE.md § "Deployment Strategy"**
+**→ Deployment details & cost breakdown in docs/ARCHITECTURE.md § "Deployment Strategy"**
 
 ---
 
@@ -124,7 +124,7 @@ Six tables in Supabase (`ytxncykyfbhoyvxkocrs`):
 
 **Realtime:** Backend inserts to game_messages → Supabase broadcasts → Frontend re-renders
 
-**→ Code examples in ARCHITECTURE.md § "Key Implementation Notes"**
+**→ Code examples in docs/ARCHITECTURE.md § "Key Implementation Notes"**
 
 ---
 
@@ -136,7 +136,7 @@ Six tables in Supabase (`ytxncykyfbhoyvxkocrs`):
 - [ ] Environment variables configured
 - [ ] Supabase schema finalized
 
-**→ Full checklist in ARCHITECTURE.md § "Checklist Before You Code"**
+**→ Full checklist in docs/ARCHITECTURE.md § "Checklist Before You Code"**
 
 ---
 
@@ -144,7 +144,8 @@ Six tables in Supabase (`ytxncykyfbhoyvxkocrs`):
 
 | Document | Contents |
 |---|---|
-| **ARCHITECTURE.md** | Complete design: flows, decisions, code examples, learning outcomes |
+| **docs/ARCHITECTURE.md** | Complete design: flows, decisions, code examples, learning outcomes |
+| **docs/DATA_MODEL.md** | Tables, columns, enums, indexes, triggers, RLS policies |
 | **FILE_PLACEMENT_GUIDE.md** | Exact file locations & copy-paste instructions |
 | **This file (CLAUDE.md)** | Project overview & reference links |
 
@@ -156,7 +157,7 @@ Six tables in Supabase (`ytxncykyfbhoyvxkocrs`):
 - **Backend:** Type hints, Pydantic validation, docstrings, pytest tests
 - **Both:** Environment variables in `.env`, migrations tracked
 
-**→ Full conventions in ARCHITECTURE.md § "Conventions" (original doc)**
+**→ Full conventions in docs/ARCHITECTURE.md § "Conventions" (original doc)**
 
 ---
 
@@ -178,13 +179,13 @@ Six tables in Supabase (`ytxncykyfbhoyvxkocrs`):
 
 **DevOps:** Monorepo management, GitHub Actions, Vercel + Render deployments
 
-**→ Full learning outcomes in ARCHITECTURE.md § "What You'll Learn"**
+**→ Full learning outcomes in docs/ARCHITECTURE.md § "What You'll Learn"**
 
 ---
 
 ## Next Steps
 
-1. Read ARCHITECTURE.md (complete design north star)
+1. Read docs/ARCHITECTURE.md (complete design north star)
 2. Review FILE_PLACEMENT_GUIDE.md (file locations)
 3. Create monorepo structure
 4. Copy template files
@@ -196,7 +197,7 @@ Six tables in Supabase (`ytxncykyfbhoyvxkocrs`):
 
 ## References
 
-- **Full architecture:** `ARCHITECTURE.md`
+- **Full architecture:** `docs/ARCHITECTURE.md`
 - **File placement:** `FILE_PLACEMENT_GUIDE.md`
 - **GitHub repo:** https://github.com/dinokong0128/dnd-side
 - **Supabase project:** `ytxncykyfbhoyvxkocrs`
@@ -205,4 +206,4 @@ Six tables in Supabase (`ytxncykyfbhoyvxkocrs`):
 
 ## Maintenance
 
-When schema migrations, architecture decisions, or features change, update ARCHITECTURE.md and keep this file as a lightweight reference.
+When schema migrations, architecture decisions, or features change, update `docs/ARCHITECTURE.md` and `docs/DATA_MODEL.md` and keep this file as a lightweight reference.
