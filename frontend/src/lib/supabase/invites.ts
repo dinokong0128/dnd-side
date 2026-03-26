@@ -5,12 +5,9 @@ export async function fetchInviteByCode(
 ): Promise<{ gameId: string } | null> {
   const supabase = await createClient()
 
-  const { data, error } = await supabase
-    .from('invites')
-    .select('game_id')
-    .eq('code', code)
-    .is('used_at', null)
-    .maybeSingle()
+  const { data, error } = await supabase.rpc('validate_invite_code', {
+    invite_code: code,
+  })
 
   if (error) {
     throw new Error(`Failed to fetch invite: ${error.message}`)
@@ -20,5 +17,5 @@ export async function fetchInviteByCode(
     return null
   }
 
-  return { gameId: data.game_id }
+  return { gameId: data as string }
 }

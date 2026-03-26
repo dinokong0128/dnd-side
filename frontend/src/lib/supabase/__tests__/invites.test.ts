@@ -1,32 +1,24 @@
 import { fetchInviteByCode } from '../invites'
 
-const mockMaybeSingle = jest.fn()
-const mockIs = jest.fn(() => ({ maybeSingle: mockMaybeSingle }))
-const mockEq = jest.fn(() => ({ is: mockIs }))
-const mockSelect = jest.fn(() => ({ eq: mockEq }))
-const mockFrom = jest.fn(() => ({ select: mockSelect }))
+const mockRpc = jest.fn()
 
 jest.mock('@/lib/supabase/server', () => ({
   createClient: jest.fn(() =>
     Promise.resolve({
-      from: mockFrom,
+      rpc: mockRpc,
     })
   ),
 }))
 
 beforeEach(() => {
   jest.clearAllMocks()
-  mockFrom.mockReturnValue({ select: mockSelect })
-  mockSelect.mockReturnValue({ eq: mockEq })
-  mockEq.mockReturnValue({ is: mockIs })
-  mockIs.mockReturnValue({ maybeSingle: mockMaybeSingle })
 })
 
 describe('fetchInviteByCode', () => {
   describe('when the code is valid and unused', () => {
     it('returns an object with the gameId', async () => {
-      mockMaybeSingle.mockResolvedValue({
-        data: { game_id: 'game-abc-123' },
+      mockRpc.mockResolvedValue({
+        data: 'game-abc-123',
         error: null,
       })
 
@@ -35,24 +27,23 @@ describe('fetchInviteByCode', () => {
       expect(result).toEqual({ gameId: 'game-abc-123' })
     })
 
-    it('queries the invites table with correct filters', async () => {
-      mockMaybeSingle.mockResolvedValue({
-        data: { game_id: 'game-abc-123' },
+    it('calls the validate_invite_code RPC with the correct argument', async () => {
+      mockRpc.mockResolvedValue({
+        data: 'game-abc-123',
         error: null,
       })
 
       await fetchInviteByCode('MY_CODE')
 
-      expect(mockFrom).toHaveBeenCalledWith('invites')
-      expect(mockSelect).toHaveBeenCalledWith('game_id')
-      expect(mockEq).toHaveBeenCalledWith('code', 'MY_CODE')
-      expect(mockIs).toHaveBeenCalledWith('used_at', null)
+      expect(mockRpc).toHaveBeenCalledWith('validate_invite_code', {
+        invite_code: 'MY_CODE',
+      })
     })
   })
 
   describe('when the code does not exist', () => {
     it('returns null', async () => {
-      mockMaybeSingle.mockResolvedValue({ data: null, error: null })
+      mockRpc.mockResolvedValue({ data: null, error: null })
 
       const result = await fetchInviteByCode('NONEXISTENT')
 
@@ -60,32 +51,31 @@ describe('fetchInviteByCode', () => {
     })
   })
 
-  describe('when the code has already been used (used_at is set)', () => {
-    it('returns null because the is(used_at, null) filter excludes it', async () => {
-      mockMaybeSingle.mockResolvedValue({ data: null, error: null })
+  describe('when the code has already been used', () => {
+    it('returns null because the RPC filters by used_at is null', async () => {
+      mockRpc.mockResolvedValue({ data: null, error: null })
 
       const result = await fetchInviteByCode('USED_CODE')
 
       expect(result).toBeNull()
-      expect(mockIs).toHaveBeenCalledWith('used_at', null)
     })
   })
 
   describe('when Supabase returns an error', () => {
     it('throws with a descriptive error message', async () => {
-      mockMaybeSingle.mockResolvedValue({
+      mockRpc.mockResolvedValue({
         data: null,
-        error: { message: 'relation "invites" does not exist' },
+        error: { message: 'function "validate_invite_code" does not exist' },
       })
 
       await expect(fetchInviteByCode('any')).rejects.toThrow(
-        'Failed to fetch invite: relation "invites" does not exist'
+        'Failed to fetch invite: function "validate_invite_code" does not exist'
       )
     })
 
     it('throws even when data is also present alongside the error', async () => {
-      mockMaybeSingle.mockResolvedValue({
-        data: { game_id: 'some-id' },
+      mockRpc.mockResolvedValue({
+        data: 'some-id',
         error: { message: 'partial failure' },
       })
 
@@ -96,13 +86,15 @@ describe('fetchInviteByCode', () => {
   })
 
   describe('when the code is an empty string', () => {
-    it('still queries Supabase and returns null if no match', async () => {
-      mockMaybeSingle.mockResolvedValue({ data: null, error: null })
+    it('still calls the RPC and returns null if no match', async () => {
+      mockRpc.mockResolvedValue({ data: null, error: null })
 
       const result = await fetchInviteByCode('')
 
       expect(result).toBeNull()
-      expect(mockEq).toHaveBeenCalledWith('code', '')
+      expect(mockRpc).toHaveBeenCalledWith('validate_invite_code', {
+        invite_code: '',
+      })
     })
   })
 })
