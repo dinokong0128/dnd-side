@@ -12,12 +12,12 @@ from datetime import datetime
 import logging
 
 from config import supabase_client, anthropic_client, openai_client
-from redis_broker import dramatiq_app
+import redis_broker  # noqa: F401 — ensure broker is set before defining actors
 from services.dm_service import extract_events_from_response
 
 logger = logging.getLogger(__name__)
 
-@dramatiq_app.actor(max_retries=3, min_backoff=1000)
+@dramatiq.actor(max_retries=3, min_backoff=1000)
 def dm_response_task(
     game_id: str,
     action_id: str,
@@ -150,7 +150,7 @@ PLAYER ACTION:
         # Dramatiq will retry up to 3 times with exponential backoff
         raise
 
-@dramatiq_app.actor()
+@dramatiq.actor()
 def aggregation_task(game_id: str):
     """
     Background task: Summarize long campaigns
