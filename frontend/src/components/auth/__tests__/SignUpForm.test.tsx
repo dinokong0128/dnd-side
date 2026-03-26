@@ -2,19 +2,11 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { SignUpForm } from '../SignUpForm'
 
-const mockSignUp = jest.fn()
-
-jest.mock('@/lib/supabase/client', () => ({
-  createClient: () => ({
-    auth: {
-      signUp: mockSignUp,
-    },
-  }),
-}))
+const mockFetch = jest.fn()
+global.fetch = mockFetch
 
 beforeEach(() => {
   jest.clearAllMocks()
-  process.env.NEXT_PUBLIC_SITE_URL = 'http://localhost:3000'
 })
 
 describe('SignUpForm', () => {
@@ -101,7 +93,7 @@ describe('SignUpForm', () => {
       })
     })
 
-    it('does not call signUp when validation fails', async () => {
+    it('does not call the API when validation fails', async () => {
       const user = userEvent.setup()
       render(<SignUpForm {...defaultProps} />)
 
@@ -112,12 +104,15 @@ describe('SignUpForm', () => {
           screen.getByText(/Please enter a valid email address/)
         ).toBeInTheDocument()
       })
-      expect(mockSignUp).not.toHaveBeenCalled()
+      expect(mockFetch).not.toHaveBeenCalled()
     })
 
     it('clears previous validation errors on re-submit', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: true }),
+      })
       const user = userEvent.setup()
-      mockSignUp.mockResolvedValue({ data: {}, error: null })
       render(<SignUpForm {...defaultProps} />)
 
       // First submit: triggers validation errors
@@ -141,7 +136,10 @@ describe('SignUpForm', () => {
     })
 
     it('accepts password of exactly 8 characters', async () => {
-      mockSignUp.mockResolvedValue({ data: {}, error: null })
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: true }),
+      })
       const user = userEvent.setup()
       render(<SignUpForm {...defaultProps} />)
 
@@ -150,14 +148,17 @@ describe('SignUpForm', () => {
       await user.click(screen.getByTestId('submit-button'))
 
       await waitFor(() => {
-        expect(mockSignUp).toHaveBeenCalled()
+        expect(mockFetch).toHaveBeenCalled()
       })
     })
   })
 
   describe('successful submission', () => {
-    it('calls supabase.auth.signUp with correct email and password', async () => {
-      mockSignUp.mockResolvedValue({ data: {}, error: null })
+    it('sends a POST to /api/auth/signup with invite code and game ID', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: true }),
+      })
       const user = userEvent.setup()
       render(<SignUpForm {...defaultProps} />)
 
@@ -166,41 +167,45 @@ describe('SignUpForm', () => {
       await user.click(screen.getByTestId('submit-button'))
 
       await waitFor(() => {
-        expect(mockSignUp).toHaveBeenCalledWith({
-          email: 'hero@example.com',
-          password: 'strongpass99',
-          options: {
-            emailRedirectTo:
-              'http://localhost:3000/auth/callback?next=/games/game-123',
-          },
+        expect(mockFetch).toHaveBeenCalledWith('/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: 'hero@example.com',
+            password: 'strongpass99',
+            invite_code: 'invite-abc',
+            game_id: 'game-123',
+          }),
         })
       })
     })
 
-    it('includes the gameId in the emailRedirectTo callback URL', async () => {
-      mockSignUp.mockResolvedValue({ data: {}, error: null })
+    it('passes custom gameId and inviteCode from props', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: true }),
+      })
       const user = userEvent.setup()
-      render(<SignUpForm gameId="custom-game-id" inviteCode="code" />)
+      render(<SignUpForm gameId="custom-game-id" inviteCode="custom-code" />)
 
       await user.type(screen.getByTestId('email-input'), 'test@example.com')
       await user.type(screen.getByTestId('password-input'), 'password123')
       await user.click(screen.getByTestId('submit-button'))
 
       await waitFor(() => {
-        expect(mockSignUp).toHaveBeenCalledWith(
-          expect.objectContaining({
-            options: {
-              emailRedirectTo: expect.stringContaining(
-                '/auth/callback?next=/games/custom-game-id'
-              ),
-            },
-          })
+        const body = JSON.parse(
+          (mockFetch.mock.calls[0][1] as RequestInit).body as string
         )
+        expect(body.invite_code).toBe('custom-code')
+        expect(body.game_id).toBe('custom-game-id')
       })
     })
 
     it('shows success message after successful sign up', async () => {
-      mockSignUp.mockResolvedValue({ data: {}, error: null })
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: true }),
+      })
       const user = userEvent.setup()
       render(<SignUpForm {...defaultProps} />)
 
@@ -217,7 +222,10 @@ describe('SignUpForm', () => {
     })
 
     it('hides the form after successful sign up', async () => {
-      mockSignUp.mockResolvedValue({ data: {}, error: null })
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: true }),
+      })
       const user = userEvent.setup()
       render(<SignUpForm {...defaultProps} />)
 
@@ -234,10 +242,10 @@ describe('SignUpForm', () => {
   })
 
   describe('error handling', () => {
-    it('shows the Supabase error message in form-error', async () => {
-      mockSignUp.mockResolvedValue({
-        data: {},
-        error: { message: 'User already registered' },
+    it('shows the server error message in form-error', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        json: () => Promise.resolve({ error: 'User already registered' }),
       })
       const user = userEvent.setup()
       render(<SignUpForm {...defaultProps} />)
@@ -253,10 +261,30 @@ describe('SignUpForm', () => {
       })
     })
 
+    it('shows error when invite code is invalid (403)', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        json: () =>
+          Promise.resolve({ error: 'Invalid or expired invite code' }),
+      })
+      const user = userEvent.setup()
+      render(<SignUpForm {...defaultProps} />)
+
+      await user.type(screen.getByTestId('email-input'), 'test@example.com')
+      await user.type(screen.getByTestId('password-input'), 'password123')
+      await user.click(screen.getByTestId('submit-button'))
+
+      await waitFor(() => {
+        expect(screen.getByTestId('form-error')).toHaveTextContent(
+          'Invalid or expired invite code'
+        )
+      })
+    })
+
     it('does not show success message on error', async () => {
-      mockSignUp.mockResolvedValue({
-        data: {},
-        error: { message: 'Signup disabled' },
+      mockFetch.mockResolvedValue({
+        ok: false,
+        json: () => Promise.resolve({ error: 'Signup disabled' }),
       })
       const user = userEvent.setup()
       render(<SignUpForm {...defaultProps} />)
@@ -272,9 +300,9 @@ describe('SignUpForm', () => {
     })
 
     it('keeps the form visible so user can correct and retry', async () => {
-      mockSignUp.mockResolvedValue({
-        data: {},
-        error: { message: 'Error' },
+      mockFetch.mockResolvedValue({
+        ok: false,
+        json: () => Promise.resolve({ error: 'Error' }),
       })
       const user = userEvent.setup()
       render(<SignUpForm {...defaultProps} />)
@@ -289,14 +317,30 @@ describe('SignUpForm', () => {
       expect(screen.getByTestId('email-input')).toBeInTheDocument()
       expect(screen.getByTestId('submit-button')).toBeInTheDocument()
     })
+
+    it('shows generic error when fetch throws (network error)', async () => {
+      mockFetch.mockRejectedValue(new Error('Network error'))
+      const user = userEvent.setup()
+      render(<SignUpForm {...defaultProps} />)
+
+      await user.type(screen.getByTestId('email-input'), 'test@example.com')
+      await user.type(screen.getByTestId('password-input'), 'password123')
+      await user.click(screen.getByTestId('submit-button'))
+
+      await waitFor(() => {
+        expect(screen.getByTestId('form-error')).toHaveTextContent(
+          'An unexpected error occurred'
+        )
+      })
+    })
   })
 
   describe('loading state', () => {
     it('disables the submit button while loading', async () => {
-      let resolveSignUp: (value: unknown) => void
-      mockSignUp.mockReturnValue(
+      let resolveFetch: (value: unknown) => void
+      mockFetch.mockReturnValue(
         new Promise((resolve) => {
-          resolveSignUp = resolve
+          resolveFetch = resolve
         })
       )
       const user = userEvent.setup()
@@ -308,7 +352,10 @@ describe('SignUpForm', () => {
 
       expect(screen.getByTestId('submit-button')).toBeDisabled()
 
-      resolveSignUp!({ data: {}, error: null })
+      resolveFetch!({
+        ok: true,
+        json: () => Promise.resolve({ success: true }),
+      })
       await waitFor(() => {
         expect(screen.getByTestId('success-message')).toBeInTheDocument()
       })

@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/client'
 
 const signUpSchema = z.object({
   email: z.email({ error: 'Please enter a valid email address' }),
@@ -16,7 +15,7 @@ type SignUpFormProps = {
   inviteCode: string
 }
 
-export function SignUpForm({ gameId }: SignUpFormProps) {
+export function SignUpForm({ gameId, inviteCode }: SignUpFormProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
@@ -44,21 +43,26 @@ export function SignUpForm({ gameId }: SignUpFormProps) {
 
     setLoading(true)
     try {
-      const supabase = createClient()
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/games/${gameId}`,
-        },
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          password,
+          invite_code: inviteCode,
+          game_id: gameId,
+        }),
       })
 
-      if (error) {
-        setFormError(error.message)
+      if (!response.ok) {
+        const data = await response.json()
+        setFormError(data.error || 'Failed to create account')
         return
       }
 
       setSuccess(true)
+    } catch {
+      setFormError('An unexpected error occurred')
     } finally {
       setLoading(false)
     }
