@@ -11,8 +11,6 @@ const createGameBodySchema = z.object({
   dm_persona: z.string().optional(),
 })
 
-const DEFAULT_DM_PERSONA = 'A classic high-fantasy D&D adventure.'
-
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const cookieStore = await cookies()
@@ -34,10 +32,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     )
 
     const {
-      data: { user },
-    } = await supabase.auth.getUser()
+      data: { session },
+    } = await supabase.auth.getSession()
 
-    if (!user) {
+    if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -51,26 +49,30 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       )
     }
 
-    const dmPersona = parsed.data.dm_persona?.trim() || DEFAULT_DM_PERSONA
-
-    const { data: game, error } = await supabase
-      .from('games')
-      .insert({
+    const backendUrl =
+      process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+    const response = await fetch(`${backendUrl}/games`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
         name: parsed.data.name,
-        dm_persona: dmPersona,
-        created_by: user.id,
-      })
-      .select('id, name, dm_persona, status, created_at')
-      .single()
+        dm_persona: parsed.data.dm_persona,
+      }),
+    })
 
-    if (error) {
+    if (!response.ok) {
+      const errorData = await response.json()
       return NextResponse.json(
-        { error: 'Failed to create game' },
-        { status: 500 }
+        { error: errorData.detail || 'Backend error' },
+        { status: response.status }
       )
     }
 
-    return NextResponse.json(game, { status: 201 })
+    const data = await response.json()
+    return NextResponse.json(data, { status: 201 })
   } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
