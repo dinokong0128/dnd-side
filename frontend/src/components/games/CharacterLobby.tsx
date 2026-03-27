@@ -48,8 +48,14 @@ export function CharacterLobby({
           onEdit={() => setEditing(true)}
         />
       ) : (
-        <div className="rounded-lg border border-gray-700 bg-gray-800/30 p-6 text-center">
-          <p className="text-sm text-gray-400">
+        <div
+          className="rounded-lg p-6 text-center"
+          style={{
+            background: 'rgba(25,21,15,0.6)',
+            border: '1px solid #2d2518',
+          }}
+        >
+          <p className="text-sm" style={{ color: '#6a5a3a' }}>
             The game has started. Character creation is closed.
           </p>
         </div>

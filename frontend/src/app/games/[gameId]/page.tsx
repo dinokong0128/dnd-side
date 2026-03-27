@@ -21,12 +21,18 @@ export default async function GameLobbyPage({
   if (!game) {
     return (
       <div className="mx-auto max-w-md p-8">
-        <h1 className="text-2xl font-bold">Game not found</h1>
+        <h1
+          className="text-2xl font-bold"
+          style={{ color: '#e8d5a3', fontFamily: 'Georgia, "Times New Roman", serif' }}
+        >
+          Game not found
+        </h1>
         <Link
           href="/dashboard"
-          className="mt-4 inline-block text-sm text-amber-400 hover:underline"
+          className="mt-4 inline-block text-sm hover:opacity-80"
+          style={{ color: '#b09050' }}
         >
-          Back to Dashboard
+          &larr; Back to Dashboard
         </Link>
       </div>
     )
@@ -37,38 +43,63 @@ export default async function GameLobbyPage({
     : null
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-8">
-      {/* Game Header */}
-      <div className="mb-6">
-        <Link
-          href="/dashboard"
-          className="mb-2 inline-block text-xs text-gray-500 hover:text-gray-300"
-        >
-          &larr; Dashboard
-        </Link>
-        <h1 className="text-2xl font-bold tracking-tight text-gray-100">
-          {game.name}
-        </h1>
-        <div className="mt-1 flex items-center gap-2">
-          <span className="rounded bg-gray-700 px-2 py-0.5 text-xs uppercase tracking-wide text-gray-300">
-            {game.status}
-          </span>
+    <div
+      className="min-h-screen"
+      style={{
+        background: 'radial-gradient(ellipse at top, #141008 0%, #0a0804 60%, #050302 100%)',
+      }}
+    >
+      <div className="mx-auto max-w-lg px-4 py-8">
+        {/* Game Header */}
+        <div className="mb-6">
+          <Link
+            href="/dashboard"
+            className="mb-3 inline-block text-[11px] uppercase tracking-widest transition-opacity hover:opacity-80"
+            style={{ color: '#6a5a3a' }}
+          >
+            &larr; Dashboard
+          </Link>
+          <h1
+            className="text-2xl font-bold"
+            style={{ color: '#e8d5a3', fontFamily: 'Georgia, "Times New Roman", serif' }}
+          >
+            {game.name}
+          </h1>
+          <div className="mt-2 flex items-center gap-2">
+            <span
+              className="inline-block h-1.5 w-1.5 rounded-full"
+              style={{
+                backgroundColor:
+                  game.status === 'active'
+                    ? '#5a8a3a'
+                    : game.status === 'lobby'
+                      ? '#c4a040'
+                      : '#4a4030',
+              }}
+            />
+            <span
+              className="text-[11px] font-bold uppercase tracking-[0.15em]"
+              style={{ color: '#6a5a3a' }}
+            >
+              {game.status}
+            </span>
+          </div>
         </div>
-      </div>
 
-      {/* Character Section */}
-      <CharacterLobby
-        gameId={gameId}
-        gameStatus={game.status}
-        initialPlayer={player ? {
-          id: player.id,
-          character_name: player.character_name,
-          character_class: player.character_class,
-          hp_current: player.hp_current,
-          hp_max: player.hp_max,
-          stats: player.stats as Record<string, number>,
-        } : null}
-      />
+        {/* Character Section */}
+        <CharacterLobby
+          gameId={gameId}
+          gameStatus={game.status}
+          initialPlayer={player ? {
+            id: player.id,
+            character_name: player.character_name,
+            character_class: player.character_class,
+            hp_current: player.hp_current,
+            hp_max: player.hp_max,
+            stats: player.stats as Record<string, number>,
+          } : null}
+        />
+      </div>
     </div>
   )
 }
