@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { CharacterCreationForm } from '@/components/games/CharacterCreationForm'
 import { CharacterSummaryCard } from '@/components/games/CharacterSummaryCard'
+import { InventoryPanel } from '@/components/games/InventoryPanel'
 
 type CharacterData = {
   id: string
@@ -13,33 +14,56 @@ type CharacterData = {
   stats: Record<string, number>
 }
 
+type InventoryItem = {
+  id: string
+  item_name: string
+  quantity: number
+  properties: Record<string, unknown> | null
+}
+
 export function CharacterLobby({
   gameId,
   gameStatus,
   initialPlayer,
+  initialInventory,
 }: {
   gameId: string
   gameStatus: string
   initialPlayer: CharacterData | null
+  initialInventory: InventoryItem[]
 }) {
   const [character, setCharacter] = useState<CharacterData | null>(
     initialPlayer
   )
+  const [inventory, setInventory] = useState<InventoryItem[]>(initialInventory)
   const [editing, setEditing] = useState(false)
 
   const canEdit = gameStatus === 'lobby' || gameStatus === 'pending'
   const showForm = canEdit && (!character || editing)
 
+  async function handleSave(saved: CharacterData) {
+    setCharacter(saved)
+    setEditing(false)
+
+    // Fetch updated inventory after save
+    try {
+      const res = await fetch(`/api/games/${gameId}/players/inventory`)
+      if (res.ok) {
+        const data = await res.json()
+        setInventory(data)
+      }
+    } catch {
+      // Inventory fetch failed silently — panel will show stale or empty data
+    }
+  }
+
   return (
-    <div data-testid="character-lobby">
+    <div data-testid="character-lobby" className="space-y-4">
       {showForm ? (
         <CharacterCreationForm
           gameId={gameId}
           existingCharacter={editing ? character : null}
-          onSave={(saved) => {
-            setCharacter(saved)
-            setEditing(false)
-          }}
+          onSave={handleSave}
         />
       ) : character ? (
         <CharacterSummaryCard
@@ -60,6 +84,8 @@ export function CharacterLobby({
           </p>
         </div>
       )}
+
+      <InventoryPanel items={inventory} hasCharacter={!!character} />
     </div>
   )
 }

@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { CLASS_STARTING_INVENTORY } from '@/lib/constants/starting-inventory'
 
 const D5E_CLASSES = [
   'Fighter',
@@ -148,6 +149,19 @@ export async function POST(
       )
     }
 
+    // Populate starting inventory for the new character
+    const inventoryError = await setStartingInventory(
+      supabase,
+      player.id,
+      character_class
+    )
+    if (inventoryError) {
+      return NextResponse.json(
+        { error: `Character saved but inventory failed: ${inventoryError}` },
+        { status: 500 }
+      )
+    }
+
     return NextResponse.json(player, { status: 201 })
   } catch {
     return NextResponse.json(
@@ -212,6 +226,19 @@ export async function PATCH(
       )
     }
 
+    // Reset inventory to match the (possibly new) class
+    const inventoryError = await setStartingInventory(
+      supabase,
+      player.id,
+      character_class
+    )
+    if (inventoryError) {
+      return NextResponse.json(
+        { error: `Character updated but inventory reset failed: ${inventoryError}` },
+        { status: 500 }
+      )
+    }
+
     return NextResponse.json(player)
   } catch {
     return NextResponse.json(
@@ -219,4 +246,42 @@ export async function PATCH(
       { status: 500 }
     )
   }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function setStartingInventory(
+  supabase: any,
+  playerId: string,
+  characterClass: string
+): Promise<string | null> {
+  const items = CLASS_STARTING_INVENTORY[characterClass]
+  if (!items) return null
+
+  // Delete existing inventory (idempotent reset)
+  const { error: deleteError } = await supabase
+    .from('player_inventory')
+    .delete()
+    .eq('player_id', playerId)
+
+  if (deleteError) {
+    return `Failed to clear inventory: ${deleteError.message}`
+  }
+
+  // Insert new class items
+  const rows = items.map((item) => ({
+    player_id: playerId,
+    item_name: item.item_name,
+    quantity: item.quantity,
+    properties: item.properties,
+  }))
+
+  const { error: insertError } = await supabase
+    .from('player_inventory')
+    .insert(rows)
+
+  if (insertError) {
+    return `Failed to insert inventory: ${insertError.message}`
+  }
+
+  return null
 }
