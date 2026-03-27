@@ -1,35 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
+import type { Player, InventoryItem } from '@/types/player'
 
-export type PlayerStats = {
-  str: number
-  dex: number
-  con: number
-  int: number
-  wis: number
-  cha: number
-}
-
-export type Player = {
-  id: string
-  game_id: string
-  profile_id: string
-  character_name: string
-  character_class: string
-  hp_current: number
-  hp_max: number
-  stats: PlayerStats
-  status: string
-  joined_at: string
-}
-
-export type InventoryItem = {
-  id: string
-  player_id: string
-  item_name: string
-  quantity: number
-  properties: Record<string, unknown> | null
-  created_at: string
-}
+export type { Player, PlayerStats, InventoryItem } from '@/types/player'
 
 const PLAYER_COLUMNS =
   'id, game_id, profile_id, character_name, character_class, hp_current, hp_max, stats, status, joined_at'

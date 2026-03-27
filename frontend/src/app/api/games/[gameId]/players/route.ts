@@ -2,21 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-
-const D5E_CLASSES = [
-  'Fighter',
-  'Wizard',
-  'Rogue',
-  'Cleric',
-  'Ranger',
-  'Barbarian',
-  'Paladin',
-  'Druid',
-  'Bard',
-  'Monk',
-  'Sorcerer',
-  'Warlock',
-] as const
+import { D5E_CLASSES, CLASS_HIT_DIE } from '@/lib/config/character'
 
 const statSchema = z.number().int().min(1).max(20)
 
@@ -37,21 +23,6 @@ const characterSchema = z.object({
     cha: statSchema,
   }),
 })
-
-const CLASS_HIT_DIE: Record<string, number> = {
-  Barbarian: 12,
-  Fighter: 10,
-  Paladin: 10,
-  Ranger: 10,
-  Bard: 8,
-  Cleric: 8,
-  Druid: 8,
-  Monk: 8,
-  Rogue: 8,
-  Warlock: 8,
-  Sorcerer: 6,
-  Wizard: 6,
-}
 
 function calculateHpMax(characterClass: string, conScore: number): number {
   const hitDie = CLASS_HIT_DIE[characterClass] ?? 8

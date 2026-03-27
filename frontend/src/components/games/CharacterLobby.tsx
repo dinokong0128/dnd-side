@@ -3,15 +3,7 @@
 import { useState } from 'react'
 import { CharacterCreationForm } from '@/components/games/CharacterCreationForm'
 import { CharacterSummaryCard } from '@/components/games/CharacterSummaryCard'
-
-type CharacterData = {
-  id: string
-  character_name: string
-  character_class: string
-  hp_current: number
-  hp_max: number
-  stats: Record<string, number>
-}
+import type { CharacterData } from '@/types/player'
 
 export function CharacterLobby({
   gameId,

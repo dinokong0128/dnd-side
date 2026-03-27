@@ -1,23 +1,7 @@
 'use client'
 
-const ABILITY_ORDER = ['str', 'dex', 'con', 'int', 'wis', 'cha'] as const
-const ABILITY_LABELS: Record<string, string> = {
-  str: 'STR',
-  dex: 'DEX',
-  con: 'CON',
-  int: 'INT',
-  wis: 'WIS',
-  cha: 'CHA',
-}
-
-type CharacterData = {
-  id: string
-  character_name: string
-  character_class: string
-  hp_current: number
-  hp_max: number
-  stats: Record<string, number>
-}
+import { ABILITY_NAMES, ABILITY_LABELS } from '@/lib/config/character'
+import type { CharacterData } from '@/types/player'
 
 function getModifier(score: number): string {
   const mod = Math.floor((score - 10) / 2)
@@ -51,7 +35,7 @@ export function CharacterSummaryCard({
       </div>
 
       <div className="grid grid-cols-6 gap-2">
-        {ABILITY_ORDER.map((stat) => {
+        {ABILITY_NAMES.map((stat) => {
           const score = character.stats[stat] ?? 10
           return (
             <div
