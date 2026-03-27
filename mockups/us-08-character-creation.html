@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>US-08 Character Creation - UI Mockup</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0a; color: #ededed; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .page { max-width: 520px; margin: 0 auto; padding: 32px 16px; }
+  .back { font-size: 11px; color: #6b7280; text-decoration: none; display: inline-block; margin-bottom: 8px; }
+  h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; color: #f3f4f6; }
+  .status-badge { display: inline-block; background: #374151; color: #d1d5db; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 8px; border-radius: 4px; margin-top: 4px; }
+  .section { margin-top: 24px; }
+
+  /* Form Styles */
+  .form-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .form-header h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+  .hp-badge { background: rgba(220,38,38,0.15); color: #fca5a5; font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 9999px; }
+  label { display: block; font-size: 13px; font-weight: 500; color: #9ca3af; margin-bottom: 4px; }
+  input[type="text"], select { width: 100%; background: #1f2937; border: 1px solid #4b5563; border-radius: 6px; padding: 8px 12px; color: #f3f4f6; font-size: 14px; outline: none; margin-bottom: 16px; }
+  input:focus, select:focus { border-color: #d97706; box-shadow: 0 0 0 1px #d97706; }
+  .stat-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .std-array-btn { font-size: 12px; color: #fbbf24; background: none; border: none; cursor: pointer; text-decoration: underline; }
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+  .stat-box label { text-align: center; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #6b7280; }
+  .stat-box input { text-align: center; font-size: 18px; font-weight: 600; padding: 8px 4px; }
+  .submit-btn { width: 100%; background: #d97706; color: white; border: none; border-radius: 6px; padding: 10px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  .submit-btn:hover { background: #f59e0b; }
+
+  /* Summary Card */
+  .summary-card { background: rgba(31,41,55,0.5); border: 1px solid #374151; border-radius: 8px; padding: 20px; }
+  .summary-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .char-name { font-size: 18px; font-weight: 700; color: #f3f4f6; }
+  .char-class { font-size: 14px; color: #fbbf24; margin-top: 2px; }
+  .hp-pill { background: rgba(127,29,29,0.4); color: #fca5a5; font-size: 14px; font-weight: 600; padding: 4px 12px; border-radius: 9999px; }
+  .stat-display { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  .stat-cell { background: rgba(17,24,39,0.5); border: 1px solid #374151; border-radius: 6px; padding: 8px 0; text-align: center; }
+  .stat-cell .label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: #6b7280; }
+  .stat-cell .value { font-size: 18px; font-weight: 700; color: #f3f4f6; }
+  .stat-cell .mod { font-size: 12px; color: #9ca3af; }
+  .edit-btn { width: 100%; margin-top: 16px; background: transparent; border: 1px solid #4b5563; color: #9ca3af; border-radius: 6px; padding: 8px; font-size: 14px; cursor: pointer; }
+  .edit-btn:hover { border-color: #d97706; color: #fbbf24; }
+
+  .divider { border: none; border-top: 1px dashed #374151; margin: 40px 0 20px; }
+  .mockup-label { text-align: center; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 16px; }
+</style>
+</head>
+<body>
+
+<!-- STATE 1: Character Creation Form -->
+<div class="page">
+  <div class="mockup-label">State 1: Character Creation Form</div>
+  <a class="back" href="#">&larr; Dashboard</a>
+  <h1>Dragon's Keep</h1>
+  <span class="status-badge">lobby</span>
+
+  <div class="section">
+    <div class="form-header">
+      <h2>Create Your Character</h2>
+      <span class="hp-badge">HP 12</span>
+    </div>
+
+    <label>Character Name</label>
+    <input type="text" value="Thorin Oakenshield" placeholder="Thorin Oakenshield">
+
+    <label>Class</label>
+    <select><option>Fighter</option></select>
+
+    <div class="stat-header">
+      <label style="margin-bottom:0">Ability Scores</label>
+      <button class="std-array-btn">Use Standard Array</button>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-box"><label>STR</label><input type="text" value="15"></div>
+      <div class="stat-box"><label>DEX</label><input type="text" value="12"></div>
+      <div class="stat-box"><label>CON</label><input type="text" value="14"></div>
+      <div class="stat-box"><label>INT</label><input type="text" value="10"></div>
+      <div class="stat-box"><label>WIS</label><input type="text" value="11"></div>
+      <div class="stat-box"><label>CHA</label><input type="text" value="8"></div>
+    </div>
+
+    <button class="submit-btn">Save Character</button>
+  </div>
+</div>
+
+<hr class="divider" style="max-width:520px;margin-left:auto;margin-right:auto;">
+
+<!-- STATE 2: Character Summary Card (post-save) -->
+<div class="page" style="padding-top: 16px;">
+  <div class="mockup-label">State 2: Character Summary Card (post-save)</div>
+  <a class="back" href="#">&larr; Dashboard</a>
+  <h1>Dragon's Keep</h1>
+  <span class="status-badge">lobby</span>
+
+  <div class="section">
+    <div class="summary-card">
+      <div class="summary-top">
+        <div>
+          <div class="char-name">Thorin Oakenshield</div>
+          <div class="char-class">Fighter</div>
+        </div>
+        <span class="hp-pill">HP 12/12</span>
+      </div>
+      <div class="stat-display">
+        <div class="stat-cell"><div class="label">STR</div><div class="value">15</div><div class="mod">+2</div></div>
+        <div class="stat-cell"><div class="label">DEX</div><div class="value">12</div><div class="mod">+1</div></div>
+        <div class="stat-cell"><div class="label">CON</div><div class="value">14</div><div class="mod">+2</div></div>
+        <div class="stat-cell"><div class="label">INT</div><div class="value">10</div><div class="mod">+0</div></div>
+        <div class="stat-cell"><div class="label">WIS</div><div class="value">11</div><div class="mod">+0</div></div>
+        <div class="stat-cell"><div class="label">CHA</div><div class="value">8</div><div class="mod">-1</div></div>
+      </div>
+      <button class="edit-btn">Edit Character</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
