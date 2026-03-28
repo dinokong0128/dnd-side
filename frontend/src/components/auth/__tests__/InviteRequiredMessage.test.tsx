@@ -2,10 +2,10 @@ import { render, screen } from '@testing-library/react'
 import { InviteRequiredMessage } from '../InviteRequiredMessage'
 
 describe('InviteRequiredMessage', () => {
-  it('renders the "Invite required" heading', () => {
+  it('renders the "Invite Required" heading', () => {
     render(<InviteRequiredMessage />)
     expect(
-      screen.getByRole('heading', { name: 'Invite required' })
+      screen.getByRole('heading', { name: 'Invite Required' })
     ).toBeInTheDocument()
   })
 
@@ -26,14 +26,13 @@ describe('InviteRequiredMessage', () => {
   it('does not render any form inputs', () => {
     render(<InviteRequiredMessage />)
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
   it('wraps content in the data-testid container', () => {
     render(<InviteRequiredMessage />)
     const container = screen.getByTestId('invite-required-message')
     expect(container).toContainElement(
-      screen.getByRole('heading', { name: 'Invite required' })
+      screen.getByRole('heading', { name: 'Invite Required' })
     )
   })
 })

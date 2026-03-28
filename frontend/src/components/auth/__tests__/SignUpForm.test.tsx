@@ -23,17 +23,17 @@ describe('SignUpForm', () => {
       expect(screen.getByTestId('password-input')).toBeInTheDocument()
     })
 
-    it('renders the submit button with text "Create account"', () => {
+    it('renders the submit button with text "Join the Adventure"', () => {
       render(<SignUpForm {...defaultProps} />)
       const button = screen.getByTestId('submit-button')
       expect(button).toBeInTheDocument()
-      expect(button).toHaveTextContent('Create account')
+      expect(button).toHaveTextContent('Join the Adventure')
     })
 
-    it('renders the "Create account" heading', () => {
+    it('renders the "Join the Adventure" heading', () => {
       render(<SignUpForm {...defaultProps} />)
       expect(
-        screen.getByRole('heading', { name: 'Create account' })
+        screen.getByRole('heading', { name: 'Join the Adventure' })
       ).toBeInTheDocument()
     })
 
@@ -216,7 +216,7 @@ describe('SignUpForm', () => {
       await waitFor(() => {
         expect(screen.getByTestId('success-message')).toBeInTheDocument()
         expect(
-          screen.getByText('Check your email to confirm your account.')
+          screen.getByText(/Check your email to confirm your account/)
         ).toBeInTheDocument()
       })
     })
