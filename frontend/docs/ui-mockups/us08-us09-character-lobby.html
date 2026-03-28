@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>US-08 + US-09 — Character Creation & Inventory — UI Mockup</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
+
+    /* ─── Reset ─── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ─── Design Tokens ─── */
+    :root {
+      --bg-deep:      #0d0b09;
+      --bg-card:      #1a1714;
+      --bg-input:     #12100d;
+      --border-card:  #2a2520;
+      --border-input: #3a3530;
+      --border-focus: #c9a84c;
+      --gold:         #c9a84c;
+      --gold-dim:     #8a7535;
+      --gold-glow:    rgba(201, 168, 76, 0.12);
+      --text-primary: #e8e0d4;
+      --text-muted:   #9a9088;
+      --text-dim:     #6a6258;
+      --crimson:      #b44040;
+      --crimson-dim:  #3a1818;
+      --emerald:      #4a9a6a;
+      --emerald-dim:  #1a3a28;
+      --steel:        #5a7a9a;
+      --steel-dim:    #1a2a3a;
+      --amethyst:     #8a5ab0;
+      --amethyst-dim: #2a1a3a;
+      --olive:        #7a8a3a;
+      --olive-dim:    #2a2a1a;
+      --amber:        #b08a3a;
+      --amber-dim:    #3a2a1a;
+      --khaki:        #9a8a5a;
+      --khaki-dim:    #2a2a1a;
+      --font-display: 'Cinzel', serif;
+      --font-body:    'Crimson Text', serif;
+    }
+
+    body {
+      background: var(--bg-deep);
+      background-image:
+        radial-gradient(ellipse at 30% 20%, rgba(201,168,76,0.03) 0%, transparent 50%),
+        radial-gradient(ellipse at 70% 80%, rgba(100,60,30,0.04) 0%, transparent 50%);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      font-size: 17px;
+      line-height: 1.6;
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .page-title {
+      font-family: var(--font-display);
+      text-align: center;
+      font-size: 14px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 48px;
+    }
+
+    .states-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+      gap: 48px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .state-label {
+      font-family: var(--font-display);
+      font-size: 11px;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: var(--gold-dim);
+      margin-bottom: 16px;
+      padding-left: 4px;
+    }
+
+    /* ─── Card ─── */
+    .dnd-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 8px;
+      overflow: hidden;
+      position: relative;
+    }
+    .dnd-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    }
+    .dnd-card-body {
+      padding: 32px;
+    }
+
+    /* ─── Card Header ─── */
+    .card-heading {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: 0.5px;
+    }
+    .card-subheading {
+      font-size: 15px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* ─── Form ─── */
+    .form-group { margin-top: 24px; }
+    .form-label {
+      display: block;
+      font-family: var(--font-display);
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .form-input, .form-select {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border-input);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      font-size: 17px;
+      padding: 10px 14px;
+      transition: border-color 0.2s;
+    }
+    .form-input:focus, .form-select:focus {
+      outline: none;
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 2px var(--gold-glow);
+    }
+    .form-input::placeholder { color: var(--text-dim); }
+    .form-error {
+      font-size: 13px;
+      color: var(--crimson);
+      margin-top: 6px;
+    }
+
+    /* ─── Stat Grid ─── */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .stat-cell {
+      background: var(--bg-input);
+      border: 1px solid var(--border-input);
+      border-radius: 6px;
+      padding: 10px 8px;
+      text-align: center;
+    }
+    .stat-label {
+      font-family: var(--font-display);
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+    }
+    .stat-input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      font-size: 22px;
+      font-weight: 600;
+      text-align: center;
+      outline: none;
+    }
+    .stat-modifier {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* ─── Buttons ─── */
+    .btn-primary {
+      width: 100%;
+      padding: 14px 24px;
+      background: linear-gradient(135deg, var(--gold-dim), var(--gold));
+      border: none;
+      border-radius: 6px;
+      font-family: var(--font-display);
+      font-size: 13px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--bg-deep);
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+      margin-top: 28px;
+    }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 20px rgba(201,168,76,0.25);
+    }
+    .btn-secondary {
+      width: 100%;
+      padding: 12px 24px;
+      background: transparent;
+      border: 1px solid var(--border-card);
+      border-radius: 6px;
+      font-family: var(--font-display);
+      font-size: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: border-color 0.2s;
+      margin-top: 12px;
+    }
+    .btn-secondary:hover { border-color: var(--gold-dim); color: var(--gold); }
+
+    .btn-std-array {
+      padding: 6px 14px;
+      background: var(--bg-input);
+      border: 1px solid var(--border-input);
+      border-radius: 4px;
+      font-family: var(--font-display);
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--gold);
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-std-array:hover { background: var(--gold-glow); }
+
+    /* ─── HP Badge ─── */
+    .hp-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      background: var(--crimson-dim);
+      border: 1px solid rgba(180,64,64,0.3);
+      border-radius: 20px;
+      font-family: var(--font-display);
+      font-size: 12px;
+      letter-spacing: 1px;
+      color: #d07070;
+    }
+
+    /* ─── Ready Badge ─── */
+    .ready-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 14px;
+      background: var(--emerald-dim);
+      border: 1px solid rgba(74,154,106,0.3);
+      border-radius: 20px;
+      font-family: var(--font-display);
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--emerald);
+    }
+
+    /* ─── Summary Card ─── */
+    .summary-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .char-name {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .char-class {
+      font-size: 16px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    .summary-stats {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+      margin-top: 24px;
+    }
+    .summary-stat {
+      background: var(--bg-input);
+      border: 1px solid var(--border-input);
+      border-radius: 6px;
+      padding: 10px 4px;
+      text-align: center;
+    }
+    .summary-stat-label {
+      font-family: var(--font-display);
+      font-size: 9px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    .summary-stat-value {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-top: 2px;
+    }
+    .summary-stat-mod {
+      font-size: 12px;
+      color: var(--gold-dim);
+      margin-top: 1px;
+    }
+
+    /* ─── Divider ─── */
+    .gold-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border-card), transparent);
+      margin: 24px 0;
+    }
+
+    /* ─── Inventory Panel ─── */
+    .inventory-heading {
+      font-family: var(--font-display);
+      font-size: 12px;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .item-count-badge {
+      padding: 2px 10px;
+      background: var(--bg-input);
+      border: 1px solid var(--border-input);
+      border-radius: 12px;
+      font-size: 11px;
+      letter-spacing: 1px;
+      color: var(--text-dim);
+    }
+    .inventory-list {
+      margin-top: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .inventory-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      background: rgba(255,255,255,0.015);
+      border-radius: 4px;
+      transition: background 0.15s;
+    }
+    .inventory-item:hover { background: rgba(255,255,255,0.035); }
+    .item-icon {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 5px;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .item-icon.weapon    { background: var(--crimson-dim); color: #d07070; }
+    .item-icon.armor     { background: var(--steel-dim);   color: #7a9aba; }
+    .item-icon.pack      { background: var(--olive-dim);   color: #9aaa5a; }
+    .item-icon.focus     { background: var(--amethyst-dim); color: #aa7ad0; }
+    .item-icon.tool      { background: var(--khaki-dim);   color: #baaa7a; }
+    .item-icon.ammo      { background: var(--amber-dim);   color: #d0aa5a; }
+    .item-icon.instrument{ background: var(--amber-dim);   color: #d0aa5a; }
+    .item-name {
+      flex: 1;
+      font-size: 15px;
+      color: var(--text-primary);
+    }
+    .item-qty {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: var(--text-dim);
+      letter-spacing: 0.5px;
+    }
+    .inventory-footer {
+      font-size: 13px;
+      color: var(--text-dim);
+      font-style: italic;
+      margin-top: 16px;
+      text-align: center;
+    }
+    .inventory-empty {
+      text-align: center;
+      padding: 32px 16px;
+      color: var(--text-dim);
+      font-style: italic;
+      font-size: 15px;
+    }
+
+    /* ─── Stats row header ─── */
+    .stats-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    /* ─── Section Spacing ─── */
+    .section-gap { margin-top: 20px; }
+  </style>
+</head>
+<body>
+
+  <div class="page-title">US-08 + US-09 &mdash; Character Creation &amp; Starting Inventory</div>
+
+  <div class="states-grid">
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- STATE 1: Character Creation Form           -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div>
+      <div class="state-label">State 1 &mdash; Character Creation Form</div>
+      <div class="dnd-card">
+        <div class="dnd-card-body">
+          <div class="card-heading">Create Your Character</div>
+          <div class="card-subheading">Define who you are before the adventure begins.</div>
+
+          <div class="form-group">
+            <label class="form-label">Character Name</label>
+            <input class="form-input" type="text" placeholder="e.g. Thorin Oakenshield" value="Thorin Oakenshield">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Class</label>
+            <select class="form-select">
+              <option>Fighter</option>
+              <option>Wizard</option>
+              <option>Rogue</option>
+              <option>Cleric</option>
+              <option>Ranger</option>
+              <option>Barbarian</option>
+              <option>Paladin</option>
+              <option>Druid</option>
+              <option>Bard</option>
+              <option>Monk</option>
+              <option>Sorcerer</option>
+              <option>Warlock</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <div class="stats-header">
+              <span class="form-label" style="margin-bottom:0">Ability Scores</span>
+              <button class="btn-std-array">Standard Array</button>
+            </div>
+            <div class="stat-grid">
+              <div class="stat-cell">
+                <div class="stat-label">STR</div>
+                <input class="stat-input" type="number" value="15">
+                <div class="stat-modifier">+2</div>
+              </div>
+              <div class="stat-cell">
+                <div class="stat-label">DEX</div>
+                <input class="stat-input" type="number" value="12">
+                <div class="stat-modifier">+1</div>
+              </div>
+              <div class="stat-cell">
+                <div class="stat-label">CON</div>
+                <input class="stat-input" type="number" value="14">
+                <div class="stat-modifier">+2</div>
+              </div>
+              <div class="stat-cell">
+                <div class="stat-label">INT</div>
+                <input class="stat-input" type="number" value="10">
+                <div class="stat-modifier">+0</div>
+              </div>
+              <div class="stat-cell">
+                <div class="stat-label">WIS</div>
+                <input class="stat-input" type="number" value="11">
+                <div class="stat-modifier">+0</div>
+              </div>
+              <div class="stat-cell">
+                <div class="stat-label">CHA</div>
+                <input class="stat-input" type="number" value="8">
+                <div class="stat-modifier">-1</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;justify-content:flex-end;margin-top:16px;">
+            <div class="hp-badge">HP 12</div>
+          </div>
+
+          <button class="btn-primary">Seal Your Fate</button>
+        </div>
+      </div>
+
+      <!-- Inventory Empty State below form -->
+      <div class="section-gap"></div>
+      <div class="dnd-card">
+        <div class="dnd-card-body">
+          <div class="inventory-heading">Starting Inventory</div>
+          <div class="inventory-empty">Save your character above to see your starting equipment.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- STATE 2: Character Saved + Inventory        -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div>
+      <div class="state-label">State 2 &mdash; Character Ready + Inventory</div>
+      <div class="dnd-card">
+        <div class="dnd-card-body">
+          <div class="summary-header">
+            <div>
+              <div class="char-name">Thorin Oakenshield</div>
+              <div class="char-class">Fighter</div>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <div class="hp-badge">HP 12</div>
+              <div class="ready-badge">Ready</div>
+            </div>
+          </div>
+
+          <div class="summary-stats">
+            <div class="summary-stat">
+              <div class="summary-stat-label">STR</div>
+              <div class="summary-stat-value">15</div>
+              <div class="summary-stat-mod">+2</div>
+            </div>
+            <div class="summary-stat">
+              <div class="summary-stat-label">DEX</div>
+              <div class="summary-stat-value">12</div>
+              <div class="summary-stat-mod">+1</div>
+            </div>
+            <div class="summary-stat">
+              <div class="summary-stat-label">CON</div>
+              <div class="summary-stat-value">14</div>
+              <div class="summary-stat-mod">+2</div>
+            </div>
+            <div class="summary-stat">
+              <div class="summary-stat-label">INT</div>
+              <div class="summary-stat-value">10</div>
+              <div class="summary-stat-mod">+0</div>
+            </div>
+            <div class="summary-stat">
+              <div class="summary-stat-label">WIS</div>
+              <div class="summary-stat-value">11</div>
+              <div class="summary-stat-mod">+0</div>
+            </div>
+            <div class="summary-stat">
+              <div class="summary-stat-label">CHA</div>
+              <div class="summary-stat-value">8</div>
+              <div class="summary-stat-mod">-1</div>
+            </div>
+          </div>
+
+          <button class="btn-secondary">Edit Character</button>
+        </div>
+      </div>
+
+      <!-- Inventory Panel (populated) -->
+      <div class="section-gap"></div>
+      <div class="dnd-card">
+        <div class="dnd-card-body">
+          <div class="inventory-heading">
+            <span>Starting Inventory</span>
+            <span class="item-count-badge">5 items</span>
+          </div>
+          <div class="inventory-list">
+            <div class="inventory-item">
+              <div class="item-icon weapon">&#9876;</div>
+              <div class="item-name">Longsword</div>
+              <div class="item-qty">&times;1</div>
+            </div>
+            <div class="inventory-item">
+              <div class="item-icon armor">&#128737;</div>
+              <div class="item-name">Shield</div>
+              <div class="item-qty">&times;1</div>
+            </div>
+            <div class="inventory-item">
+              <div class="item-icon armor">&#128737;</div>
+              <div class="item-name">Chain Mail</div>
+              <div class="item-qty">&times;1</div>
+            </div>
+            <div class="inventory-item">
+              <div class="item-icon pack">&#127891;</div>
+              <div class="item-name">Explorer&rsquo;s Pack</div>
+              <div class="item-qty">&times;1</div>
+            </div>
+            <div class="inventory-item">
+              <div class="item-icon weapon">&#9876;</div>
+              <div class="item-name">Handaxe</div>
+              <div class="item-qty">&times;5</div>
+            </div>
+          </div>
+          <div class="inventory-footer">Items are auto-assigned for your class. They reset if you change your class.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- STATE 3: Validation Errors                  -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div>
+      <div class="state-label">State 3 &mdash; Validation Errors</div>
+      <div class="dnd-card">
+        <div class="dnd-card-body">
+          <div class="card-heading">Create Your Character</div>
+          <div class="card-subheading">Define who you are before the adventure begins.</div>
+
+          <div class="form-group">
+            <label class="form-label">Character Name</label>
+            <input class="form-input" type="text" style="border-color:var(--crimson);" value="">
+            <div class="form-error">Character name is required</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Class</label>
+            <select class="form-select" style="border-color:var(--crimson);">
+              <option value="" disabled selected>Select a class...</option>
+            </select>
+            <div class="form-error">Please select a class</div>
+          </div>
+
+          <div class="form-group">
+            <div class="stats-header">
+              <span class="form-label" style="margin-bottom:0">Ability Scores</span>
+              <button class="btn-std-array">Standard Array</button>
+            </div>
+            <div class="stat-grid">
+              <div class="stat-cell" style="border-color:var(--crimson);">
+                <div class="stat-label">STR</div>
+                <input class="stat-input" type="number" value="25">
+                <div class="stat-modifier" style="color:var(--crimson);">!</div>
+              </div>
+              <div class="stat-cell">
+                <div class="stat-label">DEX</div>
+                <input class="stat-input" type="number" value="12">
+                <div class="stat-modifier">+1</div>
+              </div>
+              <div class="stat-cell">
+                <div class="stat-label">CON</div>
+                <input class="stat-input" type="number" value="">
+                <div class="stat-modifier" style="color:var(--crimson);">!</div>
+              </div>
+              <div class="stat-cell">
+                <div class="stat-label">INT</div>
+                <input class="stat-input" type="number" value="10">
+                <div class="stat-modifier">+0</div>
+              </div>
+              <div class="stat-cell">
+                <div class="stat-label">WIS</div>
+                <input class="stat-input" type="number" value="0">
+                <div class="stat-modifier" style="color:var(--crimson);">!</div>
+              </div>
+              <div class="stat-cell">
+                <div class="stat-label">CHA</div>
+                <input class="stat-input" type="number" value="8">
+                <div class="stat-modifier">-1</div>
+              </div>
+            </div>
+            <div class="form-error">Each ability score must be between 1 and 20</div>
+          </div>
+
+          <button class="btn-primary" style="opacity:0.5;cursor:not-allowed;">Seal Your Fate</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>

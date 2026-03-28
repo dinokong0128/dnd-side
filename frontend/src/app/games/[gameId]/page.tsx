@@ -1,4 +1,10 @@
 import { fetchGameById } from '@/lib/supabase/games'
+import { createClient } from '@/lib/supabase/server'
+import {
+  fetchPlayerByProfileAndGame,
+  fetchInventoryByPlayer,
+} from '@/lib/supabase/players'
+import { GameLobby } from '@/components/games/GameLobby'
 
 export default async function GameLobbyPage({
   params,
@@ -16,10 +22,26 @@ export default async function GameLobbyPage({
     )
   }
 
+  const supabase = await createClient()
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  let player = null
+  let inventory: Awaited<ReturnType<typeof fetchInventoryByPlayer>> = []
+
+  if (session) {
+    player = await fetchPlayerByProfileAndGame(session.user.id, gameId)
+    if (player) {
+      inventory = await fetchInventoryByPlayer(player.id)
+    }
+  }
+
   return (
-    <div data-testid="game-lobby-stub" className="mx-auto max-w-md p-8">
-      <h1 className="text-2xl font-bold">{game.name}</h1>
-      <p className="mt-4 text-gray-600">Lobby — coming soon</p>
-    </div>
+    <GameLobby
+      game={game}
+      initialPlayer={player}
+      initialInventory={inventory}
+    />
   )
 }
