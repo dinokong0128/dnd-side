@@ -17,8 +17,13 @@ export default async function GameLobbyPage({
 
   if (!game) {
     return (
-      <div className="mx-auto max-w-md p-8">
-        <h1 className="text-2xl font-bold">Game not found</h1>
+      <div className="flex min-h-screen items-center justify-center bg-stone-950">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-amber-50">Game not found</h1>
+          <p className="mt-2 text-sm text-amber-100/40">
+            This adventure doesn&apos;t exist or has been removed.
+          </p>
+        </div>
       </div>
     )
   }
