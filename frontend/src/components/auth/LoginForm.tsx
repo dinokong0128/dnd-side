@@ -57,63 +57,80 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mx-auto max-w-md space-y-4 p-8">
-      <h1 className="text-2xl font-bold">Log in</h1>
+    <div className="dnd-page-bg flex min-h-screen items-center justify-center px-4">
+      <div className="dnd-fade-in w-full max-w-sm">
+        <div className="mb-8 text-center">
+          <p className="dnd-brand mb-3">Realm &amp; Ruin</p>
+          <h1 className="dnd-heading text-2xl font-bold">Welcome Back</h1>
+          <p className="dnd-subheading mt-1 text-sm">
+            Your quest awaits, adventurer.
+          </p>
+        </div>
 
-      <div>
-        <label htmlFor="email" className="block text-sm font-medium">
-          Email
-        </label>
-        <input
-          id="email"
-          type="email"
-          data-testid="email-input"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="mt-1 block w-full rounded border px-3 py-2"
-        />
-        {fieldErrors.email && (
-          <p className="mt-1 text-sm text-red-600">{fieldErrors.email}</p>
-        )}
-      </div>
+        <div className="dnd-card px-6 py-8">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label htmlFor="email" className="dnd-label">
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                data-testid="email-input"
+                autoFocus
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="dnd-input"
+                placeholder="adventurer@realm.com"
+              />
+              {fieldErrors.email && (
+                <p className="dnd-field-error">{fieldErrors.email}</p>
+              )}
+            </div>
 
-      <div>
-        <label htmlFor="password" className="block text-sm font-medium">
-          Password
-        </label>
-        <input
-          id="password"
-          type="password"
-          data-testid="password-input"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 block w-full rounded border px-3 py-2"
-        />
-        {fieldErrors.password && (
-          <p className="mt-1 text-sm text-red-600">{fieldErrors.password}</p>
-        )}
-      </div>
+            <div>
+              <label htmlFor="password" className="dnd-label">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                data-testid="password-input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="dnd-input"
+                placeholder="Your secret passphrase"
+              />
+              {fieldErrors.password && (
+                <p className="dnd-field-error">{fieldErrors.password}</p>
+              )}
+            </div>
 
-      {formError && (
-        <p data-testid="form-error" className="text-sm text-red-600">
-          {formError}
+            {formError && (
+              <div data-testid="form-error" className="dnd-error-banner">
+                {formError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              data-testid="submit-button"
+              disabled={loading}
+              className="dnd-btn-primary"
+            >
+              {loading ? 'Signing in\u2026' : 'Enter the Realm'}
+            </button>
+          </form>
+        </div>
+
+        <p className="mt-6 text-center text-sm" style={{ color: 'var(--muted)' }}>
+          New to the game? You&apos;ll need an invite link from your DM.
+          <br />
+          <Link href="/auth/signup" className="dnd-link">
+            Sign up with invite
+          </Link>
         </p>
-      )}
-
-      <button
-        type="submit"
-        data-testid="submit-button"
-        disabled={loading}
-        className="w-full rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
-      >
-        Log in
-      </button>
-
-      <p className="text-center text-sm text-gray-600">
-        <Link href="/auth/signup" className="text-blue-600 hover:underline">
-          Need an invite? Sign up
-        </Link>
-      </p>
-    </form>
+      </div>
+    </div>
   )
 }
