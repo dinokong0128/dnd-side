@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>US-08 / US-09 — Character Creation + Starting Inventory — UI Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep: #0d0b09;
+    --bg-card: #181512;
+    --bg-input: #0f0d0b;
+    --border: #2a2520;
+    --gold: #c9a84c;
+    --gold-dim: #7a6530;
+    --text: #e8dcc8;
+    --text-dim: #9a8e7c;
+    --text-muted: #5c5347;
+    --crimson-bg: rgba(163, 51, 72, 0.15);
+    --emerald: #3d9970;
+    --emerald-bg: rgba(61, 153, 112, 0.15);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg-deep);
+    background-image: radial-gradient(ellipse at 50% 0%, rgba(201,168,76,0.04) 0%, transparent 70%);
+    color: var(--text);
+    font-family: 'Crimson Text', Georgia, serif;
+    min-height: 100vh;
+    padding: 2rem 1rem;
+  }
+  .container { max-width: 960px; margin: 0 auto; }
+  h1.page-title {
+    font-family: 'Cinzel', serif;
+    color: var(--gold);
+    font-size: 1.5rem;
+    text-align: center;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.5rem;
+  }
+  .subtitle {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-style: italic;
+    margin-bottom: 2rem;
+  }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+  @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+  .column-label {
+    font-family: 'Cinzel', serif;
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+  }
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.5rem;
+    position: relative;
+    margin-bottom: 1rem;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    border-radius: 6px 6px 0 0;
+  }
+  .heading {
+    font-family: 'Cinzel', serif;
+    color: var(--gold);
+    font-weight: 600;
+    font-size: 1.15rem;
+    letter-spacing: 0.03em;
+  }
+  .label {
+    font-family: 'Cinzel', serif;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 0.4rem;
+  }
+  .input {
+    display: block;
+    width: 100%;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.6rem 0.75rem;
+    color: var(--text);
+    font-family: 'Crimson Text', serif;
+    font-size: 1rem;
+  }
+  select.input {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239a8e7c' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    padding-right: 2rem;
+  }
+  .field { margin-bottom: 1rem; }
+  .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+  .stat-block {
+    text-align: center;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.5rem 0.25rem;
+  }
+  .stat-label {
+    font-family: 'Cinzel', serif;
+    font-size: 0.55rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    color: var(--text-dim);
+  }
+  .stat-value {
+    font-family: 'Cinzel', serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.3;
+  }
+  .stat-mod {
+    font-family: 'Crimson Text', serif;
+    font-size: 0.75rem;
+    color: var(--gold-dim);
+  }
+  .btn-primary {
+    display: block;
+    width: 100%;
+    padding: 0.75rem;
+    background: linear-gradient(180deg, var(--gold), #a68a3e);
+    color: #0d0b09;
+    font-family: 'Cinzel', serif;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: center;
+  }
+  .btn-ghost {
+    display: block;
+    width: 100%;
+    padding: 0.5rem;
+    background: transparent;
+    color: var(--gold);
+    font-family: 'Cinzel', serif;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: center;
+  }
+  .btn-ghost-sm {
+    display: inline-block;
+    padding: 0.3rem 0.6rem;
+    background: transparent;
+    color: var(--gold);
+    font-family: 'Cinzel', serif;
+    font-size: 0.65rem;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+  .hp-badge {
+    display: inline-block;
+    background: var(--crimson-bg);
+    color: #e06070;
+    font-family: 'Cinzel', serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    padding: 0.1rem 0.5rem;
+    border-radius: 3px;
+    border: 1px solid rgba(163, 51, 72, 0.25);
+  }
+  .ready-badge {
+    display: inline-block;
+    background: var(--emerald-bg);
+    color: var(--emerald);
+    font-family: 'Cinzel', serif;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.25rem 0.6rem;
+    border-radius: 3px;
+    border: 1px solid rgba(61, 153, 112, 0.25);
+  }
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+    margin: 1rem 0;
+  }
+  .summary-stats {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 0.4rem;
+    text-align: center;
+  }
+  .inv-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.45rem 0;
+    border-bottom: 1px solid rgba(42, 37, 32, 0.5);
+  }
+  .inv-row:last-child { border-bottom: none; }
+  .inv-icon {
+    width: 1.75rem;
+    height: 1.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(201, 168, 76, 0.08);
+    border-radius: 4px;
+    font-size: 0.875rem;
+  }
+  .inv-name { flex: 1; }
+  .inv-qty { font-size: 0.85rem; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  .game-header {
+    max-width: 960px;
+    margin: 0 auto 1.5rem;
+  }
+  .status-badge {
+    font-family: 'Cinzel', serif;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    background: rgba(201, 168, 76, 0.12);
+    color: var(--gold);
+    border: 1px solid rgba(201, 168, 76, 0.2);
+  }
+</style>
+</head>
+<body>
+
+<h1 class="page-title">Character Creation &amp; Starting Inventory</h1>
+<p class="subtitle">US-08 + US-09 — Game Lobby UI Design Mockup</p>
+
+<!-- Game Header Card -->
+<div class="game-header">
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <span class="heading" style="font-size:1.3rem">Dragon's Keep</span>
+      <span class="status-badge">Lobby</span>
+    </div>
+    <p style="color:var(--text-dim);font-size:0.9rem;margin-top:0.4rem;font-style:italic">
+      A dark fantasy where death lurks behind every shadow and betrayal is common.
+    </p>
+  </div>
+</div>
+
+<div class="container">
+<div class="grid">
+
+<!-- LEFT: Character Creation Form -->
+<div>
+  <div class="column-label">State 1 — Character Creation Form</div>
+  <div class="card">
+    <div class="heading" style="margin-bottom:0.2rem">Create Your Character</div>
+    <p style="color:var(--text-dim);font-size:0.9rem;margin-bottom:1.25rem">Define who you are before the adventure begins</p>
+
+    <div class="field">
+      <div class="label">Character Name</div>
+      <div class="input" style="color:var(--text)">Thorin Oakenshield</div>
+    </div>
+
+    <div class="field">
+      <div class="label">Class</div>
+      <select class="input"><option>Fighter</option></select>
+      <p style="margin-top:0.4rem;font-size:0.85rem">
+        <span style="color:var(--text-dim)">Hit Points: </span>
+        <span class="hp-badge">12 HP</span>
+      </p>
+    </div>
+
+    <div class="field">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">
+        <span class="label" style="margin-bottom:0">Ability Scores</span>
+        <span class="btn-ghost-sm">Standard Array</span>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-block"><div class="stat-label">STR</div><div class="stat-value">15</div><div class="stat-mod">+2</div></div>
+        <div class="stat-block"><div class="stat-label">DEX</div><div class="stat-value">12</div><div class="stat-mod">+1</div></div>
+        <div class="stat-block"><div class="stat-label">CON</div><div class="stat-value">14</div><div class="stat-mod">+2</div></div>
+        <div class="stat-block"><div class="stat-label">INT</div><div class="stat-value">10</div><div class="stat-mod">+0</div></div>
+        <div class="stat-block"><div class="stat-label">WIS</div><div class="stat-value">11</div><div class="stat-mod">+0</div></div>
+        <div class="stat-block"><div class="stat-label">CHA</div><div class="stat-value">8</div><div class="stat-mod">−1</div></div>
+      </div>
+    </div>
+
+    <div class="btn-primary">Seal Your Fate</div>
+  </div>
+
+  <!-- Validation Error State -->
+  <div class="column-label" style="margin-top:1rem">Validation Errors</div>
+  <div class="card">
+    <div class="field">
+      <div class="label">Character Name</div>
+      <div class="input" style="border-color:rgba(224,96,112,0.4)">&nbsp;</div>
+      <p style="color:#e06070;font-size:0.8rem;margin-top:0.3rem">Character name is required</p>
+    </div>
+    <div class="field">
+      <div class="label">Class</div>
+      <div class="input" style="border-color:rgba(224,96,112,0.4);color:var(--text-muted);font-style:italic">Choose your calling…</div>
+      <p style="color:#e06070;font-size:0.8rem;margin-top:0.3rem">Select a class</p>
+    </div>
+    <div>
+      <div class="label">Ability Scores</div>
+      <div class="stats-grid">
+        <div class="stat-block" style="border-color:rgba(224,96,112,0.4)"><div class="stat-label">STR</div><div class="stat-value" style="color:var(--text-muted)">—</div><div style="color:#e06070;font-size:0.65rem;margin-top:0.1rem">1–20</div></div>
+        <div class="stat-block"><div class="stat-label">DEX</div><div class="stat-value">14</div><div class="stat-mod">+2</div></div>
+        <div class="stat-block" style="border-color:rgba(224,96,112,0.4)"><div class="stat-label">CON</div><div class="stat-value" style="color:var(--text-muted)">—</div><div style="color:#e06070;font-size:0.65rem;margin-top:0.1rem">1–20</div></div>
+        <div class="stat-block"><div class="stat-label">INT</div><div class="stat-value">10</div><div class="stat-mod">+0</div></div>
+        <div class="stat-block"><div class="stat-label">WIS</div><div class="stat-value">13</div><div class="stat-mod">+1</div></div>
+        <div class="stat-block"><div class="stat-label">CHA</div><div class="stat-value">8</div><div class="stat-mod">−1</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RIGHT: Summary + Inventory -->
+<div>
+  <div class="column-label">State 2 — Character Saved</div>
+
+  <!-- Summary Card -->
+  <div class="card">
+    <span class="ready-badge">✓ Character Ready</span>
+    <div class="heading" style="margin-top:0.5rem;font-size:1.2rem">Thorin Oakenshield</div>
+    <p style="color:var(--text-dim);font-size:0.9rem;margin-top:0.25rem">
+      Fighter · <span class="hp-badge">12 HP</span>
+    </p>
+    <div class="divider"></div>
+    <div class="summary-stats">
+      <div><div class="stat-label">STR</div><div style="font-family:'Cinzel',serif;font-weight:700;font-size:1.1rem">15</div><div class="stat-mod">+2</div></div>
+      <div><div class="stat-label">DEX</div><div style="font-family:'Cinzel',serif;font-weight:700;font-size:1.1rem">12</div><div class="stat-mod">+1</div></div>
+      <div><div class="stat-label">CON</div><div style="font-family:'Cinzel',serif;font-weight:700;font-size:1.1rem">14</div><div class="stat-mod">+2</div></div>
+      <div><div class="stat-label">INT</div><div style="font-family:'Cinzel',serif;font-weight:700;font-size:1.1rem">10</div><div class="stat-mod">+0</div></div>
+      <div><div class="stat-label">WIS</div><div style="font-family:'Cinzel',serif;font-weight:700;font-size:1.1rem">11</div><div class="stat-mod">+0</div></div>
+      <div><div class="stat-label">CHA</div><div style="font-family:'Cinzel',serif;font-weight:700;font-size:1.1rem">8</div><div class="stat-mod">−1</div></div>
+    </div>
+    <div class="divider"></div>
+    <div class="btn-ghost">Edit Character</div>
+  </div>
+
+  <!-- Inventory Panel -->
+  <div class="card">
+    <div class="label" style="margin-bottom:0.75rem">
+      Starting Inventory
+      <span style="color:var(--text-muted);text-transform:none;letter-spacing:normal;font-size:0.7rem;margin-left:0.4rem">(5 items)</span>
+    </div>
+    <div>
+      <div class="inv-row"><span class="inv-icon">⚔</span><span class="inv-name">Longsword</span><span class="inv-qty">×1</span></div>
+      <div class="inv-row"><span class="inv-icon">🛡</span><span class="inv-name">Shield</span><span class="inv-qty">×1</span></div>
+      <div class="inv-row"><span class="inv-icon">🛡</span><span class="inv-name">Chain Mail</span><span class="inv-qty">×1</span></div>
+      <div class="inv-row"><span class="inv-icon">🎒</span><span class="inv-name">Explorer's Pack</span><span class="inv-qty">×1</span></div>
+      <div class="inv-row"><span class="inv-icon">⚔</span><span class="inv-name">Handaxe</span><span class="inv-qty">×5</span></div>
+    </div>
+    <p style="color:var(--text-muted);font-size:0.75rem;margin-top:0.75rem;font-style:italic">
+      Items are auto-assigned for your class. They reset if you change your class.
+    </p>
+  </div>
+
+  <!-- Empty Inventory State -->
+  <div class="column-label" style="margin-top:0.5rem">Inventory — Empty State</div>
+  <div class="card">
+    <div class="label" style="margin-bottom:0.75rem">Starting Inventory</div>
+    <p style="color:var(--text-muted);font-size:0.9rem;font-style:italic">
+      Create your character above to see your starting items.
+    </p>
+  </div>
+</div>
+
+</div><!-- grid -->
+</div><!-- container -->
+
+</body>
+</html>
