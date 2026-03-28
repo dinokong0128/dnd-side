@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="680" viewBox="0 0 600 680">
+  <defs>
+    <style>
+      text { font-family: system-ui, -apple-system, sans-serif; }
+      .title { font-size: 20px; font-weight: 700; fill: #111827; }
+      .subtitle { font-size: 13px; fill: #6b7280; }
+      .label { font-size: 12px; font-weight: 500; fill: #374151; }
+      .required { font-size: 12px; fill: #ef4444; }
+      .placeholder { font-size: 13px; fill: #9ca3af; }
+      .link { font-size: 11px; fill: #2563eb; }
+      .stat-label { font-size: 10px; font-weight: 600; fill: #6b7280; text-anchor: middle; text-transform: uppercase; letter-spacing: 1px; }
+      .stat-placeholder { font-size: 16px; font-weight: 700; fill: #d1d5db; text-anchor: middle; }
+      .btn-text { font-size: 14px; font-weight: 500; fill: white; text-anchor: middle; }
+      .section-title { font-size: 11px; font-weight: 600; fill: #6b7280; text-transform: uppercase; letter-spacing: 1px; }
+      .empty-text { font-size: 13px; fill: #9ca3af; }
+      .badge { font-size: 10px; font-weight: 600; fill: #374151; text-transform: uppercase; }
+      .back { font-size: 12px; fill: #6b7280; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="600" height="680" rx="12" fill="#f9fafb"/>
+
+  <!-- Page header -->
+  <text x="32" y="36" class="back">&lt;- Back to dashboard</text>
+  <text x="32" y="64" class="title">Dragon's Keep</text>
+  <text x="32" y="82" class="subtitle">Status: </text>
+  <rect x="82" y="70" width="48" height="18" rx="4" fill="#e5e7eb"/>
+  <text x="89" y="83" class="badge">lobby</text>
+
+  <!-- Form card -->
+  <rect x="24" y="100" width="552" height="480" rx="8" fill="white" stroke="#e5e7eb" stroke-width="1"/>
+
+  <text x="48" y="132" class="title" style="font-size:18px">Create Your Character</text>
+
+  <!-- Character Name field -->
+  <text x="48" y="166" class="label">Character Name </text>
+  <text x="148" y="166" class="required">*</text>
+  <rect x="48" y="174" width="504" height="36" rx="6" fill="white" stroke="#d1d5db" stroke-width="1"/>
+  <text x="60" y="196" class="placeholder">Thorin Oakenshield</text>
+
+  <!-- Class dropdown -->
+  <text x="48" y="234" class="label">Class </text>
+  <text x="82" y="234" class="required">*</text>
+  <rect x="48" y="242" width="504" height="36" rx="6" fill="white" stroke="#d1d5db" stroke-width="1"/>
+  <text x="60" y="264" class="placeholder">Select a class...</text>
+  <text x="536" y="264" class="placeholder">▾</text>
+
+  <!-- Ability Scores header -->
+  <text x="48" y="304" class="label">Ability Scores </text>
+  <text x="130" y="304" class="required">*</text>
+  <text x="552" y="304" class="link" text-anchor="end">Use Standard Array [15, 14, 13, 12, 10, 8]</text>
+
+  <!-- Stat grid row 1 -->
+  <g transform="translate(48, 316)">
+    <rect width="160" height="64" rx="6" fill="white" stroke="#d1d5db" stroke-width="1"/>
+    <text x="80" y="18" class="stat-label">STR</text>
+    <text x="80" y="48" class="stat-placeholder">10</text>
+  </g>
+  <g transform="translate(220, 316)">
+    <rect width="160" height="64" rx="6" fill="white" stroke="#d1d5db" stroke-width="1"/>
+    <text x="80" y="18" class="stat-label">DEX</text>
+    <text x="80" y="48" class="stat-placeholder">10</text>
+  </g>
+  <g transform="translate(392, 316)">
+    <rect width="160" height="64" rx="6" fill="white" stroke="#d1d5db" stroke-width="1"/>
+    <text x="80" y="18" class="stat-label">CON</text>
+    <text x="80" y="48" class="stat-placeholder">10</text>
+  </g>
+
+  <!-- Stat grid row 2 -->
+  <g transform="translate(48, 392)">
+    <rect width="160" height="64" rx="6" fill="white" stroke="#d1d5db" stroke-width="1"/>
+    <text x="80" y="18" class="stat-label">INT</text>
+    <text x="80" y="48" class="stat-placeholder">10</text>
+  </g>
+  <g transform="translate(220, 392)">
+    <rect width="160" height="64" rx="6" fill="white" stroke="#d1d5db" stroke-width="1"/>
+    <text x="80" y="18" class="stat-label">WIS</text>
+    <text x="80" y="48" class="stat-placeholder">10</text>
+  </g>
+  <g transform="translate(392, 392)">
+    <rect width="160" height="64" rx="6" fill="white" stroke="#d1d5db" stroke-width="1"/>
+    <text x="80" y="18" class="stat-label">CHA</text>
+    <text x="80" y="48" class="stat-placeholder">10</text>
+  </g>
+
+  <!-- Save button -->
+  <rect x="48" y="480" width="504" height="40" rx="6" fill="#2563eb"/>
+  <text x="300" y="505" class="btn-text">Save Character</text>
+
+  <!-- Inventory empty state -->
+  <rect x="24" y="600" width="552" height="64" rx="8" fill="white" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="48" y="624" class="section-title">Starting Inventory</text>
+  <text x="48" y="648" class="empty-text">Create your character above to see your starting items.</text>
+</svg>

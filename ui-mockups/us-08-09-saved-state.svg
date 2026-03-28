@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="520" viewBox="0 0 600 520">
+  <defs>
+    <style>
+      text { font-family: system-ui, -apple-system, sans-serif; }
+      .title { font-size: 20px; font-weight: 700; fill: #111827; }
+      .subtitle { font-size: 13px; fill: #6b7280; }
+      .label-green { font-size: 10px; font-weight: 600; fill: #15803d; text-transform: uppercase; letter-spacing: 1px; }
+      .char-name { font-size: 18px; font-weight: 700; fill: #111827; }
+      .char-info { font-size: 13px; fill: #4b5563; }
+      .stat-label { font-size: 10px; font-weight: 600; fill: #6b7280; text-anchor: middle; text-transform: uppercase; }
+      .stat-value { font-size: 16px; font-weight: 700; fill: #111827; text-anchor: middle; }
+      .stat-mod { font-size: 10px; fill: #6b7280; text-anchor: middle; }
+      .btn-outline { font-size: 12px; font-weight: 500; fill: #374151; }
+      .section-title { font-size: 11px; font-weight: 600; fill: #6b7280; text-transform: uppercase; letter-spacing: 1px; }
+      .item-name { font-size: 13px; fill: #111827; }
+      .item-qty { font-size: 13px; font-weight: 500; fill: #6b7280; text-anchor: end; }
+      .footnote { font-size: 11px; fill: #9ca3af; }
+      .badge { font-size: 10px; font-weight: 600; fill: #374151; text-transform: uppercase; }
+      .back { font-size: 12px; fill: #6b7280; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="600" height="520" rx="12" fill="#f9fafb"/>
+
+  <!-- Page header -->
+  <text x="32" y="36" class="back">&lt;- Back to dashboard</text>
+  <text x="32" y="64" class="title">Dragon's Keep</text>
+  <text x="32" y="82" class="subtitle">Status: </text>
+  <rect x="82" y="70" width="48" height="18" rx="4" fill="#e5e7eb"/>
+  <text x="89" y="83" class="badge">lobby</text>
+
+  <!-- Character Summary Card -->
+  <rect x="24" y="100" width="552" height="170" rx="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1"/>
+
+  <text x="48" y="126" class="label-green">Character Ready</text>
+  <text x="48" y="150" class="char-name">Thorin Oakenshield</text>
+  <text x="48" y="170" class="char-info">Fighter · HP: 12</text>
+
+  <!-- Edit button -->
+  <rect x="440" y="112" width="112" height="32" rx="6" fill="white" stroke="#d1d5db" stroke-width="1"/>
+  <text x="466" y="132" class="btn-outline">Edit Character</text>
+
+  <!-- Stat boxes -->
+  <g transform="translate(48, 186)">
+    <rect width="80" height="60" rx="6" fill="white" stroke="#e5e7eb" stroke-width="1"/>
+    <text x="40" y="18" class="stat-label">STR</text>
+    <text x="40" y="40" class="stat-value">15</text>
+    <text x="40" y="54" class="stat-mod">+2</text>
+  </g>
+  <g transform="translate(138, 186)">
+    <rect width="80" height="60" rx="6" fill="white" stroke="#e5e7eb" stroke-width="1"/>
+    <text x="40" y="18" class="stat-label">DEX</text>
+    <text x="40" y="40" class="stat-value">12</text>
+    <text x="40" y="54" class="stat-mod">+1</text>
+  </g>
+  <g transform="translate(228, 186)">
+    <rect width="80" height="60" rx="6" fill="white" stroke="#e5e7eb" stroke-width="1"/>
+    <text x="40" y="18" class="stat-label">CON</text>
+    <text x="40" y="40" class="stat-value">14</text>
+    <text x="40" y="54" class="stat-mod">+2</text>
+  </g>
+  <g transform="translate(318, 186)">
+    <rect width="80" height="60" rx="6" fill="white" stroke="#e5e7eb" stroke-width="1"/>
+    <text x="40" y="18" class="stat-label">INT</text>
+    <text x="40" y="40" class="stat-value">10</text>
+    <text x="40" y="54" class="stat-mod">+0</text>
+  </g>
+  <g transform="translate(408, 186)">
+    <rect width="80" height="60" rx="6" fill="white" stroke="#e5e7eb" stroke-width="1"/>
+    <text x="40" y="18" class="stat-label">WIS</text>
+    <text x="40" y="40" class="stat-value">11</text>
+    <text x="40" y="54" class="stat-mod">+0</text>
+  </g>
+  <g transform="translate(498, 186)">
+    <rect width="80" height="60" rx="6" fill="white" stroke="#e5e7eb" stroke-width="1"/>
+    <text x="40" y="18" class="stat-label">CHA</text>
+    <text x="40" y="40" class="stat-value">8</text>
+    <text x="40" y="54" class="stat-mod">-1</text>
+  </g>
+
+  <!-- Inventory Panel -->
+  <rect x="24" y="288" width="552" height="220" rx="8" fill="white" stroke="#e5e7eb" stroke-width="1"/>
+
+  <text x="48" y="316" class="section-title">Starting Inventory</text>
+
+  <!-- Inventory items -->
+  <line x1="48" y1="330" x2="552" y2="330" stroke="#f3f4f6" stroke-width="1"/>
+  <text x="48" y="352" class="item-name">⚔️ Longsword</text>
+  <text x="552" y="352" class="item-qty">x1</text>
+
+  <line x1="48" y1="364" x2="552" y2="364" stroke="#f3f4f6" stroke-width="1"/>
+  <text x="48" y="386" class="item-name">🛡️ Shield</text>
+  <text x="552" y="386" class="item-qty">x1</text>
+
+  <line x1="48" y1="398" x2="552" y2="398" stroke="#f3f4f6" stroke-width="1"/>
+  <text x="48" y="420" class="item-name">🛡️ Chain Mail</text>
+  <text x="552" y="420" class="item-qty">x1</text>
+
+  <line x1="48" y1="432" x2="552" y2="432" stroke="#f3f4f6" stroke-width="1"/>
+  <text x="48" y="454" class="item-name">🎒 Explorer's Pack</text>
+  <text x="552" y="454" class="item-qty">x1</text>
+
+  <line x1="48" y1="466" x2="552" y2="466" stroke="#f3f4f6" stroke-width="1"/>
+  <text x="48" y="488" class="item-name">⚔️ Handaxe</text>
+  <text x="552" y="488" class="item-qty">x5</text>
+
+  <text x="48" y="504" class="footnote">Items are auto-assigned for your class. They reset if you change your class.</text>
+</svg>
