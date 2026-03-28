@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>US-08 / US-09 — Character Creation &amp; Starting Inventory</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-deep: #0b0a08;
+    --bg-card: #1a1714;
+    --bg-card-hover: #221f1a;
+    --bg-input: #12100d;
+    --border-subtle: #2e2922;
+    --border-gold: #8b7340;
+    --gold: #c9a84c;
+    --gold-dim: #9e8339;
+    --gold-bright: #e4c868;
+    --parchment: #e8dcc8;
+    --parchment-dim: #a89a82;
+    --crimson: #8b2e2e;
+    --crimson-bright: #c44040;
+    --emerald: #2e6b3e;
+    --steel-blue: #4a6a8a;
+    --amethyst: #6b4a8a;
+    --warm-brown: #8a6b4a;
+    --olive: #5a6b3a;
+    --amber: #8a7a3a;
+    --font-display: 'Cinzel', serif;
+    --font-body: 'Crimson Text', serif;
+  }
+
+  body {
+    background: var(--bg-deep);
+    color: var(--parchment);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.6;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(ellipse at 20% 0%, rgba(201,168,76,0.04) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 100%, rgba(139,46,46,0.03) 0%, transparent 60%);
+  }
+
+  .page-container {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+
+  /* — Back nav — */
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--parchment-dim);
+    text-decoration: none;
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    margin-bottom: 1.5rem;
+    transition: color 0.2s;
+  }
+  .back-link:hover { color: var(--gold); }
+  .back-link svg { width: 16px; height: 16px; }
+
+  /* — Game header card — */
+  .game-header {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 1.5rem 1.75rem;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .game-header::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  }
+  .game-header h1 {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--gold-bright);
+    letter-spacing: 0.04em;
+  }
+  .game-header .persona {
+    font-style: italic;
+    color: var(--parchment-dim);
+    margin-top: 0.5rem;
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+  .game-header .badge {
+    display: inline-block;
+    margin-top: 0.75rem;
+    font-family: var(--font-display);
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    background: rgba(201,168,76,0.12);
+    color: var(--gold);
+    border: 1px solid rgba(201,168,76,0.25);
+  }
+
+  /* — Cards — */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 1.75rem;
+    margin-bottom: 1.5rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, var(--border-gold), transparent);
+  }
+
+  .card-title {
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--gold);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 1.25rem;
+  }
+
+  /* — Divider — */
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border-subtle), transparent);
+    margin: 1.25rem 0;
+  }
+
+  /* — Form elements — */
+  label {
+    display: block;
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--parchment-dim);
+    margin-bottom: 0.4rem;
+  }
+  label .required { color: var(--crimson-bright); margin-left: 2px; }
+
+  input[type="text"],
+  input[type="number"],
+  select {
+    width: 100%;
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 0.65rem 0.85rem;
+    color: var(--parchment);
+    font-family: var(--font-body);
+    font-size: 1rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    outline: none;
+  }
+  input:focus, select:focus {
+    border-color: var(--gold-dim);
+    box-shadow: 0 0 0 2px rgba(201,168,76,0.15);
+  }
+  input::placeholder { color: var(--parchment-dim); opacity: 0.5; }
+
+  .field-group { margin-bottom: 1.25rem; }
+  .field-error {
+    font-size: 0.85rem;
+    color: var(--crimson-bright);
+    margin-top: 0.3rem;
+  }
+
+  /* — Stat grid — */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+  }
+  .stat-cell {
+    text-align: center;
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 0.6rem 0.5rem 0.75rem;
+    transition: border-color 0.2s;
+  }
+  .stat-cell:focus-within {
+    border-color: var(--gold-dim);
+  }
+  .stat-cell label {
+    font-size: 0.65rem;
+    letter-spacing: 0.14em;
+    margin-bottom: 0.35rem;
+    color: var(--gold-dim);
+  }
+  .stat-cell .stat-full-name {
+    font-family: var(--font-body);
+    font-size: 0.7rem;
+    color: var(--parchment-dim);
+    text-transform: none;
+    letter-spacing: 0;
+    display: block;
+    margin-top: 1px;
+  }
+  .stat-cell input[type="number"] {
+    text-align: center;
+    font-size: 1.4rem;
+    font-weight: 600;
+    padding: 0.25rem;
+    background: transparent;
+    border: none;
+    color: var(--parchment);
+    width: 100%;
+    -moz-appearance: textfield;
+  }
+  .stat-cell input[type="number"]::-webkit-inner-spin-button,
+  .stat-cell input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+  }
+  .stat-cell .modifier {
+    font-size: 0.8rem;
+    color: var(--parchment-dim);
+    margin-top: 0.1rem;
+  }
+
+  /* — Buttons — */
+  .btn-primary {
+    display: block;
+    width: 100%;
+    padding: 0.85rem;
+    background: linear-gradient(135deg, var(--gold-dim), var(--gold));
+    border: none;
+    border-radius: 8px;
+    color: var(--bg-deep);
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+  .btn-primary:hover { opacity: 0.92; }
+  .btn-primary:active { transform: scale(0.99); }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    background: rgba(201,168,76,0.08);
+    border: 1px solid rgba(201,168,76,0.2);
+    border-radius: 8px;
+    color: var(--gold);
+    font-family: var(--font-display);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .btn-secondary:hover {
+    background: rgba(201,168,76,0.15);
+    border-color: rgba(201,168,76,0.35);
+  }
+
+  /* — HP Preview — */
+  .hp-preview {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: rgba(139,46,46,0.15);
+    border: 1px solid rgba(139,46,46,0.3);
+    border-radius: 999px;
+    padding: 0.3rem 0.85rem;
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--crimson-bright);
+    letter-spacing: 0.05em;
+  }
+  .hp-preview .heart { font-size: 0.85rem; }
+
+  /* — Inline hints — */
+  .hint {
+    font-size: 0.85rem;
+    color: var(--parchment-dim);
+    font-style: italic;
+    margin-top: 0.3rem;
+  }
+
+  /* — Standard Array button — */
+  .quick-fill-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 0.4rem;
+  }
+
+  /* === SUMMARY CARD === */
+  .summary-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.25rem;
+  }
+  .char-name {
+    font-family: var(--font-display);
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--parchment);
+  }
+  .ready-badge {
+    font-family: var(--font-display);
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.65rem;
+    border-radius: 999px;
+    background: rgba(46,107,62,0.2);
+    color: #5eaa6f;
+    border: 1px solid rgba(46,107,62,0.35);
+  }
+  .char-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--parchment-dim);
+    font-size: 0.95rem;
+    margin-bottom: 1rem;
+  }
+  .char-meta .class-icon { font-size: 1.1rem; }
+  .char-meta .separator { color: var(--border-subtle); }
+
+  .summary-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 0.5rem;
+    margin: 1rem 0;
+  }
+  .summary-stat {
+    text-align: center;
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 0.6rem 0.25rem;
+  }
+  .summary-stat .stat-label {
+    font-family: var(--font-display);
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    color: var(--gold-dim);
+    text-transform: uppercase;
+    display: block;
+  }
+  .summary-stat .stat-value {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--parchment);
+    display: block;
+    line-height: 1.3;
+  }
+  .summary-stat .stat-mod {
+    font-size: 0.75rem;
+    color: var(--parchment-dim);
+  }
+
+  .summary-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 1rem;
+  }
+
+  /* === INVENTORY PANEL === */
+  .inv-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid rgba(46,41,34,0.5);
+  }
+  .inv-item:last-child { border-bottom: none; }
+  .inv-item-left {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+  }
+  .inv-icon {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+  }
+  .inv-icon.weapon { background: rgba(139,46,46,0.18); color: var(--crimson-bright); }
+  .inv-icon.armor { background: rgba(74,106,138,0.18); color: var(--steel-blue); }
+  .inv-icon.pack { background: rgba(90,107,58,0.18); color: #7a8b5a; }
+  .inv-icon.focus { background: rgba(107,74,138,0.18); color: #9a7ab5; }
+  .inv-icon.tool { background: rgba(138,122,58,0.18); color: var(--amber); }
+  .inv-icon.ammo { background: rgba(138,107,74,0.18); color: var(--warm-brown); }
+  .inv-icon.instrument { background: rgba(201,168,76,0.15); color: var(--gold); }
+
+  .inv-name {
+    font-size: 0.95rem;
+    color: var(--parchment);
+  }
+  .inv-damage {
+    font-size: 0.8rem;
+    color: var(--parchment-dim);
+    margin-left: 0.5rem;
+  }
+  .inv-qty {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    color: var(--parchment-dim);
+    min-width: 2rem;
+    text-align: right;
+  }
+
+  .inv-footer {
+    font-size: 0.85rem;
+    color: var(--parchment-dim);
+    font-style: italic;
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .inv-empty {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--parchment-dim);
+    font-style: italic;
+    font-size: 0.95rem;
+  }
+
+  .inv-count {
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    color: var(--parchment-dim);
+    font-weight: normal;
+    text-transform: none;
+    letter-spacing: 0;
+    float: right;
+  }
+
+  /* — Section labels — */
+  .section-label {
+    font-family: var(--font-display);
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--parchment-dim);
+    margin-bottom: 2rem;
+    text-align: center;
+  }
+
+  /* — Columns layout for demo — */
+  .demo-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+    max-width: 1300px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+  .demo-column { max-width: 640px; }
+
+  @media (max-width: 900px) {
+    .demo-columns { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="demo-columns">
+
+  <!-- ===== COLUMN 1: CHARACTER CREATION FORM ===== -->
+  <div class="demo-column">
+    <p class="section-label">State 1 &mdash; Character Creation Form</p>
+
+    <a href="#" class="back-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      Back to Dashboard
+    </a>
+
+    <div class="game-header">
+      <h1>The Sunken Citadel</h1>
+      <p class="persona">&ldquo;A grim low-fantasy mystery where ancient ruins hold forgotten truths.&rdquo;</p>
+      <span class="badge">Lobby</span>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">Forge Your Hero</h2>
+
+      <div class="field-group">
+        <label for="char-name">Character Name <span class="required">*</span></label>
+        <input type="text" id="char-name" value="Thorin Oakenshield" />
+      </div>
+
+      <div class="field-group">
+        <label for="char-class">Class <span class="required">*</span></label>
+        <select id="char-class">
+          <option value="fighter" selected>&#9876; Fighter</option>
+          <option value="wizard">&#9733; Wizard</option>
+          <option value="rogue">&#128481; Rogue</option>
+        </select>
+        <p class="hint">Masters of martial combat, trained with every weapon and armor.</p>
+      </div>
+
+      <div class="divider"></div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+        <label style="margin-bottom: 0;">Ability Scores <span class="required">*</span></label>
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <span class="hp-preview"><span class="heart">&#10084;</span> HP 12</span>
+          <button type="button" class="btn-secondary">Standard Array</button>
+        </div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-cell">
+          <label>STR<span class="stat-full-name">Strength</span></label>
+          <input type="number" value="15" />
+          <div class="modifier">+2</div>
+        </div>
+        <div class="stat-cell">
+          <label>DEX<span class="stat-full-name">Dexterity</span></label>
+          <input type="number" value="12" />
+          <div class="modifier">+1</div>
+        </div>
+        <div class="stat-cell">
+          <label>CON<span class="stat-full-name">Constitution</span></label>
+          <input type="number" value="14" />
+          <div class="modifier">+2</div>
+        </div>
+        <div class="stat-cell">
+          <label>INT<span class="stat-full-name">Intelligence</span></label>
+          <input type="number" value="10" />
+          <div class="modifier">+0</div>
+        </div>
+        <div class="stat-cell">
+          <label>WIS<span class="stat-full-name">Wisdom</span></label>
+          <input type="number" value="11" />
+          <div class="modifier">+0</div>
+        </div>
+        <div class="stat-cell">
+          <label>CHA<span class="stat-full-name">Charisma</span></label>
+          <input type="number" value="8" />
+          <div class="modifier">-1</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <button class="btn-primary">Seal Your Fate</button>
+    </div>
+  </div>
+
+  <!-- ===== COLUMN 2: SUMMARY + INVENTORY ===== -->
+  <div class="demo-column">
+    <p class="section-label">State 2 &mdash; Character Saved + Inventory</p>
+
+    <a href="#" class="back-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      Back to Dashboard
+    </a>
+
+    <div class="game-header">
+      <h1>The Sunken Citadel</h1>
+      <p class="persona">&ldquo;A grim low-fantasy mystery where ancient ruins hold forgotten truths.&rdquo;</p>
+      <span class="badge">Lobby</span>
+    </div>
+
+    <!-- Character Summary Card -->
+    <div class="card">
+      <div class="summary-header">
+        <span class="char-name">Thorin Oakenshield</span>
+        <span class="ready-badge">&#10003; Ready</span>
+      </div>
+      <div class="char-meta">
+        <span class="class-icon">&#9876;</span>
+        <span>Fighter</span>
+        <span class="separator">&bull;</span>
+        <span class="hp-preview"><span class="heart">&#10084;</span> HP 12</span>
+      </div>
+
+      <div class="summary-stat-grid">
+        <div class="summary-stat">
+          <span class="stat-label">STR</span>
+          <span class="stat-value">15</span>
+          <span class="stat-mod">+2</span>
+        </div>
+        <div class="summary-stat">
+          <span class="stat-label">DEX</span>
+          <span class="stat-value">12</span>
+          <span class="stat-mod">+1</span>
+        </div>
+        <div class="summary-stat">
+          <span class="stat-label">CON</span>
+          <span class="stat-value">14</span>
+          <span class="stat-mod">+2</span>
+        </div>
+        <div class="summary-stat">
+          <span class="stat-label">INT</span>
+          <span class="stat-value">10</span>
+          <span class="stat-mod">+0</span>
+        </div>
+        <div class="summary-stat">
+          <span class="stat-label">WIS</span>
+          <span class="stat-value">11</span>
+          <span class="stat-mod">+0</span>
+        </div>
+        <div class="summary-stat">
+          <span class="stat-label">CHA</span>
+          <span class="stat-value">8</span>
+          <span class="stat-mod">-1</span>
+        </div>
+      </div>
+
+      <div class="summary-footer">
+        <button class="btn-secondary">&#9998; Edit Character</button>
+      </div>
+    </div>
+
+    <!-- Inventory Panel -->
+    <div class="card">
+      <h2 class="card-title">Starting Inventory <span class="inv-count">5 items</span></h2>
+
+      <div class="inv-item">
+        <div class="inv-item-left">
+          <div class="inv-icon weapon">&#9876;</div>
+          <span class="inv-name">Longsword <span class="inv-damage">1d8 slashing</span></span>
+        </div>
+        <span class="inv-qty">x1</span>
+      </div>
+
+      <div class="inv-item">
+        <div class="inv-item-left">
+          <div class="inv-icon armor">&#128737;</div>
+          <span class="inv-name">Shield</span>
+        </div>
+        <span class="inv-qty">x1</span>
+      </div>
+
+      <div class="inv-item">
+        <div class="inv-item-left">
+          <div class="inv-icon armor">&#128737;</div>
+          <span class="inv-name">Chain Mail</span>
+        </div>
+        <span class="inv-qty">x1</span>
+      </div>
+
+      <div class="inv-item">
+        <div class="inv-item-left">
+          <div class="inv-icon pack">&#127890;</div>
+          <span class="inv-name">Explorer's Pack</span>
+        </div>
+        <span class="inv-qty">x1</span>
+      </div>
+
+      <div class="inv-item">
+        <div class="inv-item-left">
+          <div class="inv-icon weapon">&#9876;</div>
+          <span class="inv-name">Handaxe</span>
+        </div>
+        <span class="inv-qty">x5</span>
+      </div>
+
+      <p class="inv-footer">Items are auto-assigned for your class. They reset if you change your class.</p>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

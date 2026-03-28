@@ -3,6 +3,20 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* D&D Design System */
+  --dnd-bg-deep: #0b0a08;
+  --dnd-bg-card: #1a1714;
+  --dnd-bg-input: #12100d;
+  --dnd-border-subtle: #2e2922;
+  --dnd-border-gold: #8b7340;
+  --dnd-gold: #c9a84c;
+  --dnd-gold-dim: #9e8339;
+  --dnd-gold-bright: #e4c868;
+  --dnd-parchment: #e8dcc8;
+  --dnd-parchment-dim: #a89a82;
+  --dnd-crimson: #8b2e2e;
+  --dnd-crimson-bright: #c44040;
 }
 
 @theme inline {
@@ -22,5 +36,222 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Crimson Text', Georgia, serif;
+}
+
+/* ─── D&D Page Layout ─── */
+.dnd-page-container {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(201,168,76,0.04) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 100%, rgba(139,46,46,0.03) 0%, transparent 60%);
+  min-height: 100vh;
+}
+
+/* ─── D&D Card ─── */
+.dnd-card {
+  background: var(--dnd-bg-card);
+  border: 1px solid var(--dnd-border-subtle);
+  border-radius: 12px;
+  padding: 1.75rem;
+  position: relative;
+  overflow: hidden;
+}
+.dnd-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--dnd-border-gold), transparent);
+}
+
+/* ─── D&D Card Title ─── */
+.dnd-card-title {
+  font-family: 'Cinzel', serif;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--dnd-gold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 1.25rem;
+}
+
+/* ─── D&D Labels ─── */
+.dnd-label {
+  display: block;
+  font-family: 'Cinzel', serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dnd-parchment-dim);
+  margin-bottom: 0.4rem;
+}
+
+/* ─── D&D Inputs ─── */
+.dnd-input {
+  width: 100%;
+  background: var(--dnd-bg-input);
+  border: 1px solid var(--dnd-border-subtle);
+  border-radius: 8px;
+  padding: 0.65rem 0.85rem;
+  color: var(--dnd-parchment);
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 1rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+}
+.dnd-input:focus {
+  border-color: var(--dnd-gold-dim);
+  box-shadow: 0 0 0 2px rgba(201,168,76,0.15);
+}
+.dnd-input::placeholder {
+  color: var(--dnd-parchment-dim);
+  opacity: 0.5;
+}
+
+/* ─── D&D Field Error ─── */
+.dnd-field-error {
+  font-size: 0.85rem;
+  color: var(--dnd-crimson-bright);
+  margin-top: 0.3rem;
+}
+
+/* ─── D&D Divider ─── */
+.dnd-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--dnd-border-subtle), transparent);
+  margin: 1.25rem 0;
+}
+
+/* ─── D&D Stat Cell ─── */
+.dnd-stat-cell {
+  text-align: center;
+  background: var(--dnd-bg-input);
+  border: 1px solid var(--dnd-border-subtle);
+  border-radius: 10px;
+  padding: 0.6rem 0.5rem 0.75rem;
+  transition: border-color 0.2s;
+}
+.dnd-stat-cell:focus-within {
+  border-color: var(--dnd-gold-dim);
+}
+.dnd-stat-label {
+  display: block;
+  font-family: 'Cinzel', serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dnd-gold-dim);
+  margin-bottom: 0.35rem;
+}
+.dnd-stat-fullname {
+  display: block;
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 0.7rem;
+  color: var(--dnd-parchment-dim);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-top: 1px;
+}
+.dnd-stat-input {
+  text-align: center;
+  font-size: 1.4rem;
+  font-weight: 600;
+  padding: 0.25rem;
+  background: transparent;
+  border: none;
+  color: var(--dnd-parchment);
+  width: 100%;
+  outline: none;
+  -moz-appearance: textfield;
+}
+.dnd-stat-input::-webkit-inner-spin-button,
+.dnd-stat-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+}
+
+/* ─── D&D Buttons ─── */
+.dnd-btn-primary {
+  display: block;
+  padding: 0.85rem;
+  background: linear-gradient(135deg, var(--dnd-gold-dim), var(--dnd-gold));
+  border: none;
+  border-radius: 8px;
+  color: var(--dnd-bg-deep);
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+}
+.dnd-btn-primary:hover { opacity: 0.92; }
+.dnd-btn-primary:active { transform: scale(0.99); }
+.dnd-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.dnd-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  background: rgba(201,168,76,0.08);
+  border: 1px solid rgba(201,168,76,0.2);
+  border-radius: 8px;
+  color: var(--dnd-gold);
+  font-family: 'Cinzel', serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+.dnd-btn-secondary:hover {
+  background: rgba(201,168,76,0.15);
+  border-color: rgba(201,168,76,0.35);
+}
+
+/* ─── D&D HP Badge ─── */
+.dnd-hp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(139,46,46,0.15);
+  border: 1px solid rgba(139,46,46,0.3);
+  border-radius: 999px;
+  padding: 0.3rem 0.85rem;
+  font-family: 'Cinzel', serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--dnd-crimson-bright);
+  letter-spacing: 0.05em;
+}
+
+/* ─── D&D Status Badges ─── */
+.dnd-badge-lobby {
+  font-family: 'Cinzel', serif;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(201,168,76,0.12);
+  color: var(--dnd-gold);
+  border: 1px solid rgba(201,168,76,0.25);
+}
+.dnd-badge-ready {
+  font-family: 'Cinzel', serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(46,107,62,0.2);
+  color: #5eaa6f;
+  border: 1px solid rgba(46,107,62,0.35);
 }
