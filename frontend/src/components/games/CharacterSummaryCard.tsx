@@ -1,30 +1,21 @@
 'use client'
 
-const ABILITY_ORDER = ['str', 'dex', 'con', 'int', 'wis', 'cha'] as const
-const ABILITY_LABELS: Record<string, string> = {
-  str: 'STR',
-  dex: 'DEX',
-  con: 'CON',
-  int: 'INT',
-  wis: 'WIS',
-  cha: 'CHA',
-}
+const STAT_LABELS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'] as const
+const STAT_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha'] as const
 
-type Stats = {
-  str: number
-  dex: number
-  con: number
-  int: number
-  wis: number
-  cha: number
-}
-
-type Props = {
-  characterName: string
-  characterClass: string
-  hpMax: number
-  stats: Stats
-  onEdit: () => void
+const CLASS_ICONS: Record<string, string> = {
+  Fighter: '\u2694\uFE0F',
+  Wizard: '\uD83E\uDDD9',
+  Rogue: '\uD83D\uDDE1\uFE0F',
+  Cleric: '\u2695\uFE0F',
+  Ranger: '\uD83C\uDFF9',
+  Barbarian: '\uD83E\uDE93',
+  Paladin: '\uD83D\uDEE1\uFE0F',
+  Druid: '\uD83C\uDF3F',
+  Bard: '\uD83C\uDFB5',
+  Monk: '\uD83E\uDDD8',
+  Sorcerer: '\uD83D\uDD2E',
+  Warlock: '\uD83D\uDC7F',
 }
 
 function getModifier(score: number): string {
@@ -32,49 +23,67 @@ function getModifier(score: number): string {
   return mod >= 0 ? `+${mod}` : `${mod}`
 }
 
-export function CharacterSummaryCard({
-  characterName,
-  characterClass,
-  hpMax,
-  stats,
-  onEdit,
-}: Props) {
+type Props = {
+  characterName: string
+  characterClass: string
+  stats: Record<string, number>
+  hpMax: number
+  onEdit: () => void
+}
+
+export function CharacterSummaryCard({ characterName, characterClass, stats, hpMax, onEdit }: Props) {
+  const icon = CLASS_ICONS[characterClass] ?? ''
+
   return (
-    <div data-testid="character-summary-card" className="space-y-4">
-      <div className="flex items-start justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-amber-100">{characterName}</h2>
-          <p className="text-sm text-amber-400/80">
-            {characterClass}
-            <span className="mx-2 text-amber-800">|</span>
-            <span className="text-red-300">HP {hpMax}</span>
-          </p>
-        </div>
-        <span className="rounded-full bg-emerald-900/50 px-2.5 py-0.5 text-xs font-medium text-emerald-300">
-          Ready
-        </span>
-      </div>
-
-      <div className="grid grid-cols-6 gap-2">
-        {ABILITY_ORDER.map((key) => (
-          <div
-            key={key}
-            className="flex flex-col items-center rounded-md border border-amber-900/30 bg-amber-950/30 py-2"
-          >
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-500/60">
-              {ABILITY_LABELS[key]}
-            </span>
-            <span className="text-lg font-bold text-amber-100">{stats[key]}</span>
-            <span className="text-xs text-amber-400/60">{getModifier(stats[key])}</span>
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="border-b border-card-border pb-4">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-gold/10 text-lg">
+            {icon}
           </div>
-        ))}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-success">
+              Character Ready
+            </p>
+          </div>
+        </div>
+        <h2 className="mt-3 font-[family-name:var(--font-display)] text-2xl font-bold tracking-wide text-foreground">
+          {characterName}
+        </h2>
+        <div className="mt-1 flex items-center gap-3 text-sm text-muted-text">
+          <span>{icon} {characterClass}</span>
+          <span className="text-card-border">|</span>
+          <span className="text-accent-red">HP {hpMax}</span>
+        </div>
       </div>
 
+      {/* Stat Grid */}
+      <div className="grid grid-cols-6 gap-1.5">
+        {STAT_KEYS.map((key, i) => {
+          const value = stats[key] ?? 10
+          const mod = getModifier(value)
+          return (
+            <div
+              key={key}
+              className="rounded-lg border border-card-border bg-input-bg p-2 text-center"
+            >
+              <span className="block text-[9px] font-bold uppercase tracking-widest text-muted-text">
+                {STAT_LABELS[i]}
+              </span>
+              <span className="block text-lg font-bold text-foreground">{value}</span>
+              <span className="block text-[10px] font-medium text-accent-gold-dim">{mod}</span>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Edit Button */}
       <button
         type="button"
         data-testid="edit-character-button"
         onClick={onEdit}
-        className="w-full rounded-md border border-amber-800/50 px-4 py-2 text-sm font-medium text-amber-300 transition-colors hover:bg-amber-900/30 hover:text-amber-200"
+        className="w-full rounded-md border border-card-border bg-card-bg px-4 py-2.5 text-sm font-medium text-muted-text transition-colors hover:border-accent-gold-dim hover:text-foreground"
       >
         Edit Character
       </button>

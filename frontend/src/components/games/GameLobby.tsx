@@ -1,113 +1,139 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { CharacterCreationForm } from './CharacterCreationForm'
 import { CharacterSummaryCard } from './CharacterSummaryCard'
 import { InventoryPanel } from './InventoryPanel'
 
-type Stats = {
-  str: number
-  dex: number
-  con: number
-  int: number
-  wis: number
-  cha: number
-}
-
-type Player = {
-  id: string
-  character_name: string
-  character_class: string
-  hp_max: number
-  stats: Stats
-}
-
 type InventoryItem = {
-  id: string
   item_name: string
   quantity: number
-  properties: Record<string, string> | null
+  properties: Record<string, unknown> | null
+}
+
+type PlayerData = {
+  id: string
+  character_name: string | null
+  character_class: string | null
+  stats: Record<string, number> | null
+  hp_max: number | null
+  hp_current: number | null
+  inventory?: InventoryItem[]
 }
 
 type Props = {
   gameId: string
   gameName: string
-  initialPlayer: Player | null
-  initialInventory: InventoryItem[]
+  dmPersona: string
 }
 
-export function GameLobby({
-  gameId,
-  gameName,
-  initialPlayer,
-  initialInventory,
-}: Props) {
-  const [player, setPlayer] = useState<Player | null>(initialPlayer)
-  const [inventory, setInventory] = useState<InventoryItem[]>(initialInventory)
-  const [editing, setEditing] = useState(!initialPlayer)
+export function GameLobby({ gameId, gameName, dmPersona }: Props) {
+  const [player, setPlayer] = useState<PlayerData | null>(null)
+  const [inventory, setInventory] = useState<InventoryItem[]>([])
+  const [editing, setEditing] = useState(false)
+  const [loadingPlayer, setLoadingPlayer] = useState(true)
 
-  const handleSaved = useCallback(async () => {
-    const res = await fetch(`/api/games/${gameId}/players`)
-    if (res.ok) {
-      const data = await res.json()
-      setPlayer(data.player)
-      setInventory(data.inventory ?? [])
+  useEffect(() => {
+    async function loadPlayer() {
+      try {
+        const res = await fetch(`/api/games/${gameId}/players`)
+        if (res.ok) {
+          const data = await res.json()
+          if (data) {
+            setPlayer(data)
+            setInventory(data.inventory ?? [])
+          }
+        }
+      } catch {
+        // silently fail — player will see the form
+      } finally {
+        setLoadingPlayer(false)
+      }
     }
-    setEditing(false)
+    loadPlayer()
   }, [gameId])
 
-  const handleEdit = useCallback(() => {
-    setEditing(true)
-  }, [])
+  const hasCompleteCharacter =
+    player?.character_name && player?.character_class && player?.stats
+
+  function handleSave(saved: PlayerData) {
+    setPlayer(saved)
+    setEditing(false)
+    // Refetch to get inventory
+    fetch(`/api/games/${gameId}/players`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data) {
+          setPlayer(data)
+          setInventory(data.inventory ?? [])
+        }
+      })
+      .catch(() => {})
+  }
+
+  if (loadingPlayer) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-accent-gold border-t-transparent" />
+      </div>
+    )
+  }
+
+  const showForm = !hasCompleteCharacter || editing
 
   return (
-    <div className="min-h-screen bg-stone-950">
-      {/* Decorative top border */}
-      <div className="h-1 bg-gradient-to-r from-transparent via-amber-700/60 to-transparent" />
-
-      <div className="mx-auto max-w-lg px-4 py-8">
-        {/* Game header */}
-        <div className="mb-8 text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-600/50">
-            Campaign Lobby
-          </p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-amber-100">
-            {gameName}
-          </h1>
-        </div>
-
-        {/* Character card */}
-        <div className="rounded-xl border border-amber-900/30 bg-gradient-to-b from-stone-900 to-stone-950 p-6 shadow-lg shadow-amber-950/20">
-          {editing ? (
-            <CharacterCreationForm
-              gameId={gameId}
-              initialData={
-                player
-                  ? {
-                      character_name: player.character_name,
-                      character_class: player.character_class,
-                      stats: player.stats,
-                    }
-                  : null
-              }
-              onSaved={handleSaved}
-            />
-          ) : player ? (
-            <CharacterSummaryCard
-              characterName={player.character_name}
-              characterClass={player.character_class}
-              hpMax={player.hp_max}
-              stats={player.stats}
-              onEdit={handleEdit}
-            />
-          ) : null}
-        </div>
-
-        {/* Inventory panel */}
-        <div className="mt-4 rounded-xl border border-amber-900/20 bg-stone-900/50 p-5">
-          <InventoryPanel items={inventory} hasCharacter={!!player} />
+    <div className="space-y-6">
+      {/* Game Header */}
+      <div className="rounded-lg border border-card-border bg-card-bg p-5">
+        <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-wide text-foreground">
+          {gameName}
+        </h1>
+        <p className="mt-2 text-sm italic text-muted-text">
+          &ldquo;{dmPersona}&rdquo;
+        </p>
+        <div className="mt-3 flex items-center gap-2">
+          <span className="inline-block h-2 w-2 rounded-full bg-accent-gold animate-pulse" />
+          <span className="text-xs uppercase tracking-wider text-muted-text">
+            Lobby — Awaiting Adventurers
+          </span>
         </div>
       </div>
+
+      {/* Character Section */}
+      <div className="rounded-lg border border-card-border bg-card-bg p-5">
+        {showForm ? (
+          <CharacterCreationForm
+            gameId={gameId}
+            existingPlayer={
+              hasCompleteCharacter
+                ? {
+                    id: player!.id,
+                    character_name: player!.character_name!,
+                    character_class: player!.character_class!,
+                    stats: player!.stats!,
+                    hp_max: player!.hp_max!,
+                    hp_current: player!.hp_current!,
+                  }
+                : null
+            }
+            onSave={handleSave}
+          />
+        ) : (
+          <CharacterSummaryCard
+            characterName={player!.character_name!}
+            characterClass={player!.character_class!}
+            stats={player!.stats!}
+            hpMax={player!.hp_max!}
+            onEdit={() => setEditing(true)}
+          />
+        )}
+      </div>
+
+      {/* Inventory Section */}
+      <InventoryPanel
+        items={inventory}
+        hasCharacter={!!hasCompleteCharacter}
+      />
     </div>
   )
 }

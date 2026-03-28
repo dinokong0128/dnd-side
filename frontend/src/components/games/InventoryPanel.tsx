@@ -1,19 +1,18 @@
 'use client'
 
 type InventoryItem = {
-  id: string
   item_name: string
   quantity: number
-  properties: Record<string, string> | null
+  properties: Record<string, unknown> | null
 }
 
 const TYPE_ICONS: Record<string, string> = {
   weapon: '\u2694\uFE0F',
   armor: '\uD83D\uDEE1\uFE0F',
-  focus: '\u2728',
   pack: '\uD83C\uDF92',
+  ammunition: '\u27B0',
+  spellcasting: '\u2728',
   tool: '\uD83D\uDD27',
-  ammunition: '\u27B3',
   instrument: '\uD83C\uDFB5',
 }
 
@@ -25,47 +24,65 @@ type Props = {
 export function InventoryPanel({ items, hasCharacter }: Props) {
   if (!hasCharacter) {
     return (
-      <div data-testid="inventory-empty-state" className="space-y-3">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-amber-500/60">
+      <div className="rounded-lg border border-card-border bg-card-bg p-5">
+        <h3 className="font-[family-name:var(--font-display)] text-sm font-bold uppercase tracking-wider text-muted-text">
           Starting Inventory
         </h3>
-        <p className="text-sm text-amber-700/60">
+        <p className="mt-3 text-sm text-muted-text/70">
           Create your character above to see your starting items.
         </p>
       </div>
     )
   }
 
+  if (items.length === 0) {
+    return (
+      <div className="rounded-lg border border-card-border bg-card-bg p-5">
+        <h3 className="font-[family-name:var(--font-display)] text-sm font-bold uppercase tracking-wider text-muted-text">
+          Starting Inventory
+        </h3>
+        <p className="mt-3 text-sm text-muted-text/70">
+          No items yet. Your inventory will populate when your character is saved.
+        </p>
+      </div>
+    )
+  }
+
   return (
-    <div data-testid="inventory-panel" className="space-y-3">
-      <h3 className="text-sm font-semibold uppercase tracking-wider text-amber-500/60">
+    <div className="rounded-lg border border-card-border bg-card-bg p-5">
+      <h3 className="font-[family-name:var(--font-display)] text-sm font-bold uppercase tracking-wider text-muted-text">
         Starting Inventory
       </h3>
-      {items.length === 0 ? (
-        <p className="text-sm text-amber-700/60">No items yet.</p>
-      ) : (
-        <ul className="space-y-1">
-          {items.map((item) => {
-            const itemType = item.properties?.type ?? ''
-            const icon = TYPE_ICONS[itemType] ?? ''
-            return (
-              <li
-                key={item.id}
-                className="flex items-center justify-between rounded px-2 py-1.5 text-sm transition-colors hover:bg-amber-950/30"
-              >
-                <span className="text-amber-200">
-                  {icon && <span className="mr-1.5">{icon}</span>}
-                  {item.item_name}
-                </span>
-                <span className="font-mono text-xs text-amber-500/60">
-                  x{item.quantity}
-                </span>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-      <p className="text-xs text-amber-800/50">
+
+      <ul className="mt-4 space-y-1">
+        {items.map((item) => {
+          const itemType = (item.properties?.type as string) ?? ''
+          const icon = TYPE_ICONS[itemType] ?? '\u25AA'
+          const damage = item.properties?.damage as string | undefined
+
+          return (
+            <li
+              key={item.item_name}
+              className="group flex items-center justify-between rounded-md px-3 py-2 transition-colors hover:bg-input-bg"
+            >
+              <div className="flex items-center gap-2.5">
+                <span className="text-sm">{icon}</span>
+                <div>
+                  <span className="text-sm text-foreground">{item.item_name}</span>
+                  {damage && (
+                    <span className="ml-2 text-[10px] text-muted-text/60">{damage}</span>
+                  )}
+                </div>
+              </div>
+              <span className="text-xs tabular-nums text-muted-text">
+                x{item.quantity}
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+
+      <p className="mt-4 border-t border-card-border pt-3 text-[11px] text-muted-text/50">
         Items are auto-assigned for your class. They reset if you change your class.
       </p>
     </div>

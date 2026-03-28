@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Character Creation Form - UI Design</title>
+
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0d0d0f;
+    color: #e8e0d4;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+  }
+  .container { max-width: 512px; width: 100%; }
+
+  .card {
+    background: #16151a;
+    border: 1px solid #2a2733;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+
+  /* Game Header */
+  .game-header h1 {
+    font-family: 'Cinzel', serif;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+  .game-header .persona {
+    margin-top: 8px;
+    font-size: 14px;
+    font-style: italic;
+    color: #8a8295;
+  }
+  .game-header .status {
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .game-header .status .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #c9a84c;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .game-header .status span {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #8a8295;
+  }
+
+  /* Form Header */
+  .form-header {
+    border-bottom: 1px solid #2a2733;
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+  }
+  .form-header h2 {
+    font-family: 'Cinzel', serif;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: #c9a84c;
+  }
+  .form-header p {
+    margin-top: 4px;
+    font-size: 14px;
+    color: #8a8295;
+  }
+
+  /* Form Fields */
+  label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: rgba(232,224,212,0.8);
+    margin-bottom: 6px;
+  }
+  input[type="text"], select {
+    width: 100%;
+    background: #1a191f;
+    border: 1px solid #33303d;
+    border-radius: 6px;
+    padding: 10px 12px;
+    color: #e8e0d4;
+    font-size: 15px;
+    outline: none;
+  }
+  input[type="text"]:focus, select:focus {
+    border-color: #c9a84c;
+    box-shadow: 0 0 0 3px rgba(201,168,76,0.1);
+  }
+  input::placeholder { color: rgba(138,130,149,0.5); }
+  .field { margin-bottom: 20px; }
+
+  /* Ability Scores */
+  .scores-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .standard-array-btn {
+    background: none;
+    border: none;
+    color: #9a7b3a;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .standard-array-btn:hover { color: #c9a84c; }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .stat-block {
+    border: 1px solid #33303d;
+    background: #1a191f;
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+    transition: border-color 0.2s;
+  }
+  .stat-block:focus-within { border-color: #c9a84c; }
+  .stat-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #8a8295;
+  }
+  .stat-value {
+    display: block;
+    width: 100%;
+    background: transparent;
+    border: none;
+    text-align: center;
+    font-size: 28px;
+    font-weight: 700;
+    color: #e8e0d4;
+    margin: 4px 0;
+    outline: none;
+  }
+  .stat-value::placeholder { color: rgba(138,130,149,0.3); }
+  .stat-full {
+    font-size: 9px;
+    color: rgba(138,130,149,0.6);
+  }
+
+  /* Submit Button */
+  .submit-btn {
+    width: 100%;
+    background: #c9a84c;
+    border: none;
+    border-radius: 6px;
+    padding: 14px;
+    font-family: 'Cinzel', serif;
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #0d0d0f;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 8px;
+  }
+  .submit-btn:hover {
+    background: rgba(201,168,76,0.9);
+    box-shadow: 0 0 20px rgba(201,168,76,0.2);
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <!-- Game Header Card -->
+  <div class="card game-header">
+    <h1>The Dragon's Lair</h1>
+    <p class="persona">&ldquo;A classic high-fantasy D&amp;D adventure.&rdquo;</p>
+    <div class="status">
+      <div class="dot"></div>
+      <span>Lobby — Awaiting Adventurers</span>
+    </div>
+  </div>
+
+  <!-- Character Creation Form Card -->
+  <div class="card">
+    <div class="form-header">
+      <h2>Forge Your Character</h2>
+      <p>Every legend begins with a name and a calling.</p>
+    </div>
+
+    <div class="field">
+      <label>Character Name</label>
+      <input type="text" value="Thorin Oakenshield" placeholder="e.g. Thorin Oakenshield">
+    </div>
+
+    <div class="field">
+      <label>Class</label>
+      <select>
+        <option>⚔️ Fighter</option>
+      </select>
+    </div>
+
+    <div class="scores-header">
+      <label style="margin-bottom:0">Ability Scores</label>
+      <button class="standard-array-btn">Use Standard Array</button>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-block">
+        <span class="stat-label">STR</span>
+        <input class="stat-value" value="15">
+        <span class="stat-full">Strength</span>
+      </div>
+      <div class="stat-block">
+        <span class="stat-label">DEX</span>
+        <input class="stat-value" value="12">
+        <span class="stat-full">Dexterity</span>
+      </div>
+      <div class="stat-block">
+        <span class="stat-label">CON</span>
+        <input class="stat-value" value="14">
+        <span class="stat-full">Constitution</span>
+      </div>
+      <div class="stat-block">
+        <span class="stat-label">INT</span>
+        <input class="stat-value" value="10">
+        <span class="stat-full">Intelligence</span>
+      </div>
+      <div class="stat-block">
+        <span class="stat-label">WIS</span>
+        <input class="stat-value" value="11">
+        <span class="stat-full">Wisdom</span>
+      </div>
+      <div class="stat-block">
+        <span class="stat-label">CHA</span>
+        <input class="stat-value" value="8">
+        <span class="stat-full">Charisma</span>
+      </div>
+    </div>
+
+    <button class="submit-btn">Save Character</button>
+  </div>
+</div>
+</body>
+</html>

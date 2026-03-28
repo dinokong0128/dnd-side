@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Character Summary + Inventory - UI Design</title>
+
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0d0d0f;
+    color: #e8e0d4;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+  }
+  .container { max-width: 512px; width: 100%; }
+
+  .card {
+    background: #16151a;
+    border: 1px solid #2a2733;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+
+  /* Game Header */
+  .game-header h1 {
+    font-family: 'Cinzel', serif;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+  .game-header .persona {
+    margin-top: 8px;
+    font-size: 14px;
+    font-style: italic;
+    color: #8a8295;
+  }
+  .game-header .status {
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .game-header .status .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #c9a84c;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .game-header .status span {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #8a8295;
+  }
+
+  /* Character Summary */
+  .char-header {
+    border-bottom: 1px solid #2a2733;
+    padding-bottom: 16px;
+    margin-bottom: 20px;
+  }
+  .char-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .char-icon {
+    width: 32px; height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(201,168,76,0.1);
+    font-size: 18px;
+  }
+  .char-ready {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #4a9;
+  }
+  .char-name {
+    margin-top: 12px;
+    font-family: 'Cinzel', serif;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+  .char-meta {
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 14px;
+    color: #8a8295;
+  }
+  .char-meta .sep { color: #2a2733; }
+  .char-meta .hp { color: #8b2f2f; }
+
+  /* Stat Grid */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+    margin-bottom: 20px;
+  }
+  .stat-block {
+    border: 1px solid #2a2733;
+    background: #1a191f;
+    border-radius: 8px;
+    padding: 8px 4px;
+    text-align: center;
+  }
+  .stat-label {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #8a8295;
+  }
+  .stat-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #e8e0d4;
+    margin: 2px 0;
+  }
+  .stat-mod {
+    font-size: 10px;
+    font-weight: 500;
+    color: #9a7b3a;
+  }
+
+  /* Edit Button */
+  .edit-btn {
+    width: 100%;
+    background: #16151a;
+    border: 1px solid #2a2733;
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #8a8295;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .edit-btn:hover {
+    border-color: #9a7b3a;
+    color: #e8e0d4;
+  }
+
+  /* Inventory Panel */
+  .inv-title {
+    font-family: 'Cinzel', serif;
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #8a8295;
+  }
+  .inv-list {
+    margin-top: 16px;
+    list-style: none;
+  }
+  .inv-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-radius: 6px;
+    transition: background 0.15s;
+  }
+  .inv-item:hover { background: #1a191f; }
+  .inv-item-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .inv-icon { font-size: 14px; }
+  .inv-name { font-size: 14px; color: #e8e0d4; }
+  .inv-damage { margin-left: 8px; font-size: 10px; color: rgba(138,130,149,0.6); }
+  .inv-qty { font-size: 12px; color: #8a8295; font-variant-numeric: tabular-nums; }
+  .inv-footer {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid #2a2733;
+    font-size: 11px;
+    color: rgba(138,130,149,0.5);
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <!-- Game Header Card -->
+  <div class="card game-header">
+    <h1>The Dragon's Lair</h1>
+    <p class="persona">&ldquo;A classic high-fantasy D&amp;D adventure.&rdquo;</p>
+    <div class="status">
+      <div class="dot"></div>
+      <span>Lobby — Awaiting Adventurers</span>
+    </div>
+  </div>
+
+  <!-- Character Summary Card -->
+  <div class="card">
+    <div class="char-header">
+      <div class="char-badge">
+        <div class="char-icon">⚔️</div>
+        <span class="char-ready">Character Ready</span>
+      </div>
+      <h2 class="char-name">Thorin Oakenshield</h2>
+      <div class="char-meta">
+        <span>⚔️ Fighter</span>
+        <span class="sep">|</span>
+        <span class="hp">HP 12</span>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-block">
+        <span class="stat-label">STR</span>
+        <div class="stat-value">15</div>
+        <span class="stat-mod">+2</span>
+      </div>
+      <div class="stat-block">
+        <span class="stat-label">DEX</span>
+        <div class="stat-value">12</div>
+        <span class="stat-mod">+1</span>
+      </div>
+      <div class="stat-block">
+        <span class="stat-label">CON</span>
+        <div class="stat-value">14</div>
+        <span class="stat-mod">+2</span>
+      </div>
+      <div class="stat-block">
+        <span class="stat-label">INT</span>
+        <div class="stat-value">10</div>
+        <span class="stat-mod">+0</span>
+      </div>
+      <div class="stat-block">
+        <span class="stat-label">WIS</span>
+        <div class="stat-value">11</div>
+        <span class="stat-mod">+0</span>
+      </div>
+      <div class="stat-block">
+        <span class="stat-label">CHA</span>
+        <div class="stat-value">8</div>
+        <span class="stat-mod">-1</span>
+      </div>
+    </div>
+
+    <button class="edit-btn">Edit Character</button>
+  </div>
+
+  <!-- Inventory Panel -->
+  <div class="card">
+    <h3 class="inv-title">Starting Inventory</h3>
+    <ul class="inv-list">
+      <li class="inv-item">
+        <div class="inv-item-left">
+          <span class="inv-icon">⚔️</span>
+          <span class="inv-name">Longsword<span class="inv-damage">1d8 slashing</span></span>
+        </div>
+        <span class="inv-qty">x1</span>
+      </li>
+      <li class="inv-item">
+        <div class="inv-item-left">
+          <span class="inv-icon">🛡️</span>
+          <span class="inv-name">Shield</span>
+        </div>
+        <span class="inv-qty">x1</span>
+      </li>
+      <li class="inv-item">
+        <div class="inv-item-left">
+          <span class="inv-icon">🛡️</span>
+          <span class="inv-name">Chain Mail</span>
+        </div>
+        <span class="inv-qty">x1</span>
+      </li>
+      <li class="inv-item">
+        <div class="inv-item-left">
+          <span class="inv-icon">🎒</span>
+          <span class="inv-name">Explorer's Pack</span>
+        </div>
+        <span class="inv-qty">x1</span>
+      </li>
+      <li class="inv-item">
+        <div class="inv-item-left">
+          <span class="inv-icon">⚔️</span>
+          <span class="inv-name">Handaxe<span class="inv-damage">1d6 slashing</span></span>
+        </div>
+        <span class="inv-qty">x5</span>
+      </li>
+    </ul>
+    <p class="inv-footer">Items are auto-assigned for your class. They reset if you change your class.</p>
+  </div>
+</div>
+</body>
+</html>

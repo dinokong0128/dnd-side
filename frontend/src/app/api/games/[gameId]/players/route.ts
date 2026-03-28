@@ -3,33 +3,31 @@ import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import {
-  CLASS_STARTING_INVENTORY,
-  CLASS_HIT_DIE,
+  calculateHpMax,
   CHARACTER_CLASSES,
-} from '@/lib/constants/starting-inventory'
+  type CharacterClass,
+} from '@/lib/game-data/characters'
+import { setStartingInventory } from '@/lib/supabase/players'
 
-const statsSchema = z.object({
-  str: z.number().int().min(1).max(20),
-  dex: z.number().int().min(1).max(20),
-  con: z.number().int().min(1).max(20),
-  int: z.number().int().min(1).max(20),
-  wis: z.number().int().min(1).max(20),
-  cha: z.number().int().min(1).max(20),
-})
-
-const createPlayerSchema = z.object({
+const characterSchema = z.object({
   character_name: z
     .string()
     .min(1, { error: 'Character name is required' })
     .max(50, { error: 'Character name must be 50 characters or less' }),
-  character_class: z.enum(CHARACTER_CLASSES as [string, ...string[]], {
+  character_class: z.enum(CHARACTER_CLASSES as unknown as [string, ...string[]], {
     error: 'Please select a valid class',
   }),
-  stats: statsSchema,
+  stats: z.object({
+    str: z.number().int().min(1).max(20, { error: 'STR must be 1-20' }),
+    dex: z.number().int().min(1).max(20, { error: 'DEX must be 1-20' }),
+    con: z.number().int().min(1).max(20, { error: 'CON must be 1-20' }),
+    int: z.number().int().min(1).max(20, { error: 'INT must be 1-20' }),
+    wis: z.number().int().min(1).max(20, { error: 'WIS must be 1-20' }),
+    cha: z.number().int().min(1).max(20, { error: 'CHA must be 1-20' }),
+  }),
 })
 
-async function getSupabaseClient() {
-  const cookieStore = await cookies()
+function createSupabaseClient(cookieStore: Awaited<ReturnType<typeof cookies>>) {
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -48,19 +46,13 @@ async function getSupabaseClient() {
   )
 }
 
-function calculateHpMax(characterClass: string, conScore: number): number {
-  const hitDie = CLASS_HIT_DIE[characterClass] ?? 8
-  const conModifier = Math.floor((conScore - 10) / 2)
-  return hitDie + conModifier
-}
-
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ gameId: string }> }
 ): Promise<NextResponse> {
   try {
-    const { gameId } = await params
-    const supabase = await getSupabaseClient()
+    const cookieStore = await cookies()
+    const supabase = createSupabaseClient(cookieStore)
 
     const {
       data: { session },
@@ -71,18 +63,24 @@ export async function POST(
     }
 
     const body = await request.json()
-    const parsed = createPlayerSchema.safeParse(body)
+    const parsed = characterSchema.safeParse(body)
 
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.issues[0].message },
-        { status: 400 }
-      )
+      const errors: Record<string, string> = {}
+      for (const issue of parsed.error.issues) {
+        const path = issue.path.join('.')
+        if (!errors[path]) {
+          errors[path] = issue.message
+        }
+      }
+      return NextResponse.json({ errors }, { status: 400 })
     }
 
+    const { gameId } = await params
     const { character_name, character_class, stats } = parsed.data
-    const hpMax = calculateHpMax(character_class, stats.con)
+    const hpMax = calculateHpMax(character_class as CharacterClass, stats.con)
 
+    // Upsert player row
     const { data: player, error: upsertError } = await supabase
       .from('players')
       .upsert(
@@ -97,7 +95,7 @@ export async function POST(
         },
         { onConflict: 'game_id,profile_id' }
       )
-      .select('*')
+      .select('id, game_id, profile_id, character_name, character_class, stats, hp_current, hp_max, created_at')
       .single()
 
     if (upsertError) {
@@ -107,48 +105,15 @@ export async function POST(
       )
     }
 
-    // Populate starting inventory
-    const startingItems = CLASS_STARTING_INVENTORY[character_class]
-    if (startingItems) {
-      const { error: deleteError } = await supabase
-        .from('player_inventory')
-        .delete()
-        .eq('player_id', player.id)
-
-      if (deleteError) {
-        return NextResponse.json(
-          { error: `Failed to reset inventory: ${deleteError.message}` },
-          { status: 500 }
-        )
-      }
-
-      const rows = startingItems.map((item) => ({
-        player_id: player.id,
-        item_name: item.item_name,
-        quantity: item.quantity,
-        properties: item.properties,
-      }))
-
-      const { error: insertError } = await supabase
-        .from('player_inventory')
-        .insert(rows)
-
-      if (insertError) {
-        return NextResponse.json(
-          { error: `Failed to set inventory: ${insertError.message}` },
-          { status: 500 }
-        )
-      }
+    // Populate starting inventory based on class
+    try {
+      await setStartingInventory(player.id, character_class as CharacterClass)
+    } catch (err) {
+      console.error('Failed to set starting inventory:', err)
+      // Non-blocking: character is saved even if inventory fails
     }
 
-    // Fetch the inventory to return with the player
-    const { data: inventory } = await supabase
-      .from('player_inventory')
-      .select('*')
-      .eq('player_id', player.id)
-      .order('created_at', { ascending: true })
-
-    return NextResponse.json({ player, inventory: inventory ?? [] }, { status: 201 })
+    return NextResponse.json(player, { status: 201 })
   } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -162,8 +127,8 @@ export async function GET(
   { params }: { params: Promise<{ gameId: string }> }
 ): Promise<NextResponse> {
   try {
-    const { gameId } = await params
-    const supabase = await getSupabaseClient()
+    const cookieStore = await cookies()
+    const supabase = createSupabaseClient(cookieStore)
 
     const {
       data: { session },
@@ -173,9 +138,11 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const { gameId } = await params
+
     const { data: player, error } = await supabase
       .from('players')
-      .select('*')
+      .select('id, game_id, profile_id, character_name, character_class, stats, hp_current, hp_max, created_at')
       .eq('game_id', gameId)
       .eq('profile_id', session.user.id)
       .maybeSingle()
@@ -188,16 +155,17 @@ export async function GET(
     }
 
     if (!player) {
-      return NextResponse.json({ player: null, inventory: [] })
+      return NextResponse.json(null, { status: 200 })
     }
 
+    // Fetch inventory
     const { data: inventory } = await supabase
       .from('player_inventory')
-      .select('*')
+      .select('id, player_id, item_name, quantity, properties')
       .eq('player_id', player.id)
-      .order('created_at', { ascending: true })
+      .order('item_name', { ascending: true })
 
-    return NextResponse.json({ player, inventory: inventory ?? [] })
+    return NextResponse.json({ ...player, inventory: inventory ?? [] }, { status: 200 })
   } catch {
     return NextResponse.json(
       { error: 'Internal server error' },

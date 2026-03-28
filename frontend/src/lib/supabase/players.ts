@@ -1,45 +1,36 @@
 import { createClient } from '@/lib/supabase/server'
+import {
+  type PlayerStats,
+  type CharacterClass,
+  type InventoryItem,
+  CLASS_STARTING_INVENTORY,
+} from '@/lib/game-data/characters'
+
+export type { PlayerStats, CharacterClass, InventoryItem }
 
 export type Player = {
   id: string
   game_id: string
   profile_id: string
-  character_name: string
-  character_class: string
-  hp_current: number
-  hp_max: number
-  stats: {
-    str: number
-    dex: number
-    con: number
-    int: number
-    wis: number
-    cha: number
-  }
-  status: string
-  joined_at: string
-}
-
-export type InventoryItem = {
-  id: string
-  player_id: string
-  item_name: string
-  quantity: number
-  properties: Record<string, string> | null
+  character_name: string | null
+  character_class: string | null
+  stats: PlayerStats | null
+  hp_current: number | null
+  hp_max: number | null
   created_at: string
 }
 
-export async function fetchPlayerByGameAndProfile(
+export async function fetchPlayerByUserId(
   gameId: string,
-  profileId: string
+  userId: string
 ): Promise<Player | null> {
   const supabase = await createClient()
 
   const { data, error } = await supabase
     .from('players')
-    .select('*')
+    .select('id, game_id, profile_id, character_name, character_class, stats, hp_current, hp_max, created_at')
     .eq('game_id', gameId)
-    .eq('profile_id', profileId)
+    .eq('profile_id', userId)
     .maybeSingle()
 
   if (error) {
@@ -56,9 +47,9 @@ export async function fetchPlayerInventory(
 
   const { data, error } = await supabase
     .from('player_inventory')
-    .select('*')
+    .select('id, player_id, item_name, quantity, properties')
     .eq('player_id', playerId)
-    .order('created_at', { ascending: true })
+    .order('item_name', { ascending: true })
 
   if (error) {
     throw new Error(`Failed to fetch inventory: ${error.message}`)
@@ -69,10 +60,11 @@ export async function fetchPlayerInventory(
 
 export async function setStartingInventory(
   playerId: string,
-  items: { item_name: string; quantity: number; properties: Record<string, string> | null }[]
+  characterClass: CharacterClass
 ): Promise<void> {
   const supabase = await createClient()
 
+  // Delete existing inventory
   const { error: deleteError } = await supabase
     .from('player_inventory')
     .delete()
@@ -82,11 +74,13 @@ export async function setStartingInventory(
     throw new Error(`Failed to clear inventory: ${deleteError.message}`)
   }
 
+  // Insert new class items
+  const items = CLASS_STARTING_INVENTORY[characterClass]
   const rows = items.map((item) => ({
     player_id: playerId,
     item_name: item.item_name,
     quantity: item.quantity,
-    properties: item.properties,
+    properties: item.properties ?? {},
   }))
 
   const { error: insertError } = await supabase
@@ -94,6 +88,6 @@ export async function setStartingInventory(
     .insert(rows)
 
   if (insertError) {
-    throw new Error(`Failed to set inventory: ${insertError.message}`)
+    throw new Error(`Failed to set starting inventory: ${insertError.message}`)
   }
 }
