@@ -24,21 +24,6 @@ export default async function GameLobbyPage({
     )
   }
 
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  let player = null
-  let inventory: Awaited<ReturnType<typeof fetchPlayerInventory>> = []
-
-  if (user) {
-    player = await fetchPlayerByGameAndProfile(gameId, user.id)
-    if (player) {
-      inventory = await fetchPlayerInventory(player.id)
-    }
-  }
-
   return (
     <div className="mx-auto max-w-lg p-6 pb-16">
       <GameLobby
