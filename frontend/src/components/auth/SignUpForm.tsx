@@ -13,9 +13,10 @@ const signUpSchema = z.object({
 type SignUpFormProps = {
   gameId: string
   inviteCode: string
+  gameName?: string
 }
 
-export function SignUpForm({ gameId, inviteCode }: SignUpFormProps) {
+export function SignUpForm({ gameId, inviteCode, gameName }: SignUpFormProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
@@ -70,64 +71,107 @@ export function SignUpForm({ gameId, inviteCode }: SignUpFormProps) {
 
   if (success) {
     return (
-      <div data-testid="success-message" className="mx-auto max-w-md p-8">
-        <p>Check your email to confirm your account.</p>
+      <div className="dnd-page flex min-h-screen items-center justify-center px-4">
+        <div className="w-full max-w-md text-center">
+          <div className="dnd-card p-8" data-testid="success-message">
+            <div className="mb-4 text-4xl">📜</div>
+            <h2 className="dnd-heading text-xl font-bold mb-3">
+              Check Your Scrolls
+            </h2>
+            <p style={{ color: 'var(--foreground-muted)' }}>
+              Check your email to confirm your account.
+            </p>
+          </div>
+        </div>
       </div>
     )
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mx-auto max-w-md space-y-4 p-8">
-      <h1 className="text-2xl font-bold">Create account</h1>
+    <div className="dnd-page flex min-h-screen items-center justify-center px-4">
+      <div className="w-full max-w-md">
+        {/* Branding */}
+        <div className="mb-8 text-center">
+          <p
+            className="mb-3 text-sm tracking-[0.3em] uppercase"
+            style={{ color: 'var(--gold-dim)' }}
+          >
+            ⚔ Realm & Ruin ⚔
+          </p>
+          <h1 className="dnd-heading text-3xl font-bold mb-2">
+            Join the Adventure
+          </h1>
+          {gameName && (
+            <div
+              className="mt-3 inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm"
+              style={{
+                background: 'rgba(201, 168, 76, 0.1)',
+                border: '1px solid rgba(201, 168, 76, 0.2)',
+                color: 'var(--gold)',
+              }}
+            >
+              Joining: {gameName}
+            </div>
+          )}
+        </div>
 
-      <div>
-        <label htmlFor="email" className="block text-sm font-medium">
-          Email
-        </label>
-        <input
-          id="email"
-          type="email"
-          data-testid="email-input"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="mt-1 block w-full rounded border px-3 py-2"
-        />
-        {fieldErrors.email && (
-          <p className="mt-1 text-sm text-red-600">{fieldErrors.email}</p>
-        )}
+        {/* Form card */}
+        <div className="dnd-card p-8">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label htmlFor="email" className="dnd-label">
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                data-testid="email-input"
+                autoFocus
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="dnd-input"
+                placeholder="adventurer@realm.com"
+              />
+              {fieldErrors.email && (
+                <p className="dnd-error">{fieldErrors.email}</p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="password" className="dnd-label">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                data-testid="password-input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="dnd-input"
+                placeholder="Min. 8 characters"
+              />
+              {fieldErrors.password && (
+                <p className="dnd-error">{fieldErrors.password}</p>
+              )}
+            </div>
+
+            {formError && (
+              <div data-testid="form-error" className="dnd-error-banner">
+                {formError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              data-testid="submit-button"
+              disabled={loading}
+              className="dnd-button-primary"
+            >
+              {loading ? 'Creating account…' : 'Join the Adventure'}
+            </button>
+          </form>
+        </div>
       </div>
-
-      <div>
-        <label htmlFor="password" className="block text-sm font-medium">
-          Password
-        </label>
-        <input
-          id="password"
-          type="password"
-          data-testid="password-input"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 block w-full rounded border px-3 py-2"
-        />
-        {fieldErrors.password && (
-          <p className="mt-1 text-sm text-red-600">{fieldErrors.password}</p>
-        )}
-      </div>
-
-      {formError && (
-        <p data-testid="form-error" className="text-sm text-red-600">
-          {formError}
-        </p>
-      )}
-
-      <button
-        type="submit"
-        data-testid="submit-button"
-        disabled={loading}
-        className="w-full rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
-      >
-        Create account
-      </button>
-    </form>
+    </div>
   )
 }
