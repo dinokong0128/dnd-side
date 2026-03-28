@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { CLASS_STARTING_INVENTORY } from '@/lib/starting-inventory'
 
 const CHARACTER_CLASSES = [
   'Fighter',
@@ -77,6 +78,34 @@ async function getSupabaseClient() {
   )
 }
 
+async function setStartingInventory(
+  supabase: Awaited<ReturnType<typeof getSupabaseClient>>,
+  playerId: string,
+  characterClass: string
+) {
+  // Delete existing inventory
+  await supabase
+    .from('player_inventory')
+    .delete()
+    .eq('player_id', playerId)
+
+  // Insert new class items
+  const items = CLASS_STARTING_INVENTORY[characterClass]
+  if (items && items.length > 0) {
+    const rows = items.map((item) => ({
+      player_id: playerId,
+      item_name: item.item_name,
+      quantity: item.quantity,
+      properties: item.properties,
+    }))
+
+    const { error } = await supabase.from('player_inventory').insert(rows)
+    if (error) {
+      throw new Error(`Failed to set starting inventory: ${error.message}`)
+    }
+  }
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ gameId: string }> }
@@ -132,6 +161,20 @@ export async function POST(
     if (error) {
       return NextResponse.json(
         { error: `Failed to save character: ${error.message}` },
+        { status: 500 }
+      )
+    }
+
+    try {
+      await setStartingInventory(supabase, player.id, character_class)
+    } catch (invError) {
+      return NextResponse.json(
+        {
+          error:
+            invError instanceof Error
+              ? invError.message
+              : 'Failed to set starting inventory',
+        },
         { status: 500 }
       )
     }
@@ -197,6 +240,20 @@ export async function PATCH(
     if (error) {
       return NextResponse.json(
         { error: `Failed to update character: ${error.message}` },
+        { status: 500 }
+      )
+    }
+
+    try {
+      await setStartingInventory(supabase, player.id, character_class)
+    } catch (invError) {
+      return NextResponse.json(
+        {
+          error:
+            invError instanceof Error
+              ? invError.message
+              : 'Failed to set starting inventory',
+        },
         { status: 500 }
       )
     }

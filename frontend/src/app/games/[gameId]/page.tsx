@@ -1,7 +1,10 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { fetchGameById } from '@/lib/supabase/games'
-import { fetchPlayerByProfileAndGame } from '@/lib/supabase/players'
+import {
+  fetchPlayerByProfileAndGame,
+  fetchInventoryByPlayer,
+} from '@/lib/supabase/players'
 import { CharacterSection } from '@/components/games/CharacterSection'
 
 export default async function GameLobbyPage({
@@ -35,6 +38,8 @@ export default async function GameLobbyPage({
     ? await fetchPlayerByProfileAndGame(user.id, gameId)
     : null
 
+  const inventory = player ? await fetchInventoryByPlayer(player.id) : []
+
   const serializedPlayer = player
     ? {
         id: player.id,
@@ -45,6 +50,13 @@ export default async function GameLobbyPage({
         stats: player.stats as Record<string, number>,
       }
     : null
+
+  const serializedInventory = inventory.map((item) => ({
+    id: item.id,
+    item_name: item.item_name,
+    quantity: item.quantity,
+    properties: item.properties,
+  }))
 
   return (
     <div data-testid="game-lobby" className="mx-auto max-w-xl p-8">
@@ -67,6 +79,7 @@ export default async function GameLobbyPage({
       <CharacterSection
         gameId={gameId}
         initialPlayer={serializedPlayer}
+        initialInventory={serializedInventory}
         gameStatus={game.status}
       />
     </div>
