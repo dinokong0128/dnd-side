@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Game Lobby — Character Creation & Inventory UI Mockup</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: #09090b;
+    color: #ededed;
+    min-height: 100vh;
+  }
+
+  /* Top bar */
+  .top-bar {
+    border-bottom: 1px solid rgba(39, 39, 42, 0.8);
+    background: rgba(24, 24, 27, 0.5);
+  }
+  .top-bar-inner {
+    max-width: 672px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+  }
+  .back-link {
+    font-size: 14px;
+    color: #71717a;
+    text-decoration: none;
+  }
+  .status-badge {
+    border-radius: 9999px;
+    border: 1px solid rgba(63, 63, 70, 0.5);
+    background: rgba(39, 39, 42, 0.5);
+    padding: 2px 12px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #71717a;
+  }
+
+  .container { max-width: 672px; margin: 0 auto; padding: 40px 24px; }
+
+  /* Game header */
+  .game-title {
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    color: #fffbeb;
+  }
+  .game-persona {
+    margin-top: 8px;
+    font-size: 14px;
+    color: #71717a;
+    font-style: italic;
+    line-height: 1.6;
+  }
+
+  /* Card wrapper */
+  .card {
+    margin-top: 40px;
+    border-radius: 12px;
+    border: 1px solid rgba(39, 39, 42, 0.8);
+    background: rgba(24, 24, 27, 0.3);
+    padding: 24px;
+  }
+
+  /* -- FORM STATE (left column) -- */
+  .form-header {
+    border-bottom: 1px solid rgba(146, 64, 14, 0.2);
+    padding-bottom: 8px;
+  }
+  .form-header h2 {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    color: #fef3c7;
+  }
+  .form-header p {
+    margin-top: 4px;
+    font-size: 14px;
+    color: #71717a;
+  }
+
+  .field { margin-top: 24px; }
+  .field-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(253, 230, 138, 0.8);
+  }
+  .field-hint {
+    margin-top: 2px;
+    font-size: 12px;
+    color: #71717a;
+  }
+  .text-input, .select-input {
+    margin-top: 6px;
+    display: block;
+    width: 100%;
+    border-radius: 6px;
+    border: 1px solid #3f3f46;
+    background: rgba(39, 39, 42, 0.5);
+    padding: 8px 12px;
+    font-size: 14px;
+    color: #f4f4f5;
+  }
+  .text-input::placeholder { color: #52525b; }
+
+  .hp-preview {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #71717a;
+  }
+  .hp-value { font-weight: 600; color: #34d399; }
+
+  /* Ability scores grid */
+  .stats-header {
+    margin-top: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .std-array-btn {
+    font-size: 12px;
+    color: #f59e0b;
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+  .stats-grid {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .stat-card {
+    border-radius: 8px;
+    border: 1px solid rgba(63, 63, 70, 0.5);
+    background: rgba(39, 39, 42, 0.3);
+    padding: 12px;
+    text-align: center;
+  }
+  .stat-abbr {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #71717a;
+  }
+  .stat-name {
+    margin-top: 2px;
+    font-size: 10px;
+    color: #52525b;
+  }
+  .stat-value {
+    margin-top: 6px;
+    font-size: 22px;
+    font-weight: 700;
+    color: #f4f4f5;
+  }
+  .stat-mod {
+    margin-top: 2px;
+    font-size: 10px;
+    color: #71717a;
+  }
+
+  .submit-btn {
+    margin-top: 24px;
+    width: 100%;
+    border-radius: 6px;
+    background: #b45309;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #fffbeb;
+    border: none;
+    cursor: pointer;
+  }
+
+  /* -- SUMMARY STATE (right column) -- */
+  .summary-ready {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid rgba(146, 64, 14, 0.2);
+    padding-bottom: 8px;
+  }
+  .ready-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #10b981;
+  }
+  .ready-text {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #34d399;
+  }
+  .char-name {
+    margin-top: 16px;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    color: #fef3c7;
+  }
+  .char-meta {
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 14px;
+    color: #71717a;
+  }
+  .char-class { font-weight: 500; color: rgba(251, 191, 36, 0.8); }
+
+  .stats-row {
+    margin-top: 16px;
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+  }
+  .stat-mini {
+    border-radius: 6px;
+    border: 1px solid rgba(63, 63, 70, 0.5);
+    background: rgba(39, 39, 42, 0.3);
+    padding: 8px 0;
+    text-align: center;
+  }
+
+  .edit-btn {
+    margin-top: 16px;
+    width: 100%;
+    border-radius: 6px;
+    border: 1px solid #3f3f46;
+    background: rgba(39, 39, 42, 0.5);
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #d4d4d8;
+    cursor: pointer;
+  }
+
+  /* -- INVENTORY PANEL -- */
+  .inventory-panel {
+    margin-top: 24px;
+    border-radius: 8px;
+    border: 1px solid #27272a;
+    background: rgba(24, 24, 27, 0.5);
+    padding: 20px;
+  }
+  .inventory-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #71717a;
+  }
+  .inventory-list {
+    margin-top: 12px;
+    list-style: none;
+  }
+  .inventory-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+  .inventory-item:hover { background: rgba(39, 39, 42, 0.5); }
+  .item-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #d4d4d8;
+  }
+  .item-icon { font-size: 16px; }
+  .item-qty {
+    font-variant-numeric: tabular-nums;
+    color: #71717a;
+  }
+  .inventory-note {
+    margin-top: 16px;
+    font-size: 12px;
+    color: #52525b;
+  }
+
+  /* Layout for side-by-side mockup */
+  .mockup-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    margin-top: 40px;
+  }
+  .mockup-label {
+    text-align: center;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #71717a;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #27272a;
+  }
+</style>
+</head>
+<body>
+  <!-- TOP BAR -->
+  <div class="top-bar">
+    <div class="top-bar-inner">
+      <a href="#" class="back-link">&larr; Dashboard</a>
+      <span class="status-badge">lobby</span>
+    </div>
+  </div>
+
+  <div class="container">
+    <h1 class="game-title">Dragon's Keep</h1>
+    <p class="game-persona">"A gritty dark fantasy world where ancient dragons rule from shadow thrones and every alliance has a price."</p>
+
+    <div class="mockup-grid">
+      <!-- LEFT: CHARACTER CREATION FORM -->
+      <div>
+        <div class="mockup-label">State: Creating Character</div>
+        <div class="card">
+          <div class="form-header">
+            <h2>Create Your Character</h2>
+            <p>Forge your hero before the adventure begins.</p>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Character Name</label>
+            <p class="field-hint">Give your adventurer a memorable title.</p>
+            <input class="text-input" type="text" value="Thorin Oakenshield" />
+          </div>
+
+          <div class="field">
+            <label class="field-label">Class</label>
+            <select class="select-input">
+              <option>Fighter</option>
+            </select>
+            <p class="hp-preview">Hit Die: d10 · Starting HP: <span class="hp-value">12</span></p>
+          </div>
+
+          <div class="stats-header">
+            <label class="field-label">Ability Scores</label>
+            <button class="std-array-btn">Fill Standard Array (15, 14, 13, 12, 10, 8)</button>
+          </div>
+          <p class="field-hint" style="margin-top:2px">Each score must be between 1 and 20.</p>
+
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-abbr">STR</div>
+              <div class="stat-name">Strength</div>
+              <div class="stat-value">15</div>
+              <div class="stat-mod">mod: +2</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-abbr">DEX</div>
+              <div class="stat-name">Dexterity</div>
+              <div class="stat-value">12</div>
+              <div class="stat-mod">mod: +1</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-abbr">CON</div>
+              <div class="stat-name">Constitution</div>
+              <div class="stat-value">14</div>
+              <div class="stat-mod">mod: +2</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-abbr">INT</div>
+              <div class="stat-name">Intelligence</div>
+              <div class="stat-value">10</div>
+              <div class="stat-mod">mod: +0</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-abbr">WIS</div>
+              <div class="stat-name">Wisdom</div>
+              <div class="stat-value">11</div>
+              <div class="stat-mod">mod: +0</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-abbr">CHA</div>
+              <div class="stat-name">Charisma</div>
+              <div class="stat-value">8</div>
+              <div class="stat-mod">mod: -1</div>
+            </div>
+          </div>
+
+          <button class="submit-btn">Save Character</button>
+        </div>
+
+        <!-- Empty inventory state -->
+        <div class="inventory-panel">
+          <div class="inventory-title">Starting Inventory</div>
+          <p style="margin-top:12px;font-size:14px;color:#71717a">Create your character above to see your starting items.</p>
+        </div>
+      </div>
+
+      <!-- RIGHT: CHARACTER SAVED + INVENTORY -->
+      <div>
+        <div class="mockup-label">State: Character Ready</div>
+        <div class="card">
+          <div class="summary-ready">
+            <div class="ready-dot"></div>
+            <span class="ready-text">Character Ready</span>
+          </div>
+
+          <div class="char-name">Thorin Oakenshield</div>
+          <div class="char-meta">
+            <span class="char-class">Fighter</span>
+            <span style="color:#52525b">&middot;</span>
+            <span>HP <span class="hp-value">12</span></span>
+          </div>
+
+          <div class="stats-row">
+            <div class="stat-mini">
+              <div class="stat-abbr">STR</div>
+              <div style="margin-top:4px;font-size:18px;font-weight:700;color:#f4f4f5">15</div>
+              <div class="stat-mod">+2</div>
+            </div>
+            <div class="stat-mini">
+              <div class="stat-abbr">DEX</div>
+              <div style="margin-top:4px;font-size:18px;font-weight:700;color:#f4f4f5">12</div>
+              <div class="stat-mod">+1</div>
+            </div>
+            <div class="stat-mini">
+              <div class="stat-abbr">CON</div>
+              <div style="margin-top:4px;font-size:18px;font-weight:700;color:#f4f4f5">14</div>
+              <div class="stat-mod">+2</div>
+            </div>
+            <div class="stat-mini">
+              <div class="stat-abbr">INT</div>
+              <div style="margin-top:4px;font-size:18px;font-weight:700;color:#f4f4f5">10</div>
+              <div class="stat-mod">+0</div>
+            </div>
+            <div class="stat-mini">
+              <div class="stat-abbr">WIS</div>
+              <div style="margin-top:4px;font-size:18px;font-weight:700;color:#f4f4f5">11</div>
+              <div class="stat-mod">+0</div>
+            </div>
+            <div class="stat-mini">
+              <div class="stat-abbr">CHA</div>
+              <div style="margin-top:4px;font-size:18px;font-weight:700;color:#f4f4f5">8</div>
+              <div class="stat-mod">-1</div>
+            </div>
+          </div>
+
+          <button class="edit-btn">Edit Character</button>
+        </div>
+
+        <!-- Populated inventory -->
+        <div class="inventory-panel">
+          <div class="inventory-title">Starting Inventory</div>
+          <ul class="inventory-list">
+            <li class="inventory-item">
+              <span class="item-name"><span class="item-icon">&#9876;</span> Longsword</span>
+              <span class="item-qty">x1</span>
+            </li>
+            <li class="inventory-item">
+              <span class="item-name"><span class="item-icon">&#128737;</span> Shield</span>
+              <span class="item-qty">x1</span>
+            </li>
+            <li class="inventory-item">
+              <span class="item-name"><span class="item-icon">&#128737;</span> Chain Mail</span>
+              <span class="item-qty">x1</span>
+            </li>
+            <li class="inventory-item">
+              <span class="item-name"><span class="item-icon">&#127890;</span> Explorer's Pack</span>
+              <span class="item-qty">x1</span>
+            </li>
+            <li class="inventory-item">
+              <span class="item-name"><span class="item-icon">&#9876;</span> Handaxe</span>
+              <span class="item-qty">x5</span>
+            </li>
+          </ul>
+          <p class="inventory-note">Items are auto-assigned for your class. They reset if you change your class.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
