@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UI Mockups — US-08, US-09 (Character Creation + Inventory)</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --dnd-black: #0d0b09; --dnd-charcoal: #1a1714; --dnd-brown: #2a2420;
+    --dnd-parchment: #e8dcc8; --dnd-parchment-dim: #b8a98c;
+    --dnd-gold: #c9a84c; --dnd-gold-bright: #e4c65a; --dnd-gold-dim: #8a7234;
+    --dnd-crimson-bright: #c0392b; --dnd-emerald: #2d6a4f;
+    --input-bg: #0f0d0a; --input-border: #3a332b;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #111; color: var(--dnd-parchment); font-family: 'Lora', Georgia, serif; }
+  .section { padding: 60px 20px; border-bottom: 1px solid #2a2420; }
+  .section-title {
+    font-family: 'Cinzel', serif; font-size: 0.7rem; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--dnd-gold); margin-bottom: 40px; text-align: center;
+  }
+  .page-bg {
+    min-height: 400px; display: flex; justify-content: center;
+    background: radial-gradient(ellipse at 50% 0%, rgba(201,168,76,0.06) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 100%, rgba(139,34,50,0.04) 0%, transparent 50%),
+                var(--dnd-black);
+    padding: 40px 20px;
+  }
+  .card {
+    background: var(--dnd-charcoal); border: 1px solid var(--dnd-brown);
+    border-radius: 0.5rem; position: relative; overflow: hidden; padding: 1.5rem;
+    width: 100%; max-width: 480px;
+  }
+  .card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, transparent, var(--dnd-gold) 30%, var(--dnd-gold-bright) 50%, var(--dnd-gold) 70%, transparent);
+  }
+  .heading { font-family: 'Cinzel', serif; color: var(--dnd-parchment); font-weight: 700; }
+  .label {
+    display: block; font-family: 'Cinzel', serif; font-size: 0.7rem; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--dnd-gold); margin-bottom: 0.375rem;
+  }
+  .input {
+    width: 100%; background: var(--input-bg); border: 1px solid var(--input-border);
+    border-radius: 0.375rem; color: var(--dnd-parchment); padding: 0.625rem 0.875rem;
+    font-family: 'Lora', serif; font-size: 0.95rem;
+  }
+  .input::placeholder { color: #5a5248; font-style: italic; }
+  .select { appearance: none; cursor: pointer; }
+  .field-error { font-size: 0.75rem; color: var(--dnd-crimson-bright); margin-top: 0.25rem; }
+  .btn-primary {
+    width: 100%; padding: 0.75rem; font-family: 'Cinzel', serif; font-size: 0.85rem;
+    font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--dnd-black); background: linear-gradient(180deg, var(--dnd-gold-bright), var(--dnd-gold));
+    border: 1px solid var(--dnd-gold); border-radius: 0.375rem; cursor: pointer;
+  }
+  .btn-secondary {
+    padding: 0.25rem 0.5rem; font-family: 'Cinzel', serif; font-size: 0.65rem;
+    font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--dnd-gold); background: transparent; border: 1px solid var(--dnd-gold-dim);
+    border-radius: 0.375rem; cursor: pointer;
+  }
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; }
+  .stat-box {
+    background: var(--input-bg); border: 1px solid var(--input-border);
+    border-radius: 0.375rem; padding: 0.5rem; text-align: center;
+  }
+  .stat-label { font-family: 'Cinzel', serif; font-size: 0.6rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--dnd-gold); }
+  .stat-value { font-family: 'Cinzel', serif; font-size: 1.4rem; font-weight: 700; color: var(--dnd-parchment); }
+  .stat-mod { font-size: 0.75rem; color: var(--dnd-parchment-dim); }
+  .stat-input {
+    width: 100%; background: transparent; border: none; color: var(--dnd-parchment);
+    font-family: 'Cinzel', serif; font-size: 1.1rem; text-align: center; padding: 0.25rem;
+  }
+  .hp-badge {
+    display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.65rem;
+    border-radius: 9999px; font-family: 'Cinzel', serif; font-size: 0.7rem; font-weight: 600;
+    background: rgba(139,34,50,0.2); color: #e8a0a0; border: 1px solid rgba(139,34,50,0.3);
+  }
+  .ready-badge {
+    display: inline-flex; align-items: center; padding: 0.2rem 0.65rem;
+    border-radius: 9999px; font-family: 'Cinzel', serif; font-size: 0.65rem; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    background: rgba(45,106,79,0.2); color: #6fcf97; border: 1px solid rgba(45,106,79,0.3);
+  }
+  .inventory-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.5rem 0; border-bottom: 1px solid var(--dnd-brown);
+  }
+  .inventory-icon { width: 1.5rem; text-align: center; font-size: 0.875rem; }
+  .flex { display: flex; } .items-center { align-items: center; }
+  .justify-between { justify-content: space-between; }
+  .gap-2 { gap: 0.5rem; } .gap-3 { gap: 0.75rem; }
+  .mb-3 { margin-bottom: 0.75rem; } .mb-4 { margin-bottom: 1rem; }
+  .mb-6 { margin-bottom: 1.5rem; }
+  .mt-1 { margin-top: 0.25rem; } .mt-4 { margin-top: 1rem; }
+  .space-y > * + * { margin-top: 1.25rem; }
+  .muted { color: var(--dnd-parchment-dim); }
+  .text-xs { font-size: 0.75rem; } .text-sm { font-size: 0.875rem; }
+</style>
+</head>
+<body>
+
+<!-- ═══ US-08: CHARACTER CREATION FORM ═══ -->
+<div class="section">
+  <div class="section-title">US-08: Character Creation Form</div>
+  <div class="page-bg">
+    <div style="width:100%; max-width:480px;">
+      <div class="card">
+        <h2 class="heading mb-6" style="font-size:1.125rem;">Create Your Character</h2>
+        <form class="space-y" onsubmit="return false">
+          <div>
+            <label class="label">Character Name</label>
+            <input class="input" placeholder="Thorin Oakenshield" value="Thorin Oakenshield">
+          </div>
+          <div>
+            <label class="label">Class</label>
+            <select class="input select"><option>Fighter</option></select>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="hp-badge">HP 12</span>
+            <span class="text-xs muted">d10 + CON modifier</span>
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <span class="label" style="margin:0;">Ability Scores</span>
+              <button class="btn-secondary">Standard Array</button>
+            </div>
+            <div class="stat-grid">
+              <div class="stat-box"><div class="stat-label">STR</div><input class="stat-input" value="15"><div class="stat-mod">+2</div></div>
+              <div class="stat-box"><div class="stat-label">DEX</div><input class="stat-input" value="14"><div class="stat-mod">+2</div></div>
+              <div class="stat-box"><div class="stat-label">CON</div><input class="stat-input" value="13"><div class="stat-mod">+1</div></div>
+              <div class="stat-box"><div class="stat-label">INT</div><input class="stat-input" value="12"><div class="stat-mod">+1</div></div>
+              <div class="stat-box"><div class="stat-label">WIS</div><input class="stat-input" value="10"><div class="stat-mod">+0</div></div>
+              <div class="stat-box"><div class="stat-label">CHA</div><input class="stat-input" value="8"><div class="stat-mod">-1</div></div>
+            </div>
+          </div>
+          <button class="btn-primary" style="margin-top:1.5rem;">Seal Your Fate</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ US-08: VALIDATION ERROR STATE ═══ -->
+<div class="section">
+  <div class="section-title">US-08: Validation Errors</div>
+  <div class="page-bg">
+    <div style="width:100%; max-width:480px;">
+      <div class="card">
+        <h2 class="heading mb-6" style="font-size:1.125rem;">Create Your Character</h2>
+        <form class="space-y" onsubmit="return false">
+          <div>
+            <label class="label">Character Name</label>
+            <input class="input" style="border-color:var(--dnd-crimson-bright);" value="">
+            <p class="field-error">Character name is required</p>
+          </div>
+          <div>
+            <label class="label">Class</label>
+            <select class="input" style="border-color:var(--dnd-crimson-bright);"><option value="">Choose your class...</option></select>
+            <p class="field-error">Please select a class</p>
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <span class="label" style="margin:0;">Ability Scores</span>
+              <button class="btn-secondary">Standard Array</button>
+            </div>
+            <div class="stat-grid">
+              <div class="stat-box"><div class="stat-label">STR</div><input class="stat-input" value="0"><p class="field-error" style="font-size:0.6rem;">1-20</p></div>
+              <div class="stat-box"><div class="stat-label">DEX</div><input class="stat-input" value=""><p class="field-error" style="font-size:0.6rem;">1-20</p></div>
+              <div class="stat-box"><div class="stat-label">CON</div><input class="stat-input" value="25"><p class="field-error" style="font-size:0.6rem;">1-20</p></div>
+              <div class="stat-box"><div class="stat-label">INT</div><input class="stat-input" value=""><p class="field-error" style="font-size:0.6rem;">1-20</p></div>
+              <div class="stat-box"><div class="stat-label">WIS</div><input class="stat-input" value=""><p class="field-error" style="font-size:0.6rem;">1-20</p></div>
+              <div class="stat-box"><div class="stat-label">CHA</div><input class="stat-input" value=""><p class="field-error" style="font-size:0.6rem;">1-20</p></div>
+            </div>
+          </div>
+          <button class="btn-primary" style="margin-top:1.5rem;">Seal Your Fate</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ US-08: CHARACTER SUMMARY CARD ═══ -->
+<div class="section">
+  <div class="section-title">US-08: Character Summary (Post-Save)</div>
+  <div class="page-bg">
+    <div style="width:100%; max-width:480px;">
+      <div class="card">
+        <div class="flex items-center justify-between mb-4">
+          <span class="ready-badge">Ready</span>
+          <button class="btn-secondary">Edit Character</button>
+        </div>
+        <h2 class="heading" style="font-size:1.25rem;">Thorin Oakenshield</h2>
+        <div class="mt-1 flex items-center gap-3">
+          <span class="text-sm muted">Fighter</span>
+          <span class="hp-badge">HP 12</span>
+        </div>
+        <div class="stat-grid mt-4">
+          <div class="stat-box"><div class="stat-label">STR</div><div class="stat-value">15</div><div class="stat-mod">+2</div></div>
+          <div class="stat-box"><div class="stat-label">DEX</div><div class="stat-value">14</div><div class="stat-mod">+2</div></div>
+          <div class="stat-box"><div class="stat-label">CON</div><div class="stat-value">13</div><div class="stat-mod">+1</div></div>
+          <div class="stat-box"><div class="stat-label">INT</div><div class="stat-value">12</div><div class="stat-mod">+1</div></div>
+          <div class="stat-box"><div class="stat-label">WIS</div><div class="stat-value">10</div><div class="stat-mod">+0</div></div>
+          <div class="stat-box"><div class="stat-label">CHA</div><div class="stat-value">8</div><div class="stat-mod">-1</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ US-09: INVENTORY — EMPTY STATE ═══ -->
+<div class="section">
+  <div class="section-title">US-09: Inventory — Empty (No Character)</div>
+  <div class="page-bg">
+    <div style="width:100%; max-width:480px;">
+      <div class="card">
+        <h3 class="heading mb-4" style="font-size:1rem;">Starting Inventory</h3>
+        <p class="text-sm muted" style="font-style:italic;">
+          Create your character above to see your starting items.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ US-09: INVENTORY — POPULATED ═══ -->
+<div class="section">
+  <div class="section-title">US-09: Inventory — Fighter Starting Equipment</div>
+  <div class="page-bg">
+    <div style="width:100%; max-width:480px;">
+      <div class="card">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="heading" style="font-size:1rem;">Starting Inventory</h3>
+          <span class="text-xs muted" style="font-family:'Cinzel',serif; letter-spacing:0.05em;">5 items</span>
+        </div>
+        <div>
+          <div class="inventory-row"><div class="flex items-center gap-2"><span class="inventory-icon">&#x2694;</span><span class="text-sm">Longsword</span></div><span class="text-xs muted">&times;1</span></div>
+          <div class="inventory-row"><div class="flex items-center gap-2"><span class="inventory-icon">&#x1F6E1;</span><span class="text-sm">Shield</span></div><span class="text-xs muted">&times;1</span></div>
+          <div class="inventory-row"><div class="flex items-center gap-2"><span class="inventory-icon">&#x1F6E1;</span><span class="text-sm">Chain Mail</span></div><span class="text-xs muted">&times;1</span></div>
+          <div class="inventory-row"><div class="flex items-center gap-2"><span class="inventory-icon">&#x1F392;</span><span class="text-sm">Explorer's Pack</span></div><span class="text-xs muted">&times;1</span></div>
+          <div class="inventory-row" style="border-bottom:none;"><div class="flex items-center gap-2"><span class="inventory-icon">&#x2694;</span><span class="text-sm">Handaxe</span></div><span class="text-xs muted">&times;5</span></div>
+        </div>
+        <p class="mt-4 text-xs muted" style="font-style:italic;">
+          Items are auto-assigned for your class. They reset if you change your class.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
