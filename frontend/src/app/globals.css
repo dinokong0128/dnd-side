@@ -3,6 +3,21 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --dnd-bg-deep: #0d0b09;
+  --dnd-bg-card: #181512;
+  --dnd-bg-input: #0f0d0b;
+  --dnd-border: #2a2520;
+  --dnd-border-focus: #c9a84c;
+  --dnd-gold: #c9a84c;
+  --dnd-gold-bright: #dbb960;
+  --dnd-gold-dim: #7a6530;
+  --dnd-text: #e8dcc8;
+  --dnd-text-dim: #9a8e7c;
+  --dnd-text-muted: #5c5347;
+  --dnd-crimson: #a33348;
+  --dnd-crimson-bg: rgba(163, 51, 72, 0.15);
+  --dnd-emerald: #3d9970;
+  --dnd-emerald-bg: rgba(61, 153, 112, 0.15);
 }
 
 @theme inline {
@@ -23,4 +38,284 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ================================================
+   D&D Dark Fantasy Design System
+   ================================================ */
+
+.dnd-page {
+  background: var(--dnd-bg-deep);
+  background-image: radial-gradient(
+    ellipse at 50% 0%,
+    rgba(201, 168, 76, 0.04) 0%,
+    transparent 70%
+  );
+  min-height: 100vh;
+  color: var(--dnd-text);
+  font-family: var(--font-crimson), 'Crimson Text', Georgia, serif;
+}
+
+/* --- Cards --- */
+
+.dnd-card {
+  background: var(--dnd-bg-card);
+  border: 1px solid var(--dnd-border);
+  border-radius: 6px;
+  padding: 1.5rem;
+  position: relative;
+}
+
+.dnd-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--dnd-gold), transparent);
+  border-radius: 6px 6px 0 0;
+}
+
+/* --- Typography --- */
+
+.dnd-heading {
+  font-family: var(--font-cinzel), 'Cinzel', serif;
+  color: var(--dnd-gold);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.dnd-label {
+  display: block;
+  font-family: var(--font-cinzel), 'Cinzel', serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dnd-text-dim);
+  margin-bottom: 0.5rem;
+}
+
+/* --- Inputs --- */
+
+.dnd-input {
+  display: block;
+  width: 100%;
+  background: var(--dnd-bg-input);
+  border: 1px solid var(--dnd-border);
+  border-radius: 4px;
+  padding: 0.625rem 0.75rem;
+  color: var(--dnd-text);
+  font-family: var(--font-crimson), 'Crimson Text', Georgia, serif;
+  font-size: 1rem;
+  transition: border-color 0.2s;
+}
+
+.dnd-input:focus {
+  outline: none;
+  border-color: var(--dnd-border-focus);
+  box-shadow: 0 0 0 1px rgba(201, 168, 76, 0.2);
+}
+
+.dnd-input::placeholder {
+  color: var(--dnd-text-muted);
+  font-style: italic;
+}
+
+select.dnd-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239a8e7c' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2rem;
+}
+
+select.dnd-input option {
+  background: var(--dnd-bg-card);
+  color: var(--dnd-text);
+}
+
+/* --- Stat Blocks --- */
+
+.dnd-stat-input {
+  text-align: center;
+  background: var(--dnd-bg-input);
+  border: 1px solid var(--dnd-border);
+  border-radius: 4px;
+  padding: 0.5rem 0.25rem;
+  transition: border-color 0.2s;
+}
+
+.dnd-stat-input:focus-within {
+  border-color: var(--dnd-border-focus);
+}
+
+.dnd-stat-label {
+  display: block;
+  font-family: var(--font-cinzel), 'Cinzel', serif;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--dnd-text-dim);
+  margin-bottom: 0.125rem;
+}
+
+.dnd-stat-value {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: none;
+  text-align: center;
+  color: var(--dnd-text);
+  font-family: var(--font-cinzel), 'Cinzel', serif;
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.2;
+  -moz-appearance: textfield;
+}
+
+.dnd-stat-value::-webkit-outer-spin-button,
+.dnd-stat-value::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.dnd-stat-value:focus {
+  outline: none;
+}
+
+.dnd-stat-modifier {
+  display: block;
+  font-family: var(--font-crimson), 'Crimson Text', serif;
+  font-size: 0.75rem;
+  color: var(--dnd-gold-dim);
+  margin-top: 0.125rem;
+}
+
+/* --- Buttons --- */
+
+.dnd-button-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(180deg, var(--dnd-gold), #a68a3e);
+  color: #0d0b09;
+  font-family: var(--font-cinzel), 'Cinzel', serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+}
+
+.dnd-button-primary:hover {
+  opacity: 0.92;
+}
+
+.dnd-button-primary:active {
+  transform: scale(0.98);
+}
+
+.dnd-button-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.dnd-button-ghost {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.375rem 0.625rem;
+  background: transparent;
+  color: var(--dnd-gold);
+  font-family: var(--font-cinzel), 'Cinzel', serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  border: 1px solid var(--dnd-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.dnd-button-ghost:hover {
+  border-color: var(--dnd-gold-dim);
+  background: rgba(201, 168, 76, 0.06);
+}
+
+/* --- Badges --- */
+
+.dnd-hp-badge {
+  display: inline-block;
+  background: var(--dnd-crimson-bg);
+  color: #e06070;
+  font-family: var(--font-cinzel), 'Cinzel', serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 0.125rem 0.5rem;
+  border-radius: 3px;
+  border: 1px solid rgba(163, 51, 72, 0.25);
+}
+
+.dnd-ready-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  background: var(--dnd-emerald-bg);
+  color: var(--dnd-emerald);
+  font-family: var(--font-cinzel), 'Cinzel', serif;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.625rem;
+  border-radius: 3px;
+  border: 1px solid rgba(61, 153, 112, 0.25);
+}
+
+/* --- Utility --- */
+
+.dnd-error {
+  color: #e06070;
+  font-size: 0.8rem;
+  margin-top: 0.375rem;
+}
+
+.dnd-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--dnd-border), transparent);
+  border: none;
+  margin: 1rem 0;
+}
+
+/* --- Inventory --- */
+
+.dnd-inventory-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(42, 37, 32, 0.5);
+}
+
+.dnd-inventory-row:last-child {
+  border-bottom: none;
+}
+
+.dnd-type-icon {
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(201, 168, 76, 0.08);
+  border-radius: 4px;
+  font-size: 0.875rem;
 }
