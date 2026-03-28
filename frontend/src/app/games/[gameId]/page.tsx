@@ -1,7 +1,10 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { fetchGameById } from '@/lib/supabase/games'
-import { fetchPlayerByProfileAndGame } from '@/lib/supabase/players'
+import {
+  fetchPlayerByProfileAndGame,
+  fetchInventoryByPlayer,
+} from '@/lib/supabase/players'
 import { CharacterLobby } from '@/components/games/CharacterLobby'
 
 export default async function GameLobbyPage({
@@ -41,6 +44,10 @@ export default async function GameLobbyPage({
   const player = user
     ? await fetchPlayerByProfileAndGame(user.id, gameId)
     : null
+
+  const inventory = player
+    ? await fetchInventoryByPlayer(player.id)
+    : []
 
   return (
     <div
@@ -98,6 +105,7 @@ export default async function GameLobbyPage({
             hp_max: player.hp_max,
             stats: player.stats as Record<string, number>,
           } : null}
+          initialInventory={inventory}
         />
       </div>
     </div>
