@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UI Mockups — US-01, US-02, US-04, US-05</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --dnd-black: #0d0b09;
+    --dnd-charcoal: #1a1714;
+    --dnd-brown: #2a2420;
+    --dnd-parchment: #e8dcc8;
+    --dnd-parchment-dim: #b8a98c;
+    --dnd-gold: #c9a84c;
+    --dnd-gold-bright: #e4c65a;
+    --dnd-gold-dim: #8a7234;
+    --dnd-crimson: #8b2232;
+    --dnd-crimson-bright: #c0392b;
+    --dnd-emerald: #2d6a4f;
+    --dnd-amber: #d4a843;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #111; color: var(--dnd-parchment); font-family: 'Lora', Georgia, serif; }
+  .section { padding: 60px 20px; border-bottom: 1px solid #2a2420; }
+  .section-title {
+    font-family: 'Cinzel', serif; font-size: 0.7rem; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--dnd-gold); margin-bottom: 40px;
+    text-align: center;
+  }
+
+  /* Page background */
+  .page-bg {
+    min-height: 500px; display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at 50% 0%, rgba(201,168,76,0.06) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 100%, rgba(139,34,50,0.04) 0%, transparent 50%),
+                var(--dnd-black);
+    padding: 40px 20px;
+  }
+
+  /* Card */
+  .card {
+    background: var(--dnd-charcoal); border: 1px solid var(--dnd-brown);
+    border-radius: 0.5rem; position: relative; overflow: hidden;
+    padding: 2rem 1.5rem; width: 100%; max-width: 380px;
+  }
+  .card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, transparent 0%, var(--dnd-gold) 30%, var(--dnd-gold-bright) 50%, var(--dnd-gold) 70%, transparent 100%);
+  }
+
+  /* Brand & headings */
+  .brand {
+    font-family: 'Cinzel', serif; color: var(--dnd-gold); letter-spacing: 0.15em;
+    font-size: 0.75rem; text-transform: uppercase; text-align: center; margin-bottom: 0.75rem;
+  }
+  .heading {
+    font-family: 'Cinzel', serif; color: var(--dnd-parchment); letter-spacing: 0.02em;
+    font-size: 1.5rem; font-weight: 700; text-align: center;
+  }
+  .subheading {
+    font-family: 'Lora', serif; color: var(--dnd-parchment-dim);
+    font-size: 0.875rem; text-align: center; margin-top: 0.25rem;
+  }
+
+  /* Form elements */
+  .label {
+    display: block; font-family: 'Cinzel', serif; font-size: 0.7rem;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--dnd-gold);
+    margin-bottom: 0.375rem;
+  }
+  .input {
+    width: 100%; background: #0f0d0a; border: 1px solid #3a332b;
+    border-radius: 0.375rem; color: var(--dnd-parchment); padding: 0.625rem 0.875rem;
+    font-family: 'Lora', serif; font-size: 0.95rem;
+  }
+  .input:focus { outline: none; border-color: var(--dnd-gold); box-shadow: 0 0 0 2px rgba(201,168,76,0.15); }
+  .input::placeholder { color: #5a5248; font-style: italic; }
+  .helper { font-size: 0.8rem; color: var(--dnd-parchment-dim); margin-top: 0.25rem; font-style: italic; }
+  .field-error { font-size: 0.8rem; color: var(--dnd-crimson-bright); margin-top: 0.25rem; }
+  .error-banner {
+    background: rgba(139,34,50,0.15); border: 1px solid rgba(192,57,43,0.3);
+    border-radius: 0.375rem; padding: 0.625rem 0.875rem; color: #e8a0a0; font-size: 0.875rem;
+  }
+  textarea.input { resize: vertical; min-height: 6rem; }
+
+  /* Buttons */
+  .btn-primary {
+    width: 100%; padding: 0.75rem 1.5rem; font-family: 'Cinzel', serif;
+    font-size: 0.85rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--dnd-black); background: linear-gradient(180deg, var(--dnd-gold-bright), var(--dnd-gold));
+    border: 1px solid var(--dnd-gold); border-radius: 0.375rem; cursor: pointer;
+  }
+  .btn-primary:hover { box-shadow: 0 0 16px rgba(201,168,76,0.25); transform: translateY(-1px); }
+  .btn-secondary {
+    padding: 0.5rem 1rem; font-family: 'Cinzel', serif; font-size: 0.75rem;
+    font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--dnd-gold); background: transparent; border: 1px solid var(--dnd-gold-dim);
+    border-radius: 0.375rem; cursor: pointer; text-decoration: none;
+  }
+  .btn-secondary:hover { border-color: var(--dnd-gold); background: rgba(201,168,76,0.08); }
+
+  /* Link */
+  .dnd-link { color: var(--dnd-gold); text-decoration: none; }
+  .dnd-link:hover { color: var(--dnd-gold-bright); text-decoration: underline; }
+
+  /* Badges */
+  .badge {
+    display: inline-flex; align-items: center; padding: 0.2rem 0.6rem;
+    border-radius: 9999px; font-family: 'Cinzel', serif; font-size: 0.6rem;
+    font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .badge-lobby { background: rgba(107,114,128,0.2); color: #9ca3af; border: 1px solid rgba(107,114,128,0.3); }
+  .badge-active { background: rgba(45,106,79,0.2); color: #6fcf97; border: 1px solid rgba(45,106,79,0.3); }
+  .badge-paused { background: rgba(212,168,67,0.2); color: var(--dnd-amber); border: 1px solid rgba(212,168,67,0.3); }
+  .badge-ended { background: rgba(74,69,64,0.2); color: #7a756e; border: 1px solid rgba(74,69,64,0.3); }
+
+  /* Game card */
+  .game-card {
+    background: var(--dnd-charcoal); border: 1px solid var(--dnd-brown);
+    border-radius: 0.5rem; padding: 1.25rem; cursor: pointer;
+    transition: all 0.25s ease;
+  }
+  .game-card:hover { border-color: var(--dnd-gold-dim); box-shadow: 0 4px 20px rgba(201,168,76,0.08); transform: translateY(-2px); }
+  .game-card-ended { opacity: 0.55; cursor: default; }
+  .game-card-ended:hover { border-color: var(--dnd-brown); box-shadow: none; transform: none; }
+  .game-name { font-family: 'Cinzel', serif; font-size: 1rem; font-weight: 600; color: var(--dnd-parchment); }
+  .game-persona { font-size: 0.75rem; color: var(--dnd-parchment-dim); margin-top: 0.5rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .game-time { font-size: 0.75rem; color: var(--dnd-parchment-dim); margin-top: 0.75rem; }
+
+  /* Utility */
+  .space-y > * + * { margin-top: 1.25rem; }
+  .text-center { text-align: center; }
+  .text-sm { font-size: 0.875rem; }
+  .muted { color: var(--dnd-parchment-dim); }
+  .mt-2 { margin-top: 0.5rem; }
+  .mt-6 { margin-top: 1.5rem; }
+  .mb-2 { margin-bottom: 0.5rem; }
+  .mb-4 { margin-bottom: 1rem; }
+  .mb-6 { margin-bottom: 1.5rem; }
+  .mb-8 { margin-bottom: 2rem; }
+  .max-w-lg { max-width: 32rem; }
+  .max-w-2xl { max-width: 42rem; }
+  .mx-auto { margin: 0 auto; }
+  .flex { display: flex; }
+  .items-start { align-items: flex-start; }
+  .items-center { align-items: center; }
+  .justify-between { justify-content: space-between; }
+  .gap-3 { gap: 0.75rem; }
+</style>
+</head>
+<body>
+
+<!-- ═══ US-02: LOGIN ═══ -->
+<div class="section">
+  <div class="section-title">US-02: Login — Default State</div>
+  <div class="page-bg">
+    <div style="width:100%; max-width:380px;">
+      <div class="text-center mb-8">
+        <div class="brand">Realm &amp; Ruin</div>
+        <h1 class="heading">Welcome Back</h1>
+        <p class="subheading">Your quest awaits, adventurer.</p>
+      </div>
+      <div class="card">
+        <form class="space-y" onsubmit="return false">
+          <div>
+            <label class="label">Email</label>
+            <input class="input" placeholder="adventurer@realm.com" value="hero@example.com">
+          </div>
+          <div>
+            <label class="label">Password</label>
+            <input class="input" type="password" placeholder="Your secret passphrase" value="••••••••">
+          </div>
+          <button class="btn-primary" style="margin-top:1.5rem;">Enter the Realm</button>
+        </form>
+      </div>
+      <p class="mt-6 text-center text-sm muted">
+        New to the game? You'll need an invite link from your DM.<br>
+        <a href="#" class="dnd-link">Sign up with invite</a>
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- US-02: LOGIN — Error State -->
+<div class="section">
+  <div class="section-title">US-02: Login — Error State</div>
+  <div class="page-bg">
+    <div style="width:100%; max-width:380px;">
+      <div class="text-center mb-8">
+        <div class="brand">Realm &amp; Ruin</div>
+        <h1 class="heading">Welcome Back</h1>
+        <p class="subheading">Your quest awaits, adventurer.</p>
+      </div>
+      <div class="card">
+        <form class="space-y" onsubmit="return false">
+          <div>
+            <label class="label">Email</label>
+            <input class="input" value="wrong@email.com">
+          </div>
+          <div>
+            <label class="label">Password</label>
+            <input class="input" type="password" value="••••">
+          </div>
+          <div class="error-banner">Invalid email or password</div>
+          <button class="btn-primary" style="margin-top:1.5rem;">Enter the Realm</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ US-01: SIGNUP ═══ -->
+<div class="section">
+  <div class="section-title">US-01: Signup — Valid Invite</div>
+  <div class="page-bg">
+    <div style="width:100%; max-width:380px;">
+      <div class="text-center mb-8">
+        <div class="brand">Realm &amp; Ruin</div>
+        <h1 class="heading">Join the Adventure</h1>
+        <p class="mt-2" style="color:var(--dnd-gold); font-size:0.875rem;">Joining: The Dragon's Keep</p>
+      </div>
+      <div class="card">
+        <form class="space-y" onsubmit="return false">
+          <div>
+            <label class="label">Email</label>
+            <input class="input" placeholder="adventurer@realm.com">
+          </div>
+          <div>
+            <label class="label">Password</label>
+            <input class="input" type="password" placeholder="Minimum 8 characters">
+          </div>
+          <button class="btn-primary" style="margin-top:1.5rem;">Join the Adventure</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- US-01: Signup — Success State -->
+<div class="section">
+  <div class="section-title">US-01: Signup — Email Confirmation</div>
+  <div class="page-bg">
+    <div style="width:100%; max-width:380px;">
+      <div class="card text-center" style="padding:2rem 1.5rem;">
+        <div class="mb-4" style="font-size:2.5rem;">&#x1F4DC;</div>
+        <h2 class="heading" style="font-size:1.25rem;">Check Your Scrolls</h2>
+        <p class="subheading mt-2 text-sm">
+          We've sent a confirmation message to your email. Verify your identity to join the adventure.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- US-01: Invite Required -->
+<div class="section">
+  <div class="section-title">US-01: Invite Required</div>
+  <div class="page-bg">
+    <div style="width:100%; max-width:380px;">
+      <div class="card text-center" style="padding:2rem 1.5rem;">
+        <div class="mb-4" style="font-size:2.5rem;">&#x1F6E1;&#xFE0F;</div>
+        <h1 class="heading" style="font-size:1.25rem;">Invite Required</h1>
+        <p class="subheading mt-2 text-sm mb-4">
+          This game is invite-only. Ask your Dungeon Master for a link to join.
+        </p>
+        <a href="#" class="dnd-link text-sm">Already have an account? Sign in</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ US-04: CREATE GAME ═══ -->
+<div class="section">
+  <div class="section-title">US-04: Create New Game</div>
+  <div class="page-bg" style="align-items:flex-start; padding-top:60px;">
+    <div style="width:100%; max-width:32rem;">
+      <a href="#" class="dnd-link text-sm mb-6" style="display:inline-block;">&larr; Back to Dashboard</a>
+      <h1 class="heading" style="text-align:left; margin-bottom:0.5rem;">Begin a New Campaign</h1>
+      <p class="subheading" style="text-align:left; margin-bottom:2rem;">Name your adventure and set the tone for your AI Dungeon Master.</p>
+      <div class="card">
+        <form class="space-y" onsubmit="return false" style="--space:1.5rem;">
+          <div>
+            <label class="label">Campaign Name</label>
+            <input class="input" placeholder="The Dragon's Keep" value="Shadows of the Underdark">
+            <p class="helper">Give your adventure a memorable title.</p>
+          </div>
+          <div style="margin-top:1.5rem;">
+            <label class="label">DM Persona / Campaign Tone</label>
+            <textarea class="input" style="min-height:6rem;" placeholder="e.g. 'A gritty pirate adventure where death is permanent and betrayal is common.'">A dark, oppressive underground world where sunlight is a distant memory and every shadow hides danger.</textarea>
+            <p class="helper">This shapes how the AI DM narrates your world. Leave blank for a classic high-fantasy adventure.</p>
+          </div>
+          <button class="btn-primary" style="margin-top:1.5rem;">Begin the Campaign</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ US-05: DASHBOARD — Empty State ═══ -->
+<div class="section">
+  <div class="section-title">US-05: Dashboard — Empty State</div>
+  <div class="page-bg" style="align-items:flex-start; padding-top:60px;">
+    <div style="width:100%; max-width:42rem;">
+      <div class="flex items-center justify-between mb-8">
+        <h1 class="heading" style="font-size:1.5rem;">Your Campaigns</h1>
+        <a href="#" class="btn-secondary">+ New Game</a>
+      </div>
+      <div class="card text-center" style="padding:3rem 2rem;">
+        <div style="font-size:2.5rem; margin-bottom:1rem;">&#x2694;&#xFE0F;</div>
+        <h2 class="heading" style="font-size:1.125rem;" class="mb-2">No Campaigns Yet</h2>
+        <p class="muted text-sm" style="margin:0.5rem 0 1.5rem;">
+          Every legend begins with a single step. Create your first campaign and let the AI Dungeon Master bring your world to life.
+        </p>
+        <button class="btn-primary" style="width:auto; padding:0.75rem 2rem;">Start Your Adventure</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ US-05: DASHBOARD — With Games ═══ -->
+<div class="section">
+  <div class="section-title">US-05: Dashboard — With Games</div>
+  <div class="page-bg" style="align-items:flex-start; padding-top:60px;">
+    <div style="width:100%; max-width:42rem;">
+      <div class="flex items-center justify-between mb-8">
+        <div>
+          <h1 class="heading" style="font-size:1.5rem;">Your Campaigns</h1>
+          <p class="subheading" style="margin-top:0.25rem; font-size:0.875rem;">3 campaigns</p>
+        </div>
+        <a href="#" class="btn-secondary">+ New Game</a>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:0.75rem;">
+        <div class="game-card">
+          <div class="flex items-start justify-between gap-3">
+            <span class="game-name">Shadows of the Underdark</span>
+            <span class="badge badge-active">Active</span>
+          </div>
+          <div class="game-persona">A dark, oppressive underground world where sunlight is a distant memory...</div>
+          <div class="game-time">Created 2d ago</div>
+        </div>
+        <div class="game-card">
+          <div class="flex items-start justify-between gap-3">
+            <span class="game-name">The Dragon's Keep</span>
+            <span class="badge badge-paused">Paused</span>
+          </div>
+          <div class="game-persona">A classic high-fantasy D&amp;D adventure.</div>
+          <div class="game-time">Created 5d ago</div>
+        </div>
+        <div class="game-card game-card-ended">
+          <div class="flex items-start justify-between gap-3">
+            <span class="game-name">Curse of the Crimson Throne</span>
+            <span class="badge badge-ended">Ended</span>
+          </div>
+          <div class="game-persona">A gritty pirate adventure where death is permanent and betrayal is common.</div>
+          <div class="game-time">Created 14d ago</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

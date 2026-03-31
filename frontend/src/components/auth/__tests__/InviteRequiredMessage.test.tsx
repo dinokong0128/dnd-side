@@ -2,10 +2,10 @@ import { render, screen } from '@testing-library/react'
 import { InviteRequiredMessage } from '../InviteRequiredMessage'
 
 describe('InviteRequiredMessage', () => {
-  it('renders the "Invite required" heading', () => {
+  it('renders the "Invite Required" heading', () => {
     render(<InviteRequiredMessage />)
     expect(
-      screen.getByRole('heading', { name: 'Invite required' })
+      screen.getByRole('heading', { name: 'Invite Required' })
     ).toBeInTheDocument()
   })
 
@@ -13,7 +13,7 @@ describe('InviteRequiredMessage', () => {
     render(<InviteRequiredMessage />)
     expect(
       screen.getByText(
-        /You need a valid invite link to sign up\. Ask your Dungeon Master for one\./
+        /invite-only\. Ask your Dungeon Master/
       )
     ).toBeInTheDocument()
   })
@@ -33,7 +33,7 @@ describe('InviteRequiredMessage', () => {
     render(<InviteRequiredMessage />)
     const container = screen.getByTestId('invite-required-message')
     expect(container).toContainElement(
-      screen.getByRole('heading', { name: 'Invite required' })
+      screen.getByRole('heading', { name: 'Invite Required' })
     )
   })
 })

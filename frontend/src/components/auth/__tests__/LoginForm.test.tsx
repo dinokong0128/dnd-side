@@ -33,23 +33,23 @@ describe('LoginForm', () => {
       expect(screen.getByTestId('password-input')).toBeInTheDocument()
     })
 
-    it('renders the submit button with text "Log in"', () => {
+    it('renders the submit button with text "Enter the Realm"', () => {
       render(<LoginForm />)
       const button = screen.getByTestId('submit-button')
       expect(button).toBeInTheDocument()
-      expect(button).toHaveTextContent('Log in')
+      expect(button).toHaveTextContent('Enter the Realm')
     })
 
-    it('renders the "Log in" heading', () => {
+    it('renders the "Welcome Back" heading', () => {
       render(<LoginForm />)
       expect(
-        screen.getByRole('heading', { name: 'Log in' })
+        screen.getByRole('heading', { name: 'Welcome Back' })
       ).toBeInTheDocument()
     })
 
     it('renders a link to the signup page', () => {
       render(<LoginForm />)
-      const link = screen.getByRole('link', { name: /Need an invite\? Sign up/ })
+      const link = screen.getByRole('link', { name: /Sign up with invite/ })
       expect(link).toBeInTheDocument()
       expect(link).toHaveAttribute('href', '/auth/signup')
     })

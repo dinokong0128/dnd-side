@@ -13,9 +13,10 @@ const signUpSchema = z.object({
 type SignUpFormProps = {
   gameId: string
   inviteCode: string
+  gameName?: string
 }
 
-export function SignUpForm({ gameId, inviteCode }: SignUpFormProps) {
+export function SignUpForm({ gameId, inviteCode, gameName }: SignUpFormProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
@@ -70,64 +71,90 @@ export function SignUpForm({ gameId, inviteCode }: SignUpFormProps) {
 
   if (success) {
     return (
-      <div data-testid="success-message" className="mx-auto max-w-md p-8">
-        <p>Check your email to confirm your account.</p>
+      <div className="dnd-page-bg flex min-h-screen items-center justify-center px-4">
+        <div className="dnd-fade-in w-full max-w-sm text-center">
+          <div className="dnd-card px-6 py-8" data-testid="success-message">
+            <div className="mb-4 text-4xl">&#x1F4DC;</div>
+            <h2 className="dnd-heading text-xl font-bold mb-2">Check Your Scrolls</h2>
+            <p className="dnd-subheading text-sm">
+              We&apos;ve sent a confirmation message to your email.
+              Verify your identity to join the adventure.
+            </p>
+          </div>
+        </div>
       </div>
     )
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mx-auto max-w-md space-y-4 p-8">
-      <h1 className="text-2xl font-bold">Create account</h1>
+    <div className="dnd-page-bg flex min-h-screen items-center justify-center px-4">
+      <div className="dnd-fade-in w-full max-w-sm">
+        <div className="mb-8 text-center">
+          <p className="dnd-brand mb-3">Realm &amp; Ruin</p>
+          <h1 className="dnd-heading text-2xl font-bold">Join the Adventure</h1>
+          {gameName && (
+            <p className="mt-2 text-sm" style={{ color: 'var(--dnd-gold)' }}>
+              Joining: {gameName}
+            </p>
+          )}
+        </div>
 
-      <div>
-        <label htmlFor="email" className="block text-sm font-medium">
-          Email
-        </label>
-        <input
-          id="email"
-          type="email"
-          data-testid="email-input"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="mt-1 block w-full rounded border px-3 py-2"
-        />
-        {fieldErrors.email && (
-          <p className="mt-1 text-sm text-red-600">{fieldErrors.email}</p>
-        )}
+        <div className="dnd-card px-6 py-8">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label htmlFor="email" className="dnd-label">
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                data-testid="email-input"
+                autoFocus
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="dnd-input"
+                placeholder="adventurer@realm.com"
+              />
+              {fieldErrors.email && (
+                <p className="dnd-field-error">{fieldErrors.email}</p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="password" className="dnd-label">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                data-testid="password-input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="dnd-input"
+                placeholder="Minimum 8 characters"
+              />
+              {fieldErrors.password && (
+                <p className="dnd-field-error">{fieldErrors.password}</p>
+              )}
+            </div>
+
+            {formError && (
+              <div data-testid="form-error" className="dnd-error-banner">
+                {formError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              data-testid="submit-button"
+              disabled={loading}
+              className="dnd-btn-primary"
+            >
+              {loading ? 'Creating account\u2026' : 'Join the Adventure'}
+            </button>
+          </form>
+        </div>
       </div>
-
-      <div>
-        <label htmlFor="password" className="block text-sm font-medium">
-          Password
-        </label>
-        <input
-          id="password"
-          type="password"
-          data-testid="password-input"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 block w-full rounded border px-3 py-2"
-        />
-        {fieldErrors.password && (
-          <p className="mt-1 text-sm text-red-600">{fieldErrors.password}</p>
-        )}
-      </div>
-
-      {formError && (
-        <p data-testid="form-error" className="text-sm text-red-600">
-          {formError}
-        </p>
-      )}
-
-      <button
-        type="submit"
-        data-testid="submit-button"
-        disabled={loading}
-        className="w-full rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
-      >
-        Create account
-      </button>
-    </form>
+    </div>
   )
 }

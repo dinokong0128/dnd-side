@@ -27,17 +27,17 @@ describe('CreateGameForm', () => {
       expect(screen.getByTestId('dm-persona-input')).toBeInTheDocument()
     })
 
-    it('renders the submit button with text "Create Game"', () => {
+    it('renders the submit button with text "Begin the Campaign"', () => {
       render(<CreateGameForm />)
       const button = screen.getByTestId('submit-button')
       expect(button).toBeInTheDocument()
-      expect(button).toHaveTextContent('Create Game')
+      expect(button).toHaveTextContent('Begin the Campaign')
     })
 
-    it('renders the "Create New Game" heading', () => {
+    it('renders the "Begin a New Campaign" heading', () => {
       render(<CreateGameForm />)
       expect(
-        screen.getByRole('heading', { name: 'Create New Game' })
+        screen.getByRole('heading', { name: 'Begin a New Campaign' })
       ).toBeInTheDocument()
     })
 
@@ -45,7 +45,7 @@ describe('CreateGameForm', () => {
       render(<CreateGameForm />)
       expect(screen.getByTestId('dm-persona-input')).toHaveAttribute(
         'placeholder',
-        'A gritty dark fantasy world where magic is forbidden...'
+        expect.stringContaining('gritty pirate adventure')
       )
     })
 
