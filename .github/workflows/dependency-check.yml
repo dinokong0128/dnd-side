@@ -117,7 +117,9 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           git add -A
-          git commit -m "$(cat <<'COMMIT_MSG'
+
+          # Create commit message file to avoid shell escaping issues
+          cat > /tmp/commit_msg.txt << 'EOF'
 chore(deps): automated dependency updates
 
 Frontend:
@@ -127,8 +129,8 @@ Backend:
 - pip dependencies reviewed
 
 For security details, see DEPENDENCY_AUDIT.md (available in workflow artifacts)
-COMMIT_MSG
-)"
+EOF
+          git commit -F /tmp/commit_msg.txt
 
       - name: Push to Develop
         if: steps.detect-changes.outputs.has_changes == 'true'
