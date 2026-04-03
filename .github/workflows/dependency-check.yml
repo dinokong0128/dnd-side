@@ -1,0 +1,164 @@
+name: Automated Dependency Check & Update
+
+on:
+  schedule:
+    # Run every Monday at 09:00 UTC
+    - cron: '0 9 * * 1'
+  push:
+    branches:
+      - develop
+    paths:
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
+      - 'backend/requirements.txt'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  dependency-check:
+    runs-on: ubuntu-latest
+    name: Check & Update Dependencies
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Check Frontend Dependencies
+        id: frontend-check
+        working-directory: frontend
+        run: |
+          echo "=== Frontend Dependency Check ===" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### npm outdated" >> $GITHUB_STEP_SUMMARY
+          npm outdated --long || true >> $GITHUB_STEP_SUMMARY
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### npm audit" >> $GITHUB_STEP_SUMMARY
+          npm audit --audit-level=moderate 2>&1 | head -50 || true >> $GITHUB_STEP_SUMMARY
+
+      - name: Check Backend Dependencies
+        id: backend-check
+        working-directory: backend
+        run: |
+          echo "=== Backend Dependency Check ===" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          pip install pip-audit
+
+          echo "### pip list --outdated" >> $GITHUB_STEP_SUMMARY
+          pip list --outdated || true >> $GITHUB_STEP_SUMMARY
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### pip-audit" >> $GITHUB_STEP_SUMMARY
+          pip-audit --format json || true >> $GITHUB_STEP_SUMMARY
+
+      - name: Run Frontend Audit Fix
+        id: frontend-update
+        working-directory: frontend
+        continue-on-error: true
+        run: |
+          npm audit fix --force 2>&1 | tee audit-fix.log
+
+          if grep -q "added\|removed\|changed" audit-fix.log; then
+            echo "updates_found=true" >> $GITHUB_OUTPUT
+          else
+            echo "updates_found=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update Backend Requirements (pip)
+        id: backend-update
+        working-directory: backend
+        continue-on-error: true
+        run: |
+          # Install current requirements first
+          pip install -q -r requirements.txt 2>/dev/null || true
+
+          # Get list of packages that need updates
+          OUTDATED=$(pip list --outdated --format=json 2>/dev/null | jq -r '.[].name' 2>/dev/null || echo "")
+
+          if [ -n "$OUTDATED" ]; then
+            echo "updates_found=true" >> $GITHUB_OUTPUT
+            echo "Packages with updates available:"
+            echo "$OUTDATED"
+          else
+            echo "updates_found=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Detect Changes
+        id: detect-changes
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Changed files:"
+            git status --porcelain
+          fi
+
+      - name: Commit Updates (if needed)
+        if: steps.detect-changes.outputs.has_changes == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+          git commit -m "chore(deps): automated dependency updates
+
+Frontend:
+- npm audit fix applied
+
+Backend:
+- pip dependencies reviewed
+
+For security details, see DEPENDENCY_AUDIT.md (available in workflow artifacts)"
+
+      - name: Push to Develop
+        if: steps.detect-changes.outputs.has_changes == 'true'
+        run: |
+          git push origin develop
+
+      - name: Generate Audit Report
+        id: audit-report
+        run: |
+          cat > DEPENDENCY_AUDIT_REPORT.md << 'EOF'
+          # Automated Dependency Check Report
+
+          **Run Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          **Trigger:** ${{ github.event_name }}
+          **Branch:** ${{ github.ref_name }}
+
+          ## Summary
+
+          - Frontend updates applied: ${{ steps.frontend-update.outputs.updates_found || 'N/A' }}
+          - Backend updates available: ${{ steps.backend-update.outputs.updates_found || 'N/A' }}
+          - Changes committed: ${{ steps.detect-changes.outputs.has_changes }}
+
+          ## Details
+
+          See workflow run logs for full audit output.
+          EOF
+
+          cat DEPENDENCY_AUDIT_REPORT.md
+
+      - name: Upload Report as Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-audit-report
+          path: DEPENDENCY_AUDIT_REPORT.md
+          retention-days: 30
