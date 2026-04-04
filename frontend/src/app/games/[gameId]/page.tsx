@@ -1,25 +1,58 @@
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
 import { fetchGameById } from '@/lib/supabase/games'
+import { getPlayer } from '@/lib/supabase/players'
+import { CharacterLobbyPanel } from '@/components/games/CharacterLobbyPanel'
 
-export default async function GameLobbyPage({
-  params,
-}: {
+interface GamePageProps {
   params: Promise<{ gameId: string }>
-}) {
-  const { gameId } = await params
-  const game = await fetchGameById(gameId)
+}
 
+export default async function GamePage({ params }: GamePageProps) {
+  const { gameId } = await params
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect('/auth/login')
+  }
+
+  const game = await fetchGameById(gameId)
   if (!game) {
     return (
-      <div className="mx-auto max-w-md p-8">
-        <h1 className="text-2xl font-bold">Game not found</h1>
+      <div className="p-6 text-center">
+        <h1 className="text-2xl font-bold text-gray-900">Game not found</h1>
       </div>
     )
   }
 
+  const player = await getPlayer(gameId, user.id)
+
   return (
-    <div data-testid="game-lobby-stub" className="mx-auto max-w-md p-8">
-      <h1 className="text-2xl font-bold">{game.name}</h1>
-      <p className="mt-4 text-gray-600">Lobby — coming soon</p>
-    </div>
+    <main className="min-h-screen bg-gray-50 p-6">
+      <div className="mx-auto max-w-2xl">
+        <div className="mb-6 space-y-2">
+          <h1 className="text-3xl font-bold text-gray-900">{game.name}</h1>
+          <p className="text-lg text-gray-600">
+            Status:{' '}
+            <span className="font-semibold capitalize">{game.status}</span>
+          </p>
+        </div>
+
+        <div className="rounded-lg bg-white p-6 shadow-sm">
+          <h2 className="mb-4 text-xl font-semibold text-gray-900">
+            Your Character
+          </h2>
+          <CharacterLobbyPanel
+            gameId={gameId}
+            gameStatus={game.status as 'lobby' | 'active' | 'paused' | 'ended'}
+            initialPlayer={player}
+          />
+        </div>
+      </div>
+    </main>
   )
 }
