@@ -132,9 +132,9 @@ export function CharacterCreationForm({
                 max="20"
                 className="w-full rounded border border-gray-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              {errors.stats?.[key as keyof typeof errors.stats]?.message && (
+              {(errors.stats?.[key as keyof typeof errors.stats] as any)?.message && (
                 <p className="mt-1 text-xs text-red-600">
-                  {(errors.stats[key as keyof typeof errors.stats] as { message?: string })?.message}
+                  {(errors.stats[key as keyof typeof errors.stats] as any)?.message}
                 </p>
               )}
             </div>
