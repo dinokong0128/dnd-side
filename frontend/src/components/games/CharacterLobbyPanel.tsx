@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { CharacterCreationForm } from './CharacterCreationForm'
 import { CharacterSummaryCard } from './CharacterSummaryCard'
 import type { PlayerRow } from '@/lib/types/player'
+import type { CharacterFormData } from '@/lib/validations/character'
 
 interface CharacterLobbyPanelProps {
   gameId: string
@@ -36,7 +37,7 @@ export function CharacterLobbyPanel({
           player
             ? {
                 characterName: player.character_name,
-                characterClass: player.character_class as unknown as typeof player.character_class,
+                characterClass: player.character_class as CharacterFormData['characterClass'],
                 stats: player.stats,
               }
             : undefined
