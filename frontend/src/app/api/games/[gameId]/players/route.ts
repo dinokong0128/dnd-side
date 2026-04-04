@@ -47,8 +47,11 @@ export async function POST(
       body: JSON.stringify(body),
     })
 
-    const data = await response.json()
-    return NextResponse.json(data, { status: response.status })
+    const responseText = await response.text()
+    return new NextResponse(responseText, {
+      status: response.status,
+      headers: { 'Content-Type': 'application/json' },
+    })
   } catch {
     return NextResponse.json(
       { error: 'Internal server error' },

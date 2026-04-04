@@ -74,11 +74,10 @@ async def upsert_player(
 ):
     """Create or update a player character in a game.
 
-    Validates that the game exists and is in lobby status.
-    Calculates HP max based on class and CON modifier.
-    Upserts the player row using (game_id, profile_id) as the conflict key.
+    Ensures only one character per user per game (via upsert conflict key).
+    Only allows character creation in 'lobby' status to prevent game-in-progress modifications.
+    Calculates level-1 HP using SRD 5e Hit Die + CON modifier.
     """
-    # Fetch and validate game
     game_result = (
         supabase_client.table("games")
         .select("id, status")
@@ -93,10 +92,7 @@ async def upsert_player(
     if game["status"] != "lobby":
         raise HTTPException(status_code=403, detail="Game is not in lobby")
 
-    # Calculate HP max
     hp_max = calculate_hp_max(body.character_class, body.stats.con)
-
-    # Upsert player
     stats_dict = body.stats.model_dump(by_alias=True)
     upsert_result = (
         supabase_client.table("players")
@@ -112,7 +108,7 @@ async def upsert_player(
             },
             on_conflict="game_id,profile_id",
         )
-        .select("*")
+        .select("id, game_id, profile_id, character_name, character_class, hp_current, hp_max, stats, status, joined_at")
         .single()
         .execute()
     )

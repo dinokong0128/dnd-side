@@ -1,5 +1,6 @@
 'use client'
 
+import { STAT_NAMES } from '@/lib/constants/game'
 import type { PlayerRow } from '@/lib/types/player'
 
 interface CharacterSummaryCardProps {
@@ -7,15 +8,6 @@ interface CharacterSummaryCardProps {
   gameStatus: 'lobby' | 'active' | 'paused' | 'ended'
   onEdit: () => void
 }
-
-const STAT_NAMES = [
-  { key: 'str', label: 'STR' },
-  { key: 'dex', label: 'DEX' },
-  { key: 'con', label: 'CON' },
-  { key: 'int', label: 'INT' },
-  { key: 'wis', label: 'WIS' },
-  { key: 'cha', label: 'CHA' },
-] as const
 
 function getModifier(score: number): number {
   return Math.floor((score - 10) / 2)

@@ -9,7 +9,7 @@ export async function getPlayer(
 
   const { data, error } = await supabase
     .from('players')
-    .select('*')
+    .select('id, game_id, profile_id, character_name, character_class, hp_current, hp_max, stats, status, joined_at')
     .eq('game_id', gameId)
     .eq('profile_id', profileId)
     .maybeSingle()

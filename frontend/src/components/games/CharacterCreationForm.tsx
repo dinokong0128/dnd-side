@@ -3,11 +3,8 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import {
-  characterSchema,
-  CHARACTER_CLASSES,
-  type CharacterFormData,
-} from '@/lib/validations/character'
+import { characterSchema, type CharacterFormData } from '@/lib/validations/character'
+import { CHARACTER_CLASSES, STAT_NAMES } from '@/lib/constants/game'
 import type { PlayerRow } from '@/lib/types/player'
 
 interface CharacterCreationFormProps {
@@ -15,15 +12,6 @@ interface CharacterCreationFormProps {
   defaultValues?: Partial<CharacterFormData>
   onSuccess: (player: PlayerRow) => void
 }
-
-const STAT_NAMES = [
-  { key: 'str', label: 'STR' },
-  { key: 'dex', label: 'DEX' },
-  { key: 'con', label: 'CON' },
-  { key: 'int', label: 'INT' },
-  { key: 'wis', label: 'WIS' },
-  { key: 'cha', label: 'CHA' },
-] as const
 
 export function CharacterCreationForm({
   gameId,

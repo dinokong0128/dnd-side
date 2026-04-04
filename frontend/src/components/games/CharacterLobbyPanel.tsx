@@ -11,50 +11,46 @@ interface CharacterLobbyPanelProps {
   initialPlayer: PlayerRow | null
 }
 
-type ViewMode = 'form' | 'summary'
-
 export function CharacterLobbyPanel({
   gameId,
   gameStatus,
   initialPlayer,
 }: CharacterLobbyPanelProps) {
   const [player, setPlayer] = useState<PlayerRow | null>(initialPlayer)
-  const [view, setView] = useState<ViewMode>(
-    initialPlayer?.character_name ? 'summary' : 'form'
-  )
+  const [isEditing, setIsEditing] = useState(!initialPlayer?.character_name)
 
   const handleSuccess = (updatedPlayer: PlayerRow) => {
     setPlayer(updatedPlayer)
-    setView('summary')
+    setIsEditing(false)
   }
 
   const handleEdit = () => {
-    setView('form')
+    setIsEditing(true)
   }
 
-  return (
-    <div>
-      {view === 'form' ? (
-        <CharacterCreationForm
-          gameId={gameId}
-          defaultValues={
-            player
-              ? {
-                  characterName: player.character_name,
-                  characterClass: player.character_class as any,
-                  stats: player.stats,
-                }
-              : undefined
-          }
-          onSuccess={handleSuccess}
-        />
-      ) : player ? (
-        <CharacterSummaryCard
-          player={player}
-          gameStatus={gameStatus}
-          onEdit={handleEdit}
-        />
-      ) : null}
-    </div>
-  )
+  if (isEditing) {
+    return (
+      <CharacterCreationForm
+        gameId={gameId}
+        defaultValues={
+          player
+            ? {
+                characterName: player.character_name,
+                characterClass: player.character_class as unknown as typeof player.character_class,
+                stats: player.stats,
+              }
+            : undefined
+        }
+        onSuccess={handleSuccess}
+      />
+    )
+  }
+
+  return player ? (
+    <CharacterSummaryCard
+      player={player}
+      gameStatus={gameStatus}
+      onEdit={handleEdit}
+    />
+  ) : null
 }

@@ -20,7 +20,11 @@ export default async function GamePage({ params }: GamePageProps) {
     redirect('/auth/login')
   }
 
-  const game = await fetchGameById(gameId)
+  const [game, player] = await Promise.all([
+    fetchGameById(gameId),
+    getPlayer(gameId, user.id),
+  ])
+
   if (!game) {
     return (
       <div className="p-6 text-center">
@@ -28,8 +32,6 @@ export default async function GamePage({ params }: GamePageProps) {
       </div>
     )
   }
-
-  const player = await getPlayer(gameId, user.id)
 
   return (
     <main className="min-h-screen bg-gray-50 p-6">
