@@ -134,7 +134,7 @@ export function CharacterCreationForm({
               />
               {(errors.stats?.[key as keyof typeof errors.stats] as any)?.message && (
                 <p className="mt-1 text-xs text-red-600">
-                  {(errors.stats[key as keyof typeof errors.stats] as any)?.message}
+                  {(errors.stats?.[key as keyof typeof errors.stats] as any)?.message}
                 </p>
               )}
             </div>
