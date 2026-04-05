@@ -79,6 +79,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       )
     }
 
+    // Mark the invite as used (best-effort — signup already succeeded)
+    await supabase.rpc('mark_invite_used', { p_invite_code: invite_code })
+
     return NextResponse.json({ success: true }, { status: 201 })
   } catch {
     return NextResponse.json(

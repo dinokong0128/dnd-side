@@ -92,22 +92,9 @@ async def upsert_player(
     if game["status"] != "lobby":
         raise HTTPException(status_code=403, detail="Game is not in lobby")
 
-    is_creator = game.get("created_by") == current_user
-    if not is_creator:
-        invite_result = (
-            supabase_client.table("invites")
-            .select("id")
-            .eq("game_id", game_id)
-            .eq("invitee_id", current_user)
-            .eq("status", "active")
-            .maybe_single()
-            .execute()
-        )
-        if not invite_result.data:
-            raise HTTPException(
-                status_code=403,
-                detail="You are not invited to this game"
-            )
+    # For MVP, any authenticated user can create a character in a lobby game.
+    # Invite validation happens at signup time (POST /api/auth/signup),
+    # not at character creation time.
 
     hp_max = calculate_hp_max(body.character_class, body.stats.con)
     stats_dict = body.stats.model_dump(by_alias=True)

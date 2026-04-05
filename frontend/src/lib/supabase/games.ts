@@ -5,6 +5,7 @@ export type Game = {
   name: string
   dm_persona: string
   status: string
+  created_by: string
   created_at: string
 }
 
@@ -19,7 +20,7 @@ export async function fetchGamesByUserId(userId: string): Promise<Game[]> {
 
   const { data, error } = await supabase
     .from('games')
-    .select('id, name, dm_persona, status, created_at')
+    .select('id, name, dm_persona, status, created_by, created_at')
     .eq('created_by', userId)
     .order('created_at', { ascending: false })
 
@@ -40,7 +41,7 @@ export async function createGame(input: CreateGameInput): Promise<Game> {
       dm_persona: input.dm_persona,
       created_by: input.host_id,
     })
-    .select('id, name, dm_persona, status, created_at')
+    .select('id, name, dm_persona, status, created_by, created_at')
     .single()
 
   if (error) {
@@ -55,7 +56,7 @@ export async function fetchGameById(gameId: string): Promise<Game | null> {
 
   const { data, error } = await supabase
     .from('games')
-    .select('id, name, dm_persona, status, created_at')
+    .select('id, name, dm_persona, status, created_by, created_at')
     .eq('id', gameId)
     .maybeSingle()
 

@@ -31,7 +31,7 @@ class TestCreateGame:
         mock_result = MagicMock()
         mock_result.data = {
             **SAMPLE_GAME,
-            "dm_persona": "You are a creative and engaging Dungeon Master.",
+            "dm_persona": "A classic high-fantasy D&D adventure.",
         }
 
         with patch("api.routes.games.supabase_client") as mock_sb:

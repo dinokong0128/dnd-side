@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     
     # Database
     DATABASE_URL: str  # Supabase Postgres connection string
+
+    # Frontend
+    FRONTEND_URL: str = "http://localhost:3000"
     
     # CORS
     ALLOWED_ORIGINS: List[str] = [

@@ -38,6 +38,7 @@ const sampleGame: Game = {
   name: 'Dragon Quest',
   dm_persona: 'A dark fantasy realm',
   status: 'lobby',
+  created_by: 'user-123',
   created_at: '2026-03-22T00:00:00Z',
 }
 
