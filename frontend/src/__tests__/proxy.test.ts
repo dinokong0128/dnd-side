@@ -24,7 +24,7 @@ beforeEach(() => {
   jest.clearAllMocks()
 })
 
-describe('middleware', () => {
+describe('proxy', () => {
   describe('unauthenticated user on protected routes', () => {
     beforeEach(() => {
       mockGetUser.mockResolvedValue({ data: { user: null } })
@@ -61,6 +61,20 @@ describe('middleware', () => {
 
     it.each(['/dashboard', '/dashboard/new', '/games/abc-123'])(
       'allows access to %s without redirecting',
+      async (pathname) => {
+        const response = await proxy(makeRequest(pathname))
+        expect(response.status).not.toBe(307)
+      }
+    )
+  })
+
+  describe('unauthenticated user on routes that share a protected prefix', () => {
+    beforeEach(() => {
+      mockGetUser.mockResolvedValue({ data: { user: null } })
+    })
+
+    it.each(['/dashboarding', '/games-preview'])(
+      'does not redirect %s (not a protected path segment)',
       async (pathname) => {
         const response = await proxy(makeRequest(pathname))
         expect(response.status).not.toBe(307)

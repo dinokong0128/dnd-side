@@ -33,8 +33,10 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   } = await supabase.auth.getUser()
 
   const protectedPrefixes = ['/dashboard', '/games']
-  const isProtectedRoute = protectedPrefixes.some((prefix) =>
-    request.nextUrl.pathname.startsWith(prefix)
+  const isProtectedRoute = protectedPrefixes.some(
+    (prefix) =>
+      request.nextUrl.pathname === prefix ||
+      request.nextUrl.pathname.startsWith(prefix + '/')
   )
 
   if (!user && isProtectedRoute) {
