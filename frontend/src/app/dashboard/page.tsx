@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { fetchGamesByUserId } from '@/lib/supabase/games'
 
@@ -8,7 +9,11 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const games = await fetchGamesByUserId(user!.id)
+  if (!user) {
+    redirect('/auth/login')
+  }
+
+  const games = await fetchGamesByUserId(user.id)
 
   return (
     <div className="mx-auto max-w-2xl p-8">
