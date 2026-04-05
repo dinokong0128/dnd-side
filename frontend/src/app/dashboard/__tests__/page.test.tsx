@@ -30,7 +30,7 @@ function mockSupabaseWithUser(user: { id: string } | null) {
     auth: {
       getUser: jest.fn().mockResolvedValue({ data: { user } }),
     },
-  } as ReturnType<typeof createClient> extends Promise<infer T> ? Promise<T> : never)
+  } as unknown as Awaited<ReturnType<typeof createClient>>)
 }
 
 const sampleGame: Game = {
