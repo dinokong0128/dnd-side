@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { fetchGameById } from '@/lib/supabase/games'
 import { getPlayer } from '@/lib/supabase/players'
 import { CharacterLobbyPanel } from '@/components/games/CharacterLobbyPanel'
+import { InviteSection } from '@/components/games/InviteSection'
 
 interface GamePageProps {
   params: Promise<{ gameId: string }>
@@ -43,6 +44,12 @@ export default async function GamePage({ params }: GamePageProps) {
             <span className="font-semibold capitalize">{game.status}</span>
           </p>
         </div>
+
+        {game.created_by === user.id && game.status === 'lobby' && (
+          <div className="mb-6">
+            <InviteSection gameId={gameId} />
+          </div>
+        )}
 
         <div className="rounded-lg bg-white p-6 shadow-sm">
           <h2 className="mb-4 text-xl font-semibold text-gray-900">

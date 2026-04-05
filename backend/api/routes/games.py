@@ -11,7 +11,7 @@ router = APIRouter()
 class CreateGameInput(BaseModel):
     """Input for creating a new game."""
     name: str
-    dm_persona: str = "You are a creative and engaging Dungeon Master."
+    dm_persona: str = "A classic high-fantasy D&D adventure."
 
 
 class GameOut(BaseModel):
@@ -20,6 +20,7 @@ class GameOut(BaseModel):
     name: str
     dm_persona: str
     status: str
+    created_by: str
     created_at: str
 
 
@@ -32,7 +33,7 @@ async def create_game(
     result = (
         supabase_client.table("games")
         .insert({"name": payload.name, "dm_persona": payload.dm_persona, "created_by": current_user})
-        .select("id, name, dm_persona, status, created_at")
+        .select("id, name, dm_persona, status, created_by, created_at")
         .single()
         .execute()
     )
@@ -46,7 +47,7 @@ async def list_games(current_user: str = Depends(get_current_user)):
     """List all games created by the authenticated user."""
     result = (
         supabase_client.table("games")
-        .select("id, name, dm_persona, status, created_at")
+        .select("id, name, dm_persona, status, created_by, created_at")
         .eq("created_by", current_user)
         .order("created_at", desc=True)
         .execute()
@@ -59,7 +60,7 @@ async def get_game(game_id: str, current_user: str = Depends(get_current_user)):
     """Retrieve a single game by ID."""
     result = (
         supabase_client.table("games")
-        .select("id, name, dm_persona, status, created_at")
+        .select("id, name, dm_persona, status, created_by, created_at")
         .eq("id", game_id)
         .maybe_single()
         .execute()

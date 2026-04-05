@@ -11,7 +11,7 @@ from redis import Redis
 from config import settings
 from redis_broker import redis_broker, dramatiq_app
 from api.middleware import add_middleware
-from api.routes import games, players, actions
+from api.routes import games, players, actions, invites
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -36,6 +36,7 @@ add_middleware(app)
 app.include_router(games.router, prefix="/games", tags=["games"])
 app.include_router(players.router, prefix="/games", tags=["players"])
 app.include_router(actions.router, prefix="/games", tags=["actions"])
+app.include_router(invites.router, prefix="/games", tags=["invites"])
 
 @app.get("/health")
 async def health_check():

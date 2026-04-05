@@ -26,6 +26,7 @@ const sampleGame: Game = {
   name: 'Dragon Quest',
   dm_persona: 'A dark fantasy realm',
   status: 'lobby',
+  created_by: 'user-1',
   created_at: '2026-03-22T00:00:00Z',
 }
 
@@ -34,6 +35,7 @@ const sampleGame2: Game = {
   name: 'Sword Coast',
   dm_persona: 'High fantasy adventure',
   status: 'active',
+  created_by: 'user-1',
   created_at: '2026-03-23T00:00:00Z',
 }
 
@@ -60,7 +62,7 @@ describe('fetchGamesByUserId', () => {
 
     expect(mockFrom).toHaveBeenCalledWith('games')
     expect(mockSelect).toHaveBeenCalledWith(
-      'id, name, dm_persona, status, created_at'
+      'id, name, dm_persona, status, created_by, created_at'
     )
     expect(mockEq).toHaveBeenCalledWith('created_by', 'user-xyz')
     expect(mockOrder).toHaveBeenCalledWith('created_at', { ascending: false })
@@ -139,7 +141,7 @@ describe('createGame', () => {
     })
 
     expect(mockSelect).toHaveBeenCalledWith(
-      'id, name, dm_persona, status, created_at'
+      'id, name, dm_persona, status, created_by, created_at'
     )
   })
 
@@ -222,7 +224,7 @@ describe('fetchGameById', () => {
     await fetchGameById('game-1')
 
     expect(mockSelect).toHaveBeenCalledWith(
-      'id, name, dm_persona, status, created_at'
+      'id, name, dm_persona, status, created_by, created_at'
     )
   })
 })
