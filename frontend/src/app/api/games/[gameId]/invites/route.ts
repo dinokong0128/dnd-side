@@ -45,11 +45,16 @@ export async function POST(
       },
     })
 
-    const responseText = await response.text()
-    return new NextResponse(responseText, {
-      status: response.status,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    if (!response.ok) {
+      const errorData = await response.json()
+      return NextResponse.json(
+        { error: errorData.detail || 'Failed to create invite' },
+        { status: response.status }
+      )
+    }
+
+    const data = await response.json()
+    return NextResponse.json(data, { status: response.status })
   } catch {
     return NextResponse.json(
       { error: 'Internal server error' },

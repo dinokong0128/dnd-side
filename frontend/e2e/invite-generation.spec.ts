@@ -11,6 +11,9 @@ const MOCK_GAME = {
 
 test.describe('Invite generation (host flow)', () => {
   test.beforeEach(async ({ page }) => {
+    // Grant clipboard-write permission so handleCopy() resolves and shows 'Copied!'
+    await page.context().grantPermissions(['clipboard-write'])
+
     // Mock authenticated user
     await page.route('**/auth/v1/user', (route) => {
       route.fulfill({
