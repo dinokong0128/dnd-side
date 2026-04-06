@@ -65,7 +65,7 @@ function GameCard({ game }: { game: Game }) {
         </p>
       )}
       <p className="mt-3 text-xs" style={{ color: 'var(--dnd-parchment-dim)' }}>
-        Created {formatRelativeTime(game.created_at)}
+        Updated {formatRelativeTime(game.updated_at)}
       </p>
     </div>
   )
