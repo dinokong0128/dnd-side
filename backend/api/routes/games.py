@@ -22,6 +22,7 @@ class GameOut(BaseModel):
     status: str
     created_by: str
     created_at: str
+    updated_at: str
 
 
 @router.post("/", response_model=GameOut, status_code=201)
@@ -33,7 +34,7 @@ async def create_game(
     result = (
         supabase_client.table("games")
         .insert({"name": payload.name, "dm_persona": payload.dm_persona, "created_by": current_user})
-        .select("id, name, dm_persona, status, created_by, created_at")
+        .select("id, name, dm_persona, status, created_by, created_at, updated_at")
         .single()
         .execute()
     )
@@ -47,9 +48,9 @@ async def list_games(current_user: str = Depends(get_current_user)):
     """List all games created by the authenticated user."""
     result = (
         supabase_client.table("games")
-        .select("id, name, dm_persona, status, created_by, created_at")
+        .select("id, name, dm_persona, status, created_by, created_at, updated_at")
         .eq("created_by", current_user)
-        .order("created_at", desc=True)
+        .order("updated_at", desc=True)
         .execute()
     )
     return result.data or []
@@ -60,7 +61,7 @@ async def get_game(game_id: str, current_user: str = Depends(get_current_user)):
     """Retrieve a single game by ID."""
     result = (
         supabase_client.table("games")
-        .select("id, name, dm_persona, status, created_by, created_at")
+        .select("id, name, dm_persona, status, created_by, created_at, updated_at")
         .eq("id", game_id)
         .maybe_single()
         .execute()
