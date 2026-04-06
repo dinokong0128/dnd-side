@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { CharacterCreationForm } from './CharacterCreationForm'
 import { CharacterSummaryCard } from './CharacterSummaryCard'
 import type { PlayerRow } from '@/lib/types/player'
@@ -17,12 +18,14 @@ export function CharacterLobbyPanel({
   gameStatus,
   initialPlayer,
 }: CharacterLobbyPanelProps) {
+  const router = useRouter()
   const [player, setPlayer] = useState<PlayerRow | null>(initialPlayer)
   const [isEditing, setIsEditing] = useState(!initialPlayer?.character_name)
 
   const handleSuccess = (updatedPlayer: PlayerRow) => {
-    setPlayer(updatedPlayer)
+    setPlayer(updatedPlayer)   // optimistic: character summary shows immediately
     setIsEditing(false)
+    router.refresh()           // re-fetches server data so InventoryPanel appears
   }
 
   const handleEdit = () => {

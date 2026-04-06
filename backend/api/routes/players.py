@@ -1,9 +1,13 @@
 """Players endpoints: create and manage player characters."""
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 from config import supabase_client
 from api.dependencies import get_current_user
-from utils.dnd import calculate_hp_max
+from utils.dnd import calculate_hp_max, CLASS_STARTING_INVENTORY
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -120,4 +124,55 @@ async def upsert_player(
     if not upsert_result.data:
         raise HTTPException(status_code=500, detail="Failed to upsert player")
 
+    # Populate starting inventory (best-effort — failure should not block the upsert)
+    try:
+        player_id = upsert_result.data["id"]
+        # Delete any existing inventory for this player (handles class changes)
+        supabase_client.table("player_inventory").delete().eq(
+            "player_id", player_id
+        ).execute()
+        # Insert new starting inventory for the selected class
+        starting_items = CLASS_STARTING_INVENTORY.get(body.character_class, [])
+        if starting_items:
+            rows = [
+                {"player_id": player_id, "item_name": item["item_name"], "quantity": item["quantity"]}
+                for item in starting_items
+            ]
+            supabase_client.table("player_inventory").insert(rows).execute()
+    except Exception as e:
+        logger.warning("Failed to populate inventory for player %s: %s", upsert_result.data.get("id"), e)
+
     return upsert_result.data
+
+
+@router.get("/{game_id}/players/inventory")
+async def get_player_inventory(
+    game_id: str,
+    current_user: str = Depends(get_current_user),
+):
+    """Get inventory items for the current player in a game."""
+    # Find the player for this user in this game
+    player_result = (
+        supabase_client.table("players")
+        .select("id")
+        .eq("game_id", game_id)
+        .eq("profile_id", current_user)
+        .maybe_single()
+        .execute()
+    )
+
+    if not player_result.data:
+        return []
+
+    player_id = player_result.data["id"]
+
+    # Fetch inventory items
+    inventory_result = (
+        supabase_client.table("player_inventory")
+        .select("id, player_id, item_name, quantity, properties, created_at")
+        .eq("player_id", player_id)
+        .order("item_name")
+        .execute()
+    )
+
+    return inventory_result.data or []
