@@ -1,9 +1,10 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { fetchGameById } from '@/lib/supabase/games'
-import { getPlayer } from '@/lib/supabase/players'
+import { getPlayer, getPlayerInventory } from '@/lib/supabase/players'
 import { CharacterLobbyPanel } from '@/components/games/CharacterLobbyPanel'
 import { InviteSection } from '@/components/games/InviteSection'
+import { InventoryPanel } from '@/components/games/InventoryPanel'
 
 interface GamePageProps {
   params: Promise<{ gameId: string }>
@@ -21,9 +22,10 @@ export default async function GamePage({ params }: GamePageProps) {
     redirect('/auth/login')
   }
 
-  const [game, player] = await Promise.all([
+  const [game, player, inventory] = await Promise.all([
     fetchGameById(gameId),
     getPlayer(gameId, user.id),
+    getPlayerInventory(gameId, user.id),
   ])
 
   if (!game) {
@@ -61,6 +63,16 @@ export default async function GamePage({ params }: GamePageProps) {
             initialPlayer={player}
           />
         </div>
+
+        {player?.character_name && (
+          <div className="mt-4">
+            <InventoryPanel items={inventory.map(i => ({
+              id: i.id,
+              item_name: i.item_name,
+              quantity: i.quantity,
+            }))} />
+          </div>
+        )}
       </div>
     </main>
   )
