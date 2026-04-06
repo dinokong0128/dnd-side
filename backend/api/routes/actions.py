@@ -11,6 +11,7 @@ from api.dependencies import get_current_user
 from models.action import ActionInput, ActionResponse
 from services.dm_service import validate_action, search_rag
 from tasks.dm_tasks import dm_response_task
+from constants import MESSAGE_ROLE_PLAYER
 
 router = APIRouter()
 
@@ -61,7 +62,7 @@ async def create_action(
         message_row = {
             "game_id": gameId,
             "profile_id": current_user,
-            "role": "player",
+            "role": MESSAGE_ROLE_PLAYER,
             "content": action.action_text,
         }
 

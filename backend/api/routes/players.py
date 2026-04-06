@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 from config import supabase_client
 from api.dependencies import get_current_user
 from utils.dnd import calculate_hp_max, CLASS_STARTING_INVENTORY
+from constants import GAME_STATUS_LOBBY
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +98,7 @@ async def upsert_player(
         raise HTTPException(status_code=404, detail="Game not found")
 
     game = game_result.data
-    if game["status"] != "lobby":
+    if game["status"] != GAME_STATUS_LOBBY:
         raise HTTPException(status_code=403, detail="Game is not in lobby")
 
     # For MVP, any authenticated user can create a character in a lobby game.

@@ -14,6 +14,7 @@ import logging
 from config import supabase_client, anthropic_client, openai_client
 import redis_broker  # noqa: F401 — ensure broker is set before defining actors
 from services.dm_service import extract_events_from_response
+from constants import MESSAGE_ROLE_DM, EVENT_SOURCE_CLAUDE
 
 logger = logging.getLogger(__name__)
 
@@ -105,14 +106,14 @@ PLAYER ACTION:
                 "event_type": event['type'],
                 "summary": event['description'],
                 "embedding": event_embedding.data[0].embedding,
-                "source": "claude",
+                "source": EVENT_SOURCE_CLAUDE,
             })
         
         # Step 6: Insert DM response to game_messages
         response_message = {
             "game_id": game_id,
             "profile_id": None,
-            "role": "dm",
+            "role": MESSAGE_ROLE_DM,
             "content": dm_response,
         }
 
