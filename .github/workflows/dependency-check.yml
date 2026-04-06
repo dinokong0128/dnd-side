@@ -126,11 +126,10 @@ Frontend:
 - npm audit fix applied
 
 Backend:
-- pip dependencies reviewed
-
-For security details, see DEPENDENCY_AUDIT.md (available in workflow artifacts)
-EOF
-          git commit -F /tmp/commit_msg.txt
+#- pip dependencies reviewed
+# For security details, see DEPENDENCY_AUDIT.md (available in workflow artifacts)
+# EOF
+#          git commit -F /tmp/commit_msg.txt
 
       - name: Push to Develop
         if: steps.detect-changes.outputs.has_changes == 'true'
