@@ -4,6 +4,8 @@ export type PlayerRow = {
   profile_id: string
   character_name: string
   character_class: string
+  race: string
+  level: number
   hp_current: number
   hp_max: number
   stats: {

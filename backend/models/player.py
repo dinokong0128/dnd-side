@@ -10,6 +10,8 @@ class Player(BaseModel):
     profile_id: str
     character_name: str
     character_class: str
+    race: str = "Human"
+    level: int = 1
     hp_current: int
     hp_max: int
     stats: dict[str, Any]

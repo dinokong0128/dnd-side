@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import {
   CHARACTER_CLASSES,
+  CHARACTER_RACES,
   CHARACTER_CONSTRAINTS,
   STAT_CONSTRAINTS,
 } from '@/lib/constants/game'
@@ -11,6 +12,8 @@ export const characterSchema = z.object({
     .min(CHARACTER_CONSTRAINTS.name.min, 'Name is required')
     .max(CHARACTER_CONSTRAINTS.name.max, 'Max 50 characters'),
   characterClass: z.enum(CHARACTER_CLASSES, { message: 'Select a class' }),
+  race: z.enum(CHARACTER_RACES, { message: 'Select a race' }),
+  level: z.number().int().min(1).max(20).default(1),
   stats: z.object({
     str: z
       .number({ error: 'Must be a number' })

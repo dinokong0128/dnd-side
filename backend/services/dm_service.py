@@ -18,7 +18,7 @@ def validate_action(action: Any, player: dict, game: dict) -> None:
         raise ValueError("Action text cannot be empty")
     if len(action.action_text) > 2000:
         raise ValueError("Action text exceeds 2000 character limit")
-    if game.get("status") not in ("active", "lobby"):
+    if game.get("status") != "active":
         raise ValueError(f"Game is not active (status: {game.get('status')})")
     if player.get("status") == "dead":
         raise ValueError("Dead players cannot take actions")

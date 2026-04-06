@@ -45,6 +45,8 @@ class UpsertPlayerRequest(BaseModel):
 
     character_name: str = Field(min_length=1, max_length=50)
     character_class: str
+    race: str = "Human"
+    level: int = Field(ge=1, le=20, default=1)
     stats: StatBlock
 
     @field_validator("character_class")
@@ -63,6 +65,8 @@ class PlayerOut(BaseModel):
     profile_id: str
     character_name: str
     character_class: str
+    race: str
+    level: int
     hp_current: int
     hp_max: int
     stats: dict
@@ -110,13 +114,15 @@ async def upsert_player(
                 "profile_id": current_user,
                 "character_name": body.character_name,
                 "character_class": body.character_class,
+                "race": body.race,
+                "level": body.level,
                 "stats": stats_dict,
                 "hp_max": hp_max,
                 "hp_current": hp_max,
             },
             on_conflict="game_id,profile_id",
         )
-        .select("id, game_id, profile_id, character_name, character_class, hp_current, hp_max, stats, status, joined_at")
+        .select("id, game_id, profile_id, character_name, character_class, race, level, hp_current, hp_max, stats, status, joined_at")
         .single()
         .execute()
     )

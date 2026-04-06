@@ -20,14 +20,13 @@ logger = logging.getLogger(__name__)
 @dramatiq.actor(max_retries=3, min_backoff=1000)
 def dm_response_task(
     game_id: str,
-    action_id: str,
+    message_id: str,
     action_text: str,
-    player_id: str,
     rag_context: List[Dict[str, Any]],
 ):
     """
     Async Dramatiq task: Process DM response
-    
+
     1. Fetch game state + relevant events
     2. Build Claude system prompt with RAG context
     3. Call Claude API
@@ -36,11 +35,11 @@ def dm_response_task(
     6. Insert DM response to game_messages
     7. Insert events to game_events
     8. Update game state
-    
+
     If fails 3 times: dead-letter queue (requires manual review)
     """
-    
-    logger.info(f"[dm_response_task] Starting for game={game_id}, action={action_id}")
+
+    logger.info(f"[dm_response_task] Starting for game={game_id}, message={message_id}")
     
     try:
         # Step 1: Fetch game state
@@ -53,39 +52,29 @@ def dm_response_task(
         ).execute()
         
         # Step 2: Build Claude system prompt
-        system_prompt = f"""
-You are the Dungeon Master for a multiplayer D&D campaign.
-Game: {game.data['name']}
-Setting: {game.data['setting']}
-Campaign: {game.data['campaign_description']}
+        system_prompt = f"""You are {game.data['dm_persona']}. You are the Dungeon Master for a D&D 5e campaign called "{game.data['name']}".
 
 CURRENT PARTY:
-{json.dumps([{
-    'name': p['character_name'],
-    'class': p['class'],
-    'level': p['level'],
-    'health': p['stats']['health'] if p['stats'] else 'Unknown',
-} for p in players.data], indent=2)}
+{chr(10).join(f"- {p['character_name']}, Level {p.get('level', 1)} {p.get('race', 'Human')} {p['character_class']}. HP: {p['hp_current']}/{p['hp_max']}" for p in players.data)}
 
 RELEVANT PAST EVENTS (Context from RAG):
-{json.dumps(rag_context, indent=2)}
+{json.dumps(rag_context, indent=2) if rag_context else "No past events yet."}
 
 RULES:
-- Respond in character as the DM
-- Be engaging and descriptive
-- Track game state changes (health, inventory, position)
+- Respond in character as the DM — never break the fourth wall
+- Be vivid and engaging but keep responses to 2–3 paragraphs
 - If important story events happen, mark them with:
-  <event type="combat|discovery|dialogue|death|milestone">Event description</event>
-- Keep responses to 2-3 paragraphs
+  <event type="combat|discovery|dialogue|death|milestone">Brief factual description</event>
+- End with a clear invitation for the party to act
 
 PLAYER ACTION:
-{player_id} says: "{action_text}"
+"{action_text}"
 """
         
         # Step 3: Call Claude API
         response = anthropic_client.messages.create(
-            model="claude-3-5-sonnet-20241022",
-            max_tokens=500,
+            model="claude-sonnet-4-20250514",
+            max_tokens=1024,
             system=system_prompt,
             messages=[
                 {
@@ -110,24 +99,23 @@ PLAYER ACTION:
                 input=event['description'],
                 dimensions=1536,
             )
-            
+
             event_rows.append({
                 "game_id": game_id,
                 "event_type": event['type'],
-                "description": event['description'],
-                "created_at": datetime.utcnow().isoformat(),
-                "vector": event_embedding.data[0].embedding,  # pgvector column
+                "summary": event['description'],
+                "embedding": event_embedding.data[0].embedding,
+                "source": "claude",
             })
         
         # Step 6: Insert DM response to game_messages
         response_message = {
             "game_id": game_id,
-            "player_id": None,  # DM messages have no player
-            "message_type": "dm_response",
+            "profile_id": None,
+            "role": "dm",
             "content": dm_response,
-            "created_at": datetime.utcnow().isoformat(),
         }
-        
+
         supabase_client.table("game_messages").insert(response_message).execute()
         logger.info(f"[dm_response_task] Inserted DM response")
         
@@ -136,11 +124,9 @@ PLAYER ACTION:
             supabase_client.table("game_events").insert(event_rows).execute()
             logger.info(f"[dm_response_task] Inserted {len(event_rows)} events")
         
-        # Step 8: Update game state (if needed)
-        # Example: Increment turn counter, update player health, etc.
+        # Step 8: Update game state
         supabase_client.table("games").update({
-            "last_dm_response": datetime.utcnow().isoformat(),
-            "turn_count": game.data.get('turn_count', 0) + 1,
+            "updated_at": datetime.utcnow().isoformat(),
         }).match({"id": game_id}).execute()
         
         logger.info(f"[dm_response_task] Success! game_id={game_id}")

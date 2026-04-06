@@ -13,6 +13,18 @@ export const CHARACTER_CLASSES = [
   'Warlock',
 ] as const
 
+export const CHARACTER_RACES = [
+  'Human',
+  'Elf',
+  'Dwarf',
+  'Halfling',
+  'Gnome',
+  'Half-Elf',
+  'Half-Orc',
+  'Tiefling',
+  'Dragonborn',
+] as const
+
 export const GAME_STATUSES = ['lobby', 'active', 'paused', 'ended'] as const
 
 export const STAT_NAMES = [

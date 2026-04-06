@@ -33,7 +33,9 @@ export function CharacterSummaryCard({
           <h2 className="text-2xl font-bold text-gray-900">
             {player.character_name}
           </h2>
-          <p className="text-lg text-gray-600">{player.character_class}</p>
+          <p className="text-lg text-gray-600">
+            Level {player.level} {player.race} {player.character_class}
+          </p>
         </div>
         {isLobby && (
           <button
