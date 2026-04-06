@@ -343,6 +343,7 @@ describe('LoginForm', () => {
           expect.objectContaining({
             email: 'hero@example.com',
             options: expect.objectContaining({
+              shouldCreateUser: false,
               emailRedirectTo: expect.stringContaining('/auth/callback?next=/dashboard'),
             }),
           })

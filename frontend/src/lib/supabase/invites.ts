@@ -20,14 +20,9 @@ export async function fetchInviteByCode(code: string): Promise<InviteResult> {
     return { status: data?.status ?? 'invalid' }
   }
 
-  const gameId = data.game_id as string
-
-  // Fetch game name for the signup banner
-  const { data: game } = await supabase
-    .from('games')
-    .select('name')
-    .eq('id', gameId)
-    .maybeSingle()
-
-  return { status: 'valid', gameId, gameName: game?.name ?? '' }
+  return {
+    status: 'valid',
+    gameId: data.game_id as string,
+    gameName: (data.game_name as string) ?? '',
+  }
 }

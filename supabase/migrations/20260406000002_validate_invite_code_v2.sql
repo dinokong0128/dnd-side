@@ -6,6 +6,7 @@ set search_path = public
 as $$
 declare
   v_invite record;
+  v_game_name text;
 begin
   select game_id, used_at into v_invite
   from public.invites
@@ -19,6 +20,15 @@ begin
     return jsonb_build_object('status', 'used');
   end if;
 
-  return jsonb_build_object('status', 'valid', 'game_id', v_invite.game_id);
+  -- Fetch game name within security-definer context to bypass RLS for anonymous users
+  select name into v_game_name
+  from public.games
+  where id = v_invite.game_id;
+
+  return jsonb_build_object(
+    'status', 'valid',
+    'game_id', v_invite.game_id,
+    'game_name', coalesce(v_game_name, '')
+  );
 end;
 $$;
