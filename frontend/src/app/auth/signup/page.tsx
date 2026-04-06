@@ -10,14 +10,24 @@ export default async function SignUpPage({
   const { code } = await searchParams
 
   if (!code || typeof code !== 'string') {
-    return <InviteRequiredMessage />
+    return <InviteRequiredMessage reason="missing" />
   }
 
-  const invite = await fetchInviteByCode(code)
+  const result = await fetchInviteByCode(code)
 
-  if (!invite) {
-    return <InviteRequiredMessage />
+  if (result.status === 'invalid') {
+    return <InviteRequiredMessage reason="invalid" />
   }
 
-  return <SignUpForm gameId={invite.gameId} inviteCode={code} />
+  if (result.status === 'used') {
+    return <InviteRequiredMessage reason="used" />
+  }
+
+  return (
+    <SignUpForm
+      gameId={result.gameId}
+      inviteCode={code}
+      gameName={result.gameName}
+    />
+  )
 }
