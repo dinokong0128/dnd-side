@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { LoginForm } from '../LoginForm'
 
 const mockSignIn = jest.fn()
+const mockSignInWithOtp = jest.fn()
 const mockPush = jest.fn()
 
 jest.mock('next/navigation', () => ({
@@ -13,6 +14,7 @@ jest.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
     auth: {
       signInWithPassword: mockSignIn,
+      signInWithOtp: mockSignInWithOtp,
     },
   }),
 }))
@@ -277,6 +279,127 @@ describe('LoginForm', () => {
       await waitFor(() => {
         expect(mockPush).toHaveBeenCalledWith('/dashboard')
       })
+    })
+  })
+
+  describe('magic link mode', () => {
+    it('toggles to magic link mode when clicking toggle', async () => {
+      const user = userEvent.setup()
+      render(<LoginForm />)
+
+      // Initially should show password field
+      expect(screen.getByTestId('password-input')).toBeInTheDocument()
+
+      // Click toggle to magic link
+      await user.click(screen.getByTestId('magic-link-toggle'))
+
+      // Password field should be hidden
+      expect(screen.queryByTestId('password-input')).not.toBeInTheDocument()
+
+      // Magic link button should be visible
+      expect(screen.getByTestId('magic-link-submit')).toBeInTheDocument()
+    })
+
+    it('shows email-only form in magic link mode', async () => {
+      const user = userEvent.setup()
+      render(<LoginForm />)
+
+      await user.click(screen.getByTestId('magic-link-toggle'))
+
+      expect(screen.getByTestId('magic-email-input')).toBeInTheDocument()
+      expect(screen.queryByTestId('password-input')).not.toBeInTheDocument()
+      expect(screen.getByTestId('magic-link-submit')).toHaveTextContent(
+        'Send Magic Link'
+      )
+    })
+
+    it('validates email before sending magic link', async () => {
+      const user = userEvent.setup()
+      render(<LoginForm />)
+
+      await user.click(screen.getByTestId('magic-link-toggle'))
+      await user.click(screen.getByTestId('magic-link-submit'))
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(/Please enter a valid email address/)
+        ).toBeInTheDocument()
+      })
+
+      expect(mockSignInWithOtp).not.toHaveBeenCalled()
+    })
+
+    it('calls signInWithOtp on valid email submit', async () => {
+      mockSignInWithOtp.mockResolvedValue({ error: null })
+      const user = userEvent.setup()
+      render(<LoginForm />)
+
+      await user.click(screen.getByTestId('magic-link-toggle'))
+      await user.type(screen.getByTestId('magic-email-input'), 'hero@example.com')
+      await user.click(screen.getByTestId('magic-link-submit'))
+
+      await waitFor(() => {
+        expect(mockSignInWithOtp).toHaveBeenCalledWith(
+          expect.objectContaining({
+            email: 'hero@example.com',
+            options: expect.objectContaining({
+              shouldCreateUser: false,
+              emailRedirectTo: expect.stringContaining('/auth/callback?next=/dashboard'),
+            }),
+          })
+        )
+      })
+    })
+
+    it('shows success message after sending magic link', async () => {
+      mockSignInWithOtp.mockResolvedValue({ error: null })
+      const user = userEvent.setup()
+      render(<LoginForm />)
+
+      await user.click(screen.getByTestId('magic-link-toggle'))
+      await user.type(screen.getByTestId('magic-email-input'), 'hero@example.com')
+      await user.click(screen.getByTestId('magic-link-submit'))
+
+      await waitFor(() => {
+        expect(screen.getByTestId('magic-link-success')).toBeInTheDocument()
+        expect(
+          screen.getByRole('heading', { name: 'Check Your Inbox' })
+        ).toBeInTheDocument()
+        expect(screen.getByText(/hero@example.com/)).toBeInTheDocument()
+      })
+    })
+
+    it('toggles back to password mode from magic mode', async () => {
+      const user = userEvent.setup()
+      render(<LoginForm />)
+
+      await user.click(screen.getByTestId('magic-link-toggle'))
+      expect(screen.getByTestId('magic-email-input')).toBeInTheDocument()
+
+      await user.click(screen.getByTestId('password-toggle'))
+
+      expect(screen.getByTestId('password-input')).toBeInTheDocument()
+      expect(screen.queryByTestId('magic-email-input')).not.toBeInTheDocument()
+    })
+
+    it('handles signInWithOtp errors gracefully', async () => {
+      mockSignInWithOtp.mockResolvedValue({
+        error: { message: 'Email service unavailable' },
+      })
+      const user = userEvent.setup()
+      render(<LoginForm />)
+
+      await user.click(screen.getByTestId('magic-link-toggle'))
+      await user.type(screen.getByTestId('magic-email-input'), 'hero@example.com')
+      await user.click(screen.getByTestId('magic-link-submit'))
+
+      await waitFor(() => {
+        expect(screen.getByTestId('form-error')).toHaveTextContent(
+          'Email service unavailable'
+        )
+      })
+
+      expect(screen.queryByTestId('magic-link-success')).not.toBeInTheDocument()
     })
   })
 })
