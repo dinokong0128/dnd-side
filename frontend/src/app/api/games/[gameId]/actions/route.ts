@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
+import { ACTION_MAX_LENGTH } from '@/lib/validations/action'
 
 export async function POST(
   request: NextRequest,
@@ -42,9 +43,9 @@ export async function POST(
       )
     }
 
-    if (action_text.length > 2000) {
+    if (action_text.length > ACTION_MAX_LENGTH) {
       return NextResponse.json(
-        { error: 'Action text exceeds 2000 character limit' },
+        { error: `Action text exceeds ${ACTION_MAX_LENGTH} character limit` },
         { status: 400 }
       )
     }
