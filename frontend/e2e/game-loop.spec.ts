@@ -36,26 +36,29 @@ test.describe('Core Game Loop — Submit Action + Receive DM Response', () => {
     const gameId = 'test-game-123'
     const userId = 'user-1'
 
-    // Mock GET /api/games/:id - game state
-    await page.route(`**/api/games/${gameId}`, (route) => {
+    // Mock Supabase server-side fetch for game data (fetchGameById)
+    await page.route('**/supabase.co/rest/v1/games**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({
-            id: gameId,
-            name: 'The Shadowveil Campaign',
-            dm_persona: 'A wise and dramatic Dungeon Master',
-            status: 'active',
-            created_at: '2026-01-01T00:00:00Z',
-            created_by: userId,
-          }),
+          body: JSON.stringify([
+            {
+              id: gameId,
+              name: 'The Shadowveil Campaign',
+              dm_persona: 'A wise and dramatic Dungeon Master',
+              status: 'active',
+              created_at: '2026-01-01T00:00:00Z',
+              created_by: userId,
+              updated_at: '2026-01-01T00:00:00Z',
+            },
+          ]),
         })
       }
     })
 
-    // Mock GET /api/games/:id/players - players in game
-    await page.route(`**/api/games/${gameId}/players`, (route) => {
+    // Mock Supabase server-side fetch for players
+    await page.route('**/supabase.co/rest/v1/players**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -179,39 +182,47 @@ test.describe('Core Game Loop — Submit Action + Receive DM Response', () => {
     const gameId = 'test-game-123'
     const userId = 'user-1'
 
-    // Mock game and players
-    await page.route(`**/api/games/${gameId}`, (route) => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          id: gameId,
-          name: 'Test Campaign',
-          dm_persona: 'A test DM',
-          status: 'active',
-          created_by: userId,
-        }),
-      })
+    // Mock Supabase server-side fetch for game data
+    await page.route('**/supabase.co/rest/v1/games**', (route) => {
+      if (route.request().method() === 'GET') {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: gameId,
+              name: 'Test Campaign',
+              dm_persona: 'A test DM',
+              status: 'active',
+              created_by: userId,
+              updated_at: '2026-01-01T00:00:00Z',
+            },
+          ]),
+        })
+      }
     })
 
-    await page.route(`**/api/games/${gameId}/players`, (route) => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify([
-          {
-            id: 'player-1',
-            game_id: gameId,
-            profile_id: userId,
-            character_name: 'Test Char',
-            character_class: 'Wizard',
-            race: 'Elf',
-            level: 1,
-            hp_current: 10,
-            hp_max: 10,
-          },
-        ]),
-      })
+    // Mock Supabase server-side fetch for players
+    await page.route('**/supabase.co/rest/v1/players**', (route) => {
+      if (route.request().method() === 'GET') {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: 'player-1',
+              game_id: gameId,
+              profile_id: userId,
+              character_name: 'Test Char',
+              character_class: 'Wizard',
+              race: 'Elf',
+              level: 1,
+              hp_current: 10,
+              hp_max: 10,
+            },
+          ]),
+        })
+      }
     })
 
     await page.goto(`/games/${gameId}`)
@@ -242,38 +253,47 @@ test.describe('Core Game Loop — Submit Action + Receive DM Response', () => {
     const gameId = 'test-game-123'
     const userId = 'user-1'
 
-    await page.route(`**/api/games/${gameId}`, (route) => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          id: gameId,
-          name: 'Error Test Campaign',
-          dm_persona: 'Test DM',
-          status: 'active',
-          created_by: userId,
-        }),
-      })
+    // Mock Supabase server-side fetch for game data
+    await page.route('**/supabase.co/rest/v1/games**', (route) => {
+      if (route.request().method() === 'GET') {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: gameId,
+              name: 'Error Test Campaign',
+              dm_persona: 'Test DM',
+              status: 'active',
+              created_by: userId,
+              updated_at: '2026-01-01T00:00:00Z',
+            },
+          ]),
+        })
+      }
     })
 
-    await page.route(`**/api/games/${gameId}/players`, (route) => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify([
-          {
-            id: 'player-1',
-            game_id: gameId,
-            profile_id: userId,
-            character_name: 'Test Char',
-            character_class: 'Rogue',
-            race: 'Halfling',
-            level: 1,
-            hp_current: 8,
-            hp_max: 8,
-          },
-        ]),
-      })
+    // Mock Supabase server-side fetch for players
+    await page.route('**/supabase.co/rest/v1/players**', (route) => {
+      if (route.request().method() === 'GET') {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: 'player-1',
+              game_id: gameId,
+              profile_id: userId,
+              character_name: 'Test Char',
+              character_class: 'Rogue',
+              race: 'Halfling',
+              level: 1,
+              hp_current: 8,
+              hp_max: 8,
+            },
+          ]),
+        })
+      }
     })
 
     await page.route(`**/api/games/${gameId}/actions`, (route) => {
@@ -325,39 +345,47 @@ test.describe('Core Game Loop — Submit Action + Receive DM Response', () => {
     const gameId = 'test-game-123'
     const userId = 'user-2' // Different user, no character
 
-    await page.route(`**/api/games/${gameId}`, (route) => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          id: gameId,
-          name: 'Campaign',
-          dm_persona: 'DM',
-          status: 'active',
-          created_by: 'user-1',
-        }),
-      })
+    // Mock Supabase server-side fetch for game data
+    await page.route('**/supabase.co/rest/v1/games**', (route) => {
+      if (route.request().method() === 'GET') {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: gameId,
+              name: 'Campaign',
+              dm_persona: 'DM',
+              status: 'active',
+              created_by: 'user-1',
+              updated_at: '2026-01-01T00:00:00Z',
+            },
+          ]),
+        })
+      }
     })
 
-    // No players for user-2
-    await page.route(`**/api/games/${gameId}/players`, (route) => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify([
-          {
-            id: 'player-1',
-            game_id: gameId,
-            profile_id: 'user-1', // Different user
-            character_name: 'Another Player',
-            character_class: 'Barbarian',
-            race: 'Orc',
-            level: 2,
-            hp_current: 30,
-            hp_max: 30,
-          },
-        ]),
-      })
+    // Mock Supabase server-side fetch for players - no players for user-2
+    await page.route('**/supabase.co/rest/v1/players**', (route) => {
+      if (route.request().method() === 'GET') {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: 'player-1',
+              game_id: gameId,
+              profile_id: 'user-1', // Different user
+              character_name: 'Another Player',
+              character_class: 'Barbarian',
+              race: 'Orc',
+              level: 2,
+              hp_current: 30,
+              hp_max: 30,
+            },
+          ]),
+        })
+      }
     })
 
     // Override the auth mock for this test
