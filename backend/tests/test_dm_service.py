@@ -63,12 +63,13 @@ class TestValidateAction:
         with pytest.raises(ValueError, match="not active"):
             validate_action(action, player, game)
 
-    def test_lobby_game_passes(self):
-        """Should not raise when game is in lobby status."""
+    def test_lobby_game_raises(self):
+        """Should raise ValueError when game is in lobby status."""
         action = self._make_action("I prepare.")
         player = {"status": "alive"}
         game = {"status": "lobby"}
-        validate_action(action, player, game)  # Should not raise
+        with pytest.raises(ValueError, match="not active"):
+            validate_action(action, player, game)
 
     def test_dead_player_raises(self):
         """Should raise ValueError when player is dead."""
