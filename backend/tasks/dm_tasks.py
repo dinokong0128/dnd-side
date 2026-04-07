@@ -10,11 +10,13 @@ import json
 import uuid
 from datetime import datetime
 import logging
+import re
 
 from config import supabase_client, anthropic_client, openai_client
 import redis_broker  # noqa: F401 — ensure broker is set before defining actors
+from redis_broker import redis_client
 from services.dm_service import extract_events_from_response
-from constants import MESSAGE_ROLE_DM, EVENT_SOURCE_CLAUDE
+from constants import MESSAGE_ROLE_DM, MESSAGE_ROLE_SYSTEM, EVENT_SOURCE_CLAUDE
 
 logger = logging.getLogger(__name__)
 
@@ -28,15 +30,19 @@ def dm_response_task(
     """
     Async Dramatiq task: Process DM response
 
-    1. Fetch game state + relevant events
-    2. Build Claude system prompt with RAG context
-    3. Call Claude API
-    4. Extract events from response (JSON markers)
-    5. Embed events
-    6. Insert DM response to game_messages
-    7. Insert events to game_events
-    8. Update game state
+    1.  Fetch game state + players
+    1b. Fetch last 20 messages for history context
+    1c. Fetch player inventory for each player
+    2.  Build Claude system prompt with history, inventory, RAG context
+    3.  Call Claude API
+    4.  Extract events from raw response
+    5.  Embed events
+    6.  Strip event markers from displayed message
+    7.  Insert cleaned DM response to game_messages
+    8.  Insert events to game_events
+    9.  Update game timestamp
 
+    On failure: insert system error message, then re-raise for Dramatiq retry.
     If fails 3 times: dead-letter queue (requires manual review)
     """
 
@@ -51,24 +57,74 @@ def dm_response_task(
         players = supabase_client.table("players").select("*").match(
             {"game_id": game_id}
         ).execute()
-        
+
+        # Step 1b: Fetch last 20 messages for context
+        recent_messages = supabase_client.table("game_messages").select(
+            "role, profile_id, content"
+        ).eq("game_id", game_id).order(
+            "created_at", desc=True
+        ).limit(20).execute()
+
+        # Reverse to chronological order and format
+        message_history = []
+        for msg in reversed(recent_messages.data or []):
+            if msg["role"] == "dm":
+                message_history.append(f"DM: {msg['content']}")
+            elif msg["role"] == "player":
+                # Find character name for this profile_id
+                player_name = next(
+                    (p["character_name"] for p in players.data
+                     if p.get("profile_id") == msg.get("profile_id")),
+                    "Unknown Player"
+                )
+                message_history.append(f"{player_name}: {msg['content']}")
+            # Skip system messages in context
+
+        message_history_text = "\n\n".join(message_history) if message_history else "No messages yet."
+
+        # Step 1c: Fetch player inventory
+        party_lines = []
+        for p in players.data:
+            inv = supabase_client.table("player_inventory").select(
+                "item_name, quantity"
+            ).eq("player_id", p["id"]).execute()
+
+            items = ", ".join(
+                f"{i['item_name']} (x{i['quantity']})" if i["quantity"] > 1 else i["item_name"]
+                for i in (inv.data or [])
+            ) or "no equipment"
+
+            party_lines.append(
+                f"- {p['character_name']}, Level {p.get('level', 1)} "
+                f"{p.get('race', 'Human')} {p['character_class']}. "
+                f"HP: {p['hp_current']}/{p['hp_max']}. Equipment: {items}"
+            )
+
         # Step 2: Build Claude system prompt
         system_prompt = f"""You are {game.data['dm_persona']}. You are the Dungeon Master for a D&D 5e campaign called "{game.data['name']}".
 
 CURRENT PARTY:
-{chr(10).join(f"- {p['character_name']}, Level {p.get('level', 1)} {p.get('race', 'Human')} {p['character_class']}. HP: {p['hp_current']}/{p['hp_max']}" for p in players.data)}
+{chr(10).join(party_lines)}
+
+RECENT SESSION HISTORY (last 20 messages, oldest first):
+---
+{message_history_text}
+---
 
 RELEVANT PAST EVENTS (Context from RAG):
 {json.dumps(rag_context, indent=2) if rag_context else "No past events yet."}
 
 RULES:
-- Respond in character as the DM — never break the fourth wall
-- Be vivid and engaging but keep responses to 2–3 paragraphs
-- If important story events happen, mark them with:
-  <event type="combat|discovery|dialogue|death|milestone">Brief factual description</event>
-- End with a clear invitation for the party to act
+1. Respond in character as the DM — never break the fourth wall
+2. Be vivid and engaging but keep responses to 2–3 paragraphs
+3. Account for character abilities, equipment, and class features when narrating outcomes
+4. If the player's action requires a skill check, narrate the attempt and outcome (you decide the result)
+5. If important story events occur, mark them inline:
+   <event type="combat|discovery|dialogue|death|milestone">Brief factual description</event>
+6. End with a clear invitation for the party to act
+7. Do not list game mechanics or stat changes — narrate them naturally
 
-PLAYER ACTION:
+The acting player's action:
 "{action_text}"
 """
         
@@ -87,11 +143,11 @@ PLAYER ACTION:
         
         dm_response = response.content[0].text
         logger.info(f"[dm_response_task] Claude responded: {len(dm_response)} chars")
-        
+
         # Step 4: Extract events from response
         events = extract_events_from_response(dm_response)
         logger.info(f"[dm_response_task] Extracted {len(events)} events")
-        
+
         # Step 5: Embed events
         event_rows = []
         for event in events:
@@ -108,34 +164,64 @@ PLAYER ACTION:
                 "embedding": event_embedding.data[0].embedding,
                 "source": EVENT_SOURCE_CLAUDE,
             })
-        
-        # Step 6: Insert DM response to game_messages
+
+        # Step 6: Strip event markers from the displayed message
+        clean_response = re.sub(
+            r'<event\s+type=["\'][^"\']+["\']>(.*?)</event>',
+            r'\1',
+            dm_response,
+            flags=re.DOTALL,
+        ).strip()
+
+        # Step 7: Insert DM response to game_messages
         response_message = {
             "game_id": game_id,
             "profile_id": None,
             "role": MESSAGE_ROLE_DM,
-            "content": dm_response,
+            "content": clean_response,
         }
 
         supabase_client.table("game_messages").insert(response_message).execute()
         logger.info(f"[dm_response_task] Inserted DM response")
-        
-        # Step 7: Insert events to game_events
+
+        # Step 8: Insert events to game_events
         if event_rows:
             supabase_client.table("game_events").insert(event_rows).execute()
             logger.info(f"[dm_response_task] Inserted {len(event_rows)} events")
-        
-        # Step 8: Update game state
+
+        # Step 9: Update game state
         supabase_client.table("games").update({
             "updated_at": datetime.utcnow().isoformat(),
         }).match({"id": game_id}).execute()
-        
+
         logger.info(f"[dm_response_task] Success! game_id={game_id}")
-        
+
     except Exception as e:
         logger.error(f"[dm_response_task] Error: {str(e)}", exc_info=True)
-        # Dramatiq will retry up to 3 times with exponential backoff
-        raise
+
+        # Only insert error message on final failure (after all retries exhausted)
+        # Track failures in Redis to detect when retries are exhausted
+        try:
+            failure_key = f"dm_response_fail:{game_id}:{message_id}"
+            attempt_num = redis_client.incr(failure_key)
+            redis_client.expire(failure_key, 3600)  # Expire after 1 hour
+
+            # max_retries=3 means up to 4 total attempts (initial + 3 retries)
+            # Only insert error message when retries are exhausted (attempt 4+)
+            if attempt_num > 3:
+                try:
+                    supabase_client.table("game_messages").insert({
+                        "game_id": game_id,
+                        "role": MESSAGE_ROLE_SYSTEM,
+                        "profile_id": None,
+                        "content": "The Dungeon Master encountered an error. Please try your action again.",
+                    }).execute()
+                except Exception:
+                    logger.error("[dm_response_task] Failed to insert error message")
+        except Exception as redis_error:
+            logger.error(f"[dm_response_task] Failed to track failures: {redis_error}")
+
+        raise  # Let Dramatiq retry
 
 @dramatiq.actor(max_retries=3, min_backoff=1000)
 def generate_opening_narration(game_id: str):

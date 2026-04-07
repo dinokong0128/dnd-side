@@ -34,6 +34,9 @@ export function ChatInput({
     return 'What does your character do?'
   }
 
+  const isDisabled = gameStatus !== 'active' || isWaitingForDm || hasCharacter !== true
+  const canSend = gameStatus === 'active' && !isWaitingForDm && hasCharacter === true && text.trim().length > 0
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!text.trim() || !onSubmit) return
@@ -42,6 +45,19 @@ export function ChatInput({
     setText('')
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      if (canSend && onSubmit) {
+        onSubmit(text)
+        setText('')
+        if (textareaRef.current) {
+          textareaRef.current.style.height = 'auto'
+        }
+      }
     }
   }
 
@@ -69,8 +85,9 @@ export function ChatInput({
             ref={textareaRef}
             value={text}
             onChange={handleTextChange}
+            onKeyDown={handleKeyDown}
             placeholder={getPlaceholder()}
-            disabled={true}
+            disabled={isDisabled}
             className="dnd-input dnd-textarea flex-1 resize-none"
             rows={1}
             style={{
@@ -80,7 +97,7 @@ export function ChatInput({
           />
           <button
             type="submit"
-            disabled={true}
+            disabled={!canSend}
             className="flex-shrink-0 rounded-sm px-6 py-2 font-semibold uppercase tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             style={{
               background: 'linear-gradient(180deg, #3a9d6e, #2d6a4f)',
