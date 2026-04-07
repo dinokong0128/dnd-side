@@ -13,7 +13,7 @@ export const characterSchema = z.object({
     .max(CHARACTER_CONSTRAINTS.name.max, 'Max 50 characters'),
   characterClass: z.enum(CHARACTER_CLASSES, { message: 'Select a class' }),
   race: z.enum(CHARACTER_RACES, { message: 'Select a race' }),
-  level: z.number().int().min(1).max(20).default(1),
+  level: z.number().int().min(1).max(20),
   stats: z.object({
     str: z
       .number({ error: 'Must be a number' })
