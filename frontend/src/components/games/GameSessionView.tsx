@@ -63,10 +63,7 @@ export function GameSessionView({
         setPlayerMap(map)
 
         // Check if current user has a character in this game
-        const currentPlayerHasCharacter = Array.from(map.entries()).some(
-          ([profileId]) => profileId === userId
-        )
-        setHasCharacter(currentPlayerHasCharacter)
+        setHasCharacter(map.has(userId))
 
         // Determine if waiting for DM
         if (msgs.length === 0) {
@@ -99,8 +96,8 @@ export function GameSessionView({
           const newMsg = payload.new as GameMessage
           setMessages((prev) => [...prev, newMsg])
 
-          // If DM responded, we're no longer waiting
-          if (newMsg.role === 'dm') {
+          // If DM or system (error) responded, we're no longer waiting
+          if (newMsg.role === 'dm' || newMsg.role === 'system') {
             setIsWaitingForDm(false)
           } else if (newMsg.role === 'player') {
             setIsWaitingForDm(true)
@@ -131,7 +128,7 @@ export function GameSessionView({
       messagesSubscription.unsubscribe()
       gamesSubscription.unsubscribe()
     }
-  }, [gameId])
+  }, [gameId, userId])
 
   const handleSubmit = async (actionText: string) => {
     try {

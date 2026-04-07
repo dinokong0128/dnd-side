@@ -29,15 +29,19 @@ def dm_response_task(
     """
     Async Dramatiq task: Process DM response
 
-    1. Fetch game state + relevant events
-    2. Build Claude system prompt with RAG context
-    3. Call Claude API
-    4. Extract events from response (JSON markers)
-    5. Embed events
-    6. Insert DM response to game_messages
-    7. Insert events to game_events
-    8. Update game state
+    1.  Fetch game state + players
+    1b. Fetch last 20 messages for history context
+    1c. Fetch player inventory for each player
+    2.  Build Claude system prompt with history, inventory, RAG context
+    3.  Call Claude API
+    4.  Extract events from raw response
+    5.  Embed events
+    6.  Strip event markers from displayed message
+    7.  Insert cleaned DM response to game_messages
+    8.  Insert events to game_events
+    9.  Update game timestamp
 
+    On failure: insert system error message, then re-raise for Dramatiq retry.
     If fails 3 times: dead-letter queue (requires manual review)
     """
 
