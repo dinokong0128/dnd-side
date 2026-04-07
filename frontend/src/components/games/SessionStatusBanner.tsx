@@ -21,7 +21,10 @@ export function SessionStatusBanner({
     setIsResuming(true)
     try {
       await onResume?.()
-    } finally {
+      // Success — don't reset isResuming; banner will unmount when
+      // Realtime changes gameStatus to 'active'
+    } catch {
+      // Failure — reset so the host can retry
       setIsResuming(false)
     }
   }

@@ -13,7 +13,9 @@ export async function POST(
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
-          getAll() { return cookieStore.getAll() },
+          getAll() {
+            return cookieStore.getAll()
+          },
           setAll(cookiesToSet) {
             cookiesToSet.forEach(({ name, value, options }) => {
               cookieStore.set(name, value, options)
@@ -23,13 +25,17 @@ export async function POST(
       }
     )
 
-    const { data: { session } } = await supabase.auth.getSession()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const { gameId } = await params
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+    const backendUrl =
+      process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
     const response = await fetch(`${backendUrl}/games/${gameId}/resume`, {
       method: 'POST',
@@ -50,6 +56,9 @@ export async function POST(
     const data = await response.json()
     return NextResponse.json(data)
   } catch {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
   }
 }

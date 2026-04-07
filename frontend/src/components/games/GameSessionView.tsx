@@ -195,21 +195,20 @@ export function GameSessionView({
   }
 
   const handleResume = async () => {
+    setIsWaitingForDm(true)
     try {
-      setIsWaitingForDm(true)
-
       const response = await fetch(`/api/games/${gameId}/resume`, { method: 'POST' })
       if (!response.ok) {
         const err = await response.json()
-        console.error('Resume failed:', err.error)
-        setIsWaitingForDm(false)
+        throw new Error(err.error || 'Resume failed')
       }
       // Status change (paused → active) arrives via Realtime games subscription
       // Resume narration arrives via Realtime game_messages subscription
       // isWaitingForDm will be cleared when the DM message arrives
-    } catch {
-      console.error('Resume request failed')
+    } catch (error) {
+      console.error('Resume failed:', error)
       setIsWaitingForDm(false)
+      throw error // Re-throw so SessionStatusBanner can reset its loading state
     }
   }
 
