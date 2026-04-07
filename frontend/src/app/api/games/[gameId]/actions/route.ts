@@ -33,30 +33,23 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { action_text, action_type } = await request.json()
+    const { action_text } = await request.json()
 
-    if (!action_text) {
+    if (!action_text || typeof action_text !== 'string' || !action_text.trim()) {
       return NextResponse.json(
         { error: 'action_text required' },
         { status: 400 }
       )
     }
 
-    const { gameId } = await params
-
-    const { data: player } = await supabase
-      .from('players')
-      .select('id, game_id')
-      .eq('profile_id', session.user.id)
-      .eq('game_id', gameId)
-      .single()
-
-    if (!player) {
+    if (action_text.length > 2000) {
       return NextResponse.json(
-        { error: 'Player not found in this game' },
-        { status: 403 }
+        { error: 'Action text exceeds 2000 character limit' },
+        { status: 400 }
       )
     }
+
+    const { gameId } = await params
 
     const backendUrl =
       process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
@@ -66,11 +59,7 @@ export async function POST(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({
-        player_id: player.id,
-        action_text,
-        action_type: action_type || 'general',
-      }),
+      body: JSON.stringify({ action_text: action_text.trim() }),
     })
 
     if (!response.ok) {

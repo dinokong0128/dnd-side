@@ -25,6 +25,7 @@ export function GameSessionView({
   const [isWaitingForDm, setIsWaitingForDm] = useState(false)
   const [gameStatus, setGameStatus] = useState(game.status)
   const [playerMap, setPlayerMap] = useState<Map<string, string>>(new Map())
+  const [hasCharacter, setHasCharacter] = useState(false)
 
   // Initialize: fetch messages and players, set up subscriptions
   useEffect(() => {
@@ -60,6 +61,12 @@ export function GameSessionView({
           }
         })
         setPlayerMap(map)
+
+        // Check if current user has a character in this game
+        const currentPlayerHasCharacter = Array.from(map.entries()).some(
+          ([profileId]) => profileId === userId
+        )
+        setHasCharacter(currentPlayerHasCharacter)
 
         // Determine if waiting for DM
         if (msgs.length === 0) {
@@ -126,12 +133,41 @@ export function GameSessionView({
     }
   }, [gameId])
 
+  const handleSubmit = async (actionText: string) => {
+    try {
+      setIsWaitingForDm(true)
+
+      const response = await fetch(`/api/games/${gameId}/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action_text: actionText }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        // On error, re-enable input
+        setIsWaitingForDm(false)
+        // Optionally show error to user
+        console.error('Action failed:', errorData.error)
+      }
+      // On success, message will appear via Realtime subscription
+      // DM response will also arrive via Realtime, clearing isWaitingForDm
+    } catch {
+      setIsWaitingForDm(false)
+    }
+  }
+
   return (
     <div className="dnd-page-bg flex flex-col h-screen">
       <GameHeader gameName={game.name} gameStatus={gameStatus} />
       <ChatLog messages={messages} playerMap={playerMap} isLoading={isLoading} />
       {isWaitingForDm && <TypingIndicator />}
-      <ChatInput gameStatus={gameStatus} isWaitingForDm={isWaitingForDm} />
+      <ChatInput
+        gameStatus={gameStatus}
+        isWaitingForDm={isWaitingForDm}
+        hasCharacter={hasCharacter}
+        onSubmit={handleSubmit}
+      />
     </div>
   )
 }
