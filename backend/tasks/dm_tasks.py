@@ -316,6 +316,74 @@ Write 3–4 paragraphs. Do not break the fourth wall."""
             logger.error("[generate_opening_narration] Failed to insert error message")
         raise  # Let Dramatiq retry
 
+@dramatiq.actor(max_retries=2, min_backoff=1000)
+def generate_pause_message(game_id: str):
+    """Generate a short in-world pause message."""
+    logger.info(f"[generate_pause_message] Starting for game={game_id}")
+    try:
+        game = supabase_client.table("games").select(
+            "dm_persona"
+        ).eq("id", game_id).single().execute()
+
+        response = anthropic_client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=256,
+            system=(
+                f"You are {game.data['dm_persona']}. The session is being paused. "
+                "Write a single evocative sentence (in-world, no meta-commentary) "
+                "that signals a pause in the adventure. Do not end the story — "
+                "imply it continues soon."
+            ),
+            messages=[{"role": "user", "content": "Pause the session."}],
+        )
+
+        supabase_client.table("game_messages").insert({
+            "game_id": game_id,
+            "role": "dm",
+            "profile_id": None,
+            "content": response.content[0].text,
+        }).execute()
+
+        logger.info(f"[generate_pause_message] Success for game={game_id}")
+    except Exception as e:
+        logger.error(f"[generate_pause_message] Error: {str(e)}", exc_info=True)
+        # Best-effort — don't insert error message, status is already changed
+        raise
+
+@dramatiq.actor(max_retries=2, min_backoff=1000)
+def generate_end_message(game_id: str):
+    """Generate a short in-world closing narration."""
+    logger.info(f"[generate_end_message] Starting for game={game_id}")
+    try:
+        game = supabase_client.table("games").select(
+            "dm_persona"
+        ).eq("id", game_id).single().execute()
+
+        response = anthropic_client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=512,
+            system=(
+                f"You are {game.data['dm_persona']}. The session is ending. "
+                "Write 2–3 sentences (in-world, no meta-commentary) that give "
+                "the party a sense of narrative conclusion for this chapter. "
+                "It may be bittersweet, triumphant, or mysterious — match the "
+                "campaign tone."
+            ),
+            messages=[{"role": "user", "content": "End the session."}],
+        )
+
+        supabase_client.table("game_messages").insert({
+            "game_id": game_id,
+            "role": "dm",
+            "profile_id": None,
+            "content": response.content[0].text,
+        }).execute()
+
+        logger.info(f"[generate_end_message] Success for game={game_id}")
+    except Exception as e:
+        logger.error(f"[generate_end_message] Error: {str(e)}", exc_info=True)
+        raise
+
 
 @dramatiq.actor()
 def aggregation_task(game_id: str):

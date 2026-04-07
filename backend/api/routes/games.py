@@ -131,3 +131,65 @@ async def start_game(
     generate_opening_narration.send(game_id)
 
     return {"status": "active"}
+
+
+@router.post("/{game_id}/pause", response_model=dict)
+async def pause_game(
+    game_id: str,
+    current_user: str = Depends(get_current_user),
+):
+    """Pause an active game session."""
+    game = (
+        supabase_client.table("games")
+        .select("id, status, created_by")
+        .eq("id", game_id)
+        .maybe_single()
+        .execute()
+    )
+    if not game.data:
+        raise HTTPException(status_code=404, detail="Game not found")
+    if game.data["created_by"] != current_user:
+        raise HTTPException(status_code=403, detail="Only the host can pause the game")
+    if game.data["status"] != "active":
+        raise HTTPException(status_code=409, detail=f"Can only pause an active game (current: {game.data['status']})")
+
+    supabase_client.table("games").update({
+        "status": "paused",
+    }).eq("id", game_id).execute()
+
+    # Best-effort DM message — status change is already committed
+    from tasks.dm_tasks import generate_pause_message
+    generate_pause_message.send(game_id)
+
+    return {"status": "paused"}
+
+
+@router.post("/{game_id}/end", response_model=dict)
+async def end_game(
+    game_id: str,
+    current_user: str = Depends(get_current_user),
+):
+    """Permanently end a game session."""
+    game = (
+        supabase_client.table("games")
+        .select("id, status, created_by")
+        .eq("id", game_id)
+        .maybe_single()
+        .execute()
+    )
+    if not game.data:
+        raise HTTPException(status_code=404, detail="Game not found")
+    if game.data["created_by"] != current_user:
+        raise HTTPException(status_code=403, detail="Only the host can end the game")
+    if game.data["status"] not in ("active", "paused"):
+        raise HTTPException(status_code=409, detail=f"Can only end an active or paused game (current: {game.data['status']})")
+
+    supabase_client.table("games").update({
+        "status": "ended",
+    }).eq("id", game_id).execute()
+
+    # Best-effort DM message
+    from tasks.dm_tasks import generate_end_message
+    generate_end_message.send(game_id)
+
+    return {"status": "ended"}

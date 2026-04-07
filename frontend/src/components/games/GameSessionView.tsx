@@ -8,6 +8,8 @@ import { GameHeader } from './GameHeader'
 import { ChatLog } from './ChatLog'
 import { ChatInput } from './ChatInput'
 import { TypingIndicator } from './TypingIndicator'
+import { ConfirmModal } from './ConfirmModal'
+import { SessionStatusBanner } from './SessionStatusBanner'
 
 interface GameSessionViewProps {
   gameId: string
@@ -26,6 +28,11 @@ export function GameSessionView({
   const [gameStatus, setGameStatus] = useState(game.status)
   const [playerMap, setPlayerMap] = useState<Map<string, string>>(new Map())
   const [hasCharacter, setHasCharacter] = useState(false)
+  const [showPauseModal, setShowPauseModal] = useState(false)
+  const [showEndModal, setShowEndModal] = useState(false)
+  const [isActionLoading, setIsActionLoading] = useState(false)
+
+  const isHost = game.created_by === userId
 
   // Initialize: fetch messages and players, set up subscriptions
   useEffect(() => {
@@ -154,16 +161,81 @@ export function GameSessionView({
     }
   }
 
+  const handlePause = async () => {
+    setIsActionLoading(true)
+    try {
+      const response = await fetch(`/api/games/${gameId}/pause`, { method: 'POST' })
+      if (!response.ok) {
+        const err = await response.json()
+        console.error('Pause failed:', err.error)
+      }
+      // Status change arrives via Realtime subscription — no manual state update needed
+    } catch {
+      console.error('Pause request failed')
+    } finally {
+      setIsActionLoading(false)
+      setShowPauseModal(false)
+    }
+  }
+
+  const handleEnd = async () => {
+    setIsActionLoading(true)
+    try {
+      const response = await fetch(`/api/games/${gameId}/end`, { method: 'POST' })
+      if (!response.ok) {
+        const err = await response.json()
+        console.error('End failed:', err.error)
+      }
+    } catch {
+      console.error('End request failed')
+    } finally {
+      setIsActionLoading(false)
+      setShowEndModal(false)
+    }
+  }
+
   return (
     <div className="dnd-page-bg flex flex-col h-screen">
-      <GameHeader gameName={game.name} gameStatus={gameStatus} />
+      <GameHeader
+        gameName={game.name}
+        gameStatus={gameStatus}
+        isHost={isHost}
+        onPause={() => setShowPauseModal(true)}
+        onEnd={() => setShowEndModal(true)}
+      />
       <ChatLog messages={messages} playerMap={playerMap} isLoading={isLoading} />
-      {isWaitingForDm && <TypingIndicator />}
+      {isWaitingForDm && gameStatus === 'active' && <TypingIndicator />}
+      <SessionStatusBanner
+        gameStatus={gameStatus}
+        isHost={isHost}
+        onEnd={() => setShowEndModal(true)}
+      />
       <ChatInput
         gameStatus={gameStatus}
         isWaitingForDm={isWaitingForDm}
         hasCharacter={hasCharacter}
         onSubmit={handleSubmit}
+      />
+
+      <ConfirmModal
+        isOpen={showPauseModal}
+        onClose={() => setShowPauseModal(false)}
+        onConfirm={handlePause}
+        title="Pause the Adventure?"
+        body="The session will be paused. Players can rejoin later when you resume."
+        confirmLabel="Pause Session"
+        variant="default"
+        isLoading={isActionLoading}
+      />
+      <ConfirmModal
+        isOpen={showEndModal}
+        onClose={() => setShowEndModal(false)}
+        onConfirm={handleEnd}
+        title="End This Adventure Forever?"
+        body="This cannot be undone. The session will be permanently closed and can never be resumed."
+        confirmLabel="End Session Forever"
+        variant="destructive"
+        isLoading={isActionLoading}
       />
     </div>
   )
