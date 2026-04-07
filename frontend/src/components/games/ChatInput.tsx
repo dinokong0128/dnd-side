@@ -34,8 +34,8 @@ export function ChatInput({
     return 'What does your character do?'
   }
 
-  const isDisabled = gameStatus !== 'active' || isWaitingForDm || hasCharacter === false
-  const canSend = gameStatus === 'active' && !isWaitingForDm && hasCharacter !== false && text.trim().length > 0
+  const isDisabled = gameStatus !== 'active' || isWaitingForDm || hasCharacter !== true
+  const canSend = gameStatus === 'active' && !isWaitingForDm && hasCharacter === true && text.trim().length > 0
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()

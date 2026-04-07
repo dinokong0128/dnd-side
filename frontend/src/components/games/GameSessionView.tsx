@@ -125,8 +125,8 @@ export function GameSessionView({
       .subscribe()
 
     return () => {
-      messagesSubscription.unsubscribe()
-      gamesSubscription.unsubscribe()
+      messagesSubscription?.unsubscribe()
+      gamesSubscription?.unsubscribe()
     }
   }, [gameId, userId])
 
