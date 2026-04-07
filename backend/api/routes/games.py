@@ -193,3 +193,33 @@ async def end_game(
     generate_end_message.send(game_id)
 
     return {"status": "ended"}
+
+
+@router.post("/{game_id}/resume", response_model=dict)
+async def resume_game(
+    game_id: str,
+    current_user: str = Depends(get_current_user),
+):
+    """Resume a paused game session."""
+    game = (
+        supabase_client.table("games")
+        .select("id, status, created_by")
+        .eq("id", game_id)
+        .maybe_single()
+        .execute()
+    )
+    if not game.data:
+        raise HTTPException(status_code=404, detail="Game not found")
+    if game.data["created_by"] != current_user:
+        raise HTTPException(status_code=403, detail="Only the host can resume the game")
+    if game.data["status"] != "paused":
+        raise HTTPException(status_code=409, detail=f"Can only resume a paused game (current: {game.data['status']})")
+
+    supabase_client.table("games").update({
+        "status": "active",
+    }).eq("id", game_id).execute()
+
+    from tasks.dm_tasks import generate_resume_narration
+    generate_resume_narration.send(game_id)
+
+    return {"status": "active"}

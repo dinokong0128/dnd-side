@@ -15,7 +15,8 @@ import re
 from config import supabase_client, anthropic_client, openai_client
 import redis_broker  # noqa: F401 — ensure broker is set before defining actors
 from redis_broker import redis_client
-from services.dm_service import extract_events_from_response
+from services.dm_service import extract_events_from_response, search_rag
+from services.embedding_service import embed_text
 from constants import MESSAGE_ROLE_DM, MESSAGE_ROLE_SYSTEM, EVENT_SOURCE_CLAUDE
 
 logger = logging.getLogger(__name__)
@@ -384,6 +385,153 @@ def generate_end_message(game_id: str):
         logger.error(f"[generate_end_message] Error: {str(e)}", exc_info=True)
         raise
 
+
+RESUME_CONTEXT_MESSAGES = 20
+
+@dramatiq.actor(max_retries=3, min_backoff=1000)
+def generate_resume_narration(game_id: str):
+    """
+    Generate a resume narration with full RAG context.
+    First real exercise of the RAG pipeline:
+    1. Fetch last 20 messages
+    2. Embed the latest player message
+    3. Cosine-similarity search on game_events
+    4. Build prompt with both context sources
+    5. Call Claude
+    """
+    logger.info(f"[generate_resume_narration] Starting for game={game_id}")
+
+    try:
+        # 1. Fetch game
+        game = supabase_client.table("games").select(
+            "id, name, dm_persona"
+        ).eq("id", game_id).single().execute()
+
+        # 2. Fetch all players
+        players = supabase_client.table("players").select(
+            "id, profile_id, character_name, race, level, character_class, hp_current, hp_max"
+        ).eq("game_id", game_id).execute()
+
+        party_lines = []
+        for p in (players.data or []):
+            party_lines.append(
+                f"- {p['character_name']}, Level {p.get('level', 1)} "
+                f"{p.get('race', 'Human')} {p['character_class']}. "
+                f"HP: {p['hp_current']}/{p['hp_max']}"
+            )
+        party_roster = "\n".join(party_lines)
+
+        # 3. Fetch last 20 messages
+        recent_messages = supabase_client.table("game_messages").select(
+            "role, profile_id, content"
+        ).eq("game_id", game_id).order(
+            "created_at", desc=True
+        ).limit(RESUME_CONTEXT_MESSAGES).execute()
+
+        # Build a profile_id → character_name map for message formatting
+        player_name_map = {
+            p["profile_id"]: p["character_name"]
+            for p in (players.data or [])
+            if p.get("profile_id") and p.get("character_name")
+        }
+
+        # Reverse to chronological order and format
+        message_history_lines = []
+        last_player_message = None
+        for msg in reversed(recent_messages.data or []):
+            if msg["role"] == "dm":
+                message_history_lines.append(f"DM: {msg['content']}")
+            elif msg["role"] == "player":
+                name = player_name_map.get(msg.get("profile_id"), "Unknown Player")
+                message_history_lines.append(f"{name}: {msg['content']}")
+                last_player_message = msg["content"]  # Track latest player message
+            # Skip system messages in context
+
+        message_history_text = "\n\n".join(message_history_lines) if message_history_lines else "No messages yet."
+
+        # 4. RAG: embed latest player message and search game_events
+        rag_text = ""
+        if last_player_message:
+            try:
+                query_embedding = embed_text(last_player_message)
+                rag_results = search_rag(game_id, query_embedding, top_k=5)
+
+                if rag_results:
+                    rag_lines = []
+                    for event in rag_results:
+                        rag_lines.append(
+                            f"- [{event.get('event_type', 'event')}] {event.get('summary', '')}"
+                        )
+                    rag_text = "\n".join(rag_lines)
+            except Exception as rag_error:
+                logger.warning(f"[generate_resume_narration] RAG search failed (non-fatal): {rag_error}")
+                # Continue without RAG — message history alone is sufficient
+
+        # 5. Build system prompt
+        rag_section = f"""Relevant past events from campaign memory:
+---
+{rag_text}
+---""" if rag_text else "No past campaign events recorded yet."
+
+        system_prompt = f"""You are {game.data['dm_persona']}. You are resuming a D&D 5e campaign session called "{game.data['name']}" after a pause.
+
+Party:
+{party_roster}
+
+Recent session history (last {RESUME_CONTEXT_MESSAGES} messages, oldest first):
+---
+{message_history_text}
+---
+
+{rag_section}
+
+Your task: Write a brief resume narration. Requirements:
+1. Open in-world — no meta-commentary ("Welcome back", "Last session", etc.)
+2. Convey that time has passed or the party has had a moment to breathe
+3. Briefly reestablish where the party is and what they were doing
+4. Reference at least one specific past event or detail from the history above
+5. End with a clear invitation to act
+
+Write 2–3 paragraphs."""
+
+        # 6. Call Claude
+        response = anthropic_client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=800,
+            system=system_prompt,
+            messages=[{"role": "user", "content": "Resume the adventure."}],
+        )
+
+        dm_response = response.content[0].text
+        logger.info(f"[generate_resume_narration] Claude responded: {len(dm_response)} chars")
+
+        # 7. Insert DM message
+        supabase_client.table("game_messages").insert({
+            "game_id": game_id,
+            "role": "dm",
+            "profile_id": None,
+            "content": dm_response,
+        }).execute()
+
+        # 8. Update game timestamp
+        supabase_client.table("games").update({
+            "updated_at": datetime.utcnow().isoformat(),
+        }).eq("id", game_id).execute()
+
+        logger.info(f"[generate_resume_narration] Success! game_id={game_id}")
+
+    except Exception as e:
+        logger.error(f"[generate_resume_narration] Error: {str(e)}", exc_info=True)
+        try:
+            supabase_client.table("game_messages").insert({
+                "game_id": game_id,
+                "role": "system",
+                "profile_id": None,
+                "content": "The Dungeon Master encountered an error while resuming the adventure. The host can try resuming again.",
+            }).execute()
+        except Exception:
+            logger.error("[generate_resume_narration] Failed to insert error message")
+        raise
 
 @dramatiq.actor()
 def aggregation_task(game_id: str):
