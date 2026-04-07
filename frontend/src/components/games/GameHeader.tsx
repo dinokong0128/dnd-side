@@ -5,14 +5,9 @@ import { useMemo } from 'react'
 interface GameHeaderProps {
   gameName: string
   gameStatus: string
-  isHost?: boolean
 }
 
-export function GameHeader({
-  gameName,
-  gameStatus,
-  isHost,
-}: GameHeaderProps) {
+export function GameHeader({ gameName, gameStatus }: GameHeaderProps) {
   const statusBadgeClass = useMemo(() => {
     switch (gameStatus) {
       case 'lobby':

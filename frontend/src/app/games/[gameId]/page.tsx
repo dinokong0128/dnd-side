@@ -32,8 +32,8 @@ export default async function GamePage({ params }: GamePageProps) {
 
   if (!game) {
     return (
-      <div className="p-6 text-center">
-        <h1 className="text-2xl font-bold text-gray-900">Game not found</h1>
+      <div className="dnd-page-bg flex min-h-screen items-center justify-center p-6 text-center">
+        <h1 className="dnd-heading text-2xl font-bold">Game not found</h1>
       </div>
     )
   }

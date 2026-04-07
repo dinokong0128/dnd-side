@@ -50,7 +50,11 @@ export function GameSessionView({
 
         // Build playerMap (profile_id -> character_name)
         const map = new Map<string, string>()
-        ;(playersData || []).forEach((p: any) => {
+        const players = (playersData ?? []) as Array<{
+          profile_id: string | null
+          character_name: string | null
+        }>
+        players.forEach((p) => {
           if (p.profile_id && p.character_name) {
             map.set(p.profile_id, p.character_name)
           }
@@ -66,8 +70,7 @@ export function GameSessionView({
         }
 
         setIsLoading(false)
-      } catch (error) {
-        console.error('Failed to initialize session:', error)
+      } catch {
         setIsLoading(false)
       }
     }
