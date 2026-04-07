@@ -92,8 +92,22 @@ async def start_game(
     if game.data["created_by"] != current_user:
         raise HTTPException(status_code=403, detail="Only the host can start the game")
 
-    # 3. Validate status
-    if game.data["status"] != "lobby":
+    # 3. Validate status — if already active with no messages, allow re-enqueue (narration may have failed)
+    if game.data["status"] == "active":
+        existing_messages = (
+            supabase_client.table("game_messages")
+            .select("id")
+            .eq("game_id", game_id)
+            .limit(1)
+            .execute()
+        )
+        if existing_messages.data:
+            raise HTTPException(status_code=409, detail="Game is already active")
+        # No messages yet — opening narration never delivered, re-enqueue
+        from tasks.dm_tasks import generate_opening_narration
+        generate_opening_narration.send(game_id)
+        return {"status": "active"}
+    elif game.data["status"] != "lobby":
         raise HTTPException(status_code=409, detail=f"Game is not in lobby status (current: {game.data['status']})")
 
     # 4. Validate at least one player with a character
