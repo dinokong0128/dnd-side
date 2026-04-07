@@ -1,15 +1,15 @@
 # D&D Multiplayer App — Project Context
 
-**Last Updated:** March 22, 2026  
-**Status:** Architected and ready for implementation  
-**Repository:** Single monorepo (`dnd-side` on GitHub)  
-**Detailed Architecture:** See `docs/ARCHITECTURE.md` (complete design doc)
+**Last Updated:** April 6, 2026
+**Status:** MVP in active development (~50% complete)
+**Repository:** `dinokong0128/dnd-side` (GitHub, `develop` branch)
+**Detailed Architecture:** See `docs/ARCHITECTURE.md`
 
 ---
 
 ## Project Overview
 
-A multiplayer D&D app where Claude acts as the Dungeon Master. Players send actions via Next.js frontend, FastAPI backend orchestrates Claude responses asynchronously, and long-term narrative memory is maintained via RAG (pgvector similarity search).
+A multiplayer D&D app where Claude acts as the Dungeon Master. Players send actions via Next.js frontend; FastAPI backend validates, embeds, and queues a Dramatiq task; a worker calls Claude with RAG context; the DM response broadcasts to all players via Supabase Realtime.
 
 ---
 
@@ -17,126 +17,156 @@ A multiplayer D&D app where Claude acts as the Dungeon Master. Players send acti
 
 | Component | Technology | Host |
 |---|---|---|
-| Frontend | Next.js latest (App Router, TypeScript) | Vercel |
-| Backend | FastAPI + Python latest | Render |
+| Frontend | Next.js 16 (App Router, TypeScript strict) | Vercel |
+| Backend | FastAPI + Python | Render |
 | Database | Supabase (Postgres + pgvector + Realtime) | Managed |
-| Job Queue | Dramatiq + Redis | Render |
+| Job Queue | Dramatiq + Redis | Render (Key Value) |
 | Auth | Supabase Auth (JWT) | Supabase |
-| LLM | Claude 3.5 Sonnet | Anthropic API |
-| Embeddings | OpenAI `text-embedding-3-small` | OpenAI API |
+| LLM | `claude-sonnet-4-20250514` | Anthropic API |
+| Embeddings | OpenAI `text-embedding-3-small` (1536-dim) | OpenAI API (called from FastAPI backend) |
 
-**→ Full rationale in docs/ARCHITECTURE.md § "Final Tech Stack"**
+**→ Full rationale in `docs/ARCHITECTURE.md`**
 
 ---
 
 ## 🏗️ Architecture: Scenario A (DM Orchestration in FastAPI)
 
-**Flow:** Player action → FastAPI validation + RAG → Queue Dramatiq task → Worker calls Claude → Response broadcast via Supabase Realtime → Frontend re-renders
+**Flow:** Player action → Next.js proxy → FastAPI validation + embed + RAG → Queue Dramatiq task → Worker calls Claude → Inserts DM response + events → Supabase Realtime broadcasts → Frontend re-renders
 
 **Why FastAPI (not Next.js)?**
-- ✅ No cold start penalty on DM latency
+- ✅ No cold start penalty on DM latency (always-on Render worker)
 - ✅ Proper job queue pattern (Dramatiq with retries)
-- ✅ Separation of concerns (frontend = UI, backend = logic)
-- ✅ Real async Python backend (learning opportunity)
+- ✅ Separation of concerns (frontend = UI, backend = business logic)
 
-**→ Detailed flow in docs/ARCHITECTURE.md § "Architecture Decision: Scenario A"**
+**→ Detailed flow in `docs/ARCHITECTURE.md`**
 
 ---
 
 ## 📁 Project Structure
 
-Monorepo with `/frontend` (Next.js) and `/backend` (FastAPI).
+```
+dnd-side/
+├── frontend/          # Next.js 16 (App Router, TypeScript)
+│   ├── src/
+│   │   ├── app/       # Pages, API routes (proxy layer only)
+│   │   ├── components/
+│   │   ├── lib/       # Supabase clients, types, validations
+│   │   └── proxy.ts   # Auth middleware (Next.js 16 convention)
+│   └── e2e/           # Playwright end-to-end tests
+├── backend/           # FastAPI (Render)
+│   ├── api/routes/    # games, players, actions, invites
+│   ├── services/      # dm_service, db_service, embedding_service
+│   ├── tasks/         # dm_tasks.py (Dramatiq actors)
+│   ├── models/        # Pydantic models
+│   └── tests/         # pytest
+├── docs/
+│   ├── ARCHITECTURE.md  # Full design, flows, decisions
+│   └── DATA_MODEL.md    # Schema reference
+└── supabase/migrations/ # All DB migrations
+```
 
-**→ Complete directory tree in docs/ARCHITECTURE.md § "Monorepo Structure"**  
-**→ File placement guide in FILE_PLACEMENT_GUIDE.md**
+**→ Complete directory tree in `docs/ARCHITECTURE.md`**
 
 ---
 
 ## 🗄️ Database Schema
 
-Six tables in Supabase (`ytxncykyfbhoyvxkocrs`):
+Seven tables in Supabase (`ytxncykyfbhoyvxkocrs`):
 
 | Table | Purpose |
 |---|---|
 | `profiles` | Extends Supabase Auth users |
-| `games` | Game sessions, DM persona |
-| `players` | Players in game, stats (jsonb) |
+| `games` | Game sessions + DM persona |
+| `players` | Characters per game (class, race, level, HP, stats) |
 | `player_inventory` | Items per player |
-| `game_messages` | Chat log, Realtime broadcast |
-| `game_events` | Events with pgvector embeddings (1536-dim) |
+| `game_messages` | Chat log — Realtime broadcast source |
+| `game_events` | Narrative events with pgvector embeddings (RAG) |
+| `invites` | One-time invite codes per game |
 
-**→ Full schema details in `docs/DATA_MODEL.md`**
+**→ Full schema with columns, indexes, and RLS in `docs/DATA_MODEL.md`**
 
 ---
 
-## 🔄 Key Decisions
+## 🔄 Key Architecture Decisions
 
 | Decision | Choice | Why |
 |---|---|---|
 | DM Orchestration | FastAPI backend | Job queues, retries, always-on workers |
-| Job Queue | Dramatiq | Lightweight, works on Render free tier |
+| Embeddings | FastAPI backend (actions.py + dm_tasks.py) | Keeps all AI logic server-side |
+| Job Queue | Dramatiq + Redis | Lightweight, Render-compatible |
 | Auth | Supabase JWT | Built-in, integrates with RLS |
-| Monorepo | Single repo | One place for both services |
-| Realtime | Supabase Changes | Native to Postgres, easy broadcast |
+| Realtime | Supabase Changes | Native Postgres, no extra infra |
+| Auth middleware | `proxy.ts` (not `middleware.ts`) | Next.js 16 convention |
 
-**→ Full rationale in docs/ARCHITECTURE.md § "Architecture Decision" sections**
+**→ Full rationale in `docs/ARCHITECTURE.md`**
 
 ---
 
 ## 🎯 Service Boundaries
 
-### Next.js (Frontend)
-- Auth UI, game lobby, real-time views
+### Next.js (Frontend — Vercel)
+- Auth UI (login, signup via invite link)
+- Dashboard, game lobby, real-time game view
 - Supabase Realtime subscriptions
-- Token refresh, session management
+- **All mutations proxy through FastAPI** (no direct Supabase writes except reads for lists/lobbies)
 
-### FastAPI (Backend)
-- Business logic validation, game rules
-- Claude DM orchestration (RAG, API calls)
-- Job queue management (Dramatiq)
-- DB mutations, background tasks
+### FastAPI (Backend — Render)
+- All business logic validation
+- Claude DM orchestration (RAG, prompt building, response parsing)
+- OpenAI embeddings for action text + narrative events
+- Job queue management (Dramatiq tasks)
+- All DB mutations
 
 ### Supabase
 - User auth (JWT, refresh tokens)
-- Data persistence & RLS
-- Real-time broadcasting
-- Vector search (pgvector)
-
-**→ Detailed boundaries in docs/ARCHITECTURE.md § "Service Boundaries"**
+- Data persistence + RLS
+- Realtime broadcasting (`game_messages`)
+- Vector similarity search (`game_events` via pgvector)
 
 ---
 
 ## 🚀 Deployment
 
-- **Frontend:** Vercel (auto-deploy on git push)
-- **Backend:** Render (auto-deploy on git push)
-- **All services on free tier**
+| Service | Platform | URL |
+|---|---|---|
+| Frontend | Vercel | `https://dnd-side.vercel.app` |
+| Backend | Render | Auto-deploy on `develop` push |
 
-**→ Deployment details & cost breakdown in docs/ARCHITECTURE.md § "Deployment Strategy"**
+**→ Deployment details in `docs/ARCHITECTURE.md`**
 
 ---
 
 ## 🔑 Implementation Notes
 
-**RAG Flow:** Embed action → Search pgvector → Inject context into Claude prompt → Parse response for events → Embed + store events
+**RAG Flow (in `actions.py` + `dm_tasks.py`):**
+1. Embed player action text via OpenAI (in `actions.py`)
+2. Cosine similarity search on `game_events` (top 5)
+3. Pass context to Dramatiq task
+4. Inject events into Claude system prompt
+5. Parse Claude response for `<event type="...">...</event>` markers
+6. Embed extracted events + insert to `game_events`
 
-**Dramatiq:** Queue task with max_retries=3, exponential backoff. Dead-letter queue if all retries fail.
+**`proxy.ts`:** Next.js 16 renamed `middleware.ts` → `proxy.ts` and `middleware()` → `proxy()`. Handles JWT session refresh + route protection for `/dashboard` and `/games/*`.
 
-**Realtime:** Backend inserts to game_messages → Supabase broadcasts → Frontend re-renders
-
-**→ Code examples in docs/ARCHITECTURE.md § "Key Implementation Notes"**
+**Service role key:** Required for all `game_events` writes and DM `game_messages` inserts. Never expose in `NEXT_PUBLIC_` env vars.
 
 ---
 
-## ✅ Pre-Implementation Checklist
+## 📊 Current MVP Status
 
-- [ ] GitHub monorepo created (`dnd-multiplayer`)
-- [ ] Vercel linked to frontend
-- [ ] Render account with Redis enabled
-- [ ] Environment variables configured
-- [ ] Supabase schema finalized
-
-**→ Full checklist in docs/ARCHITECTURE.md § "Checklist Before You Code"**
+| Epic | Feature | Status |
+|---|---|---|
+| Auth & Invite | Sign up via invite link (US-01) | 🔄 In Progress |
+| Auth & Invite | Login (US-02) | ✅ Done |
+| Game Creation | Create game (US-04) | ✅ Done |
+| Game Creation | Dashboard (US-05) | ✅ Done |
+| Character Creation | Build character (US-08) | ✅ Done |
+| Character Creation | Starting inventory (US-09) | ✅ Done |
+| Session Lifecycle | Start session + opening narration (US-11) | 🔄 In Progress |
+| Session Lifecycle | Pause/end session (US-12) | 🔄 In Progress |
+| Core Game Loop | Submit action (US-14) | 🔄 In Progress |
+| Core Game Loop | Receive DM response in real-time (US-15) | 🔄 In Progress |
+| Core Game Loop | Scroll chat log (US-17) | 🔄 In Progress |
 
 ---
 
@@ -144,66 +174,35 @@ Six tables in Supabase (`ytxncykyfbhoyvxkocrs`):
 
 | Document | Contents |
 |---|---|
-| **docs/ARCHITECTURE.md** | Complete design: flows, decisions, code examples, learning outcomes |
-| **docs/DATA_MODEL.md** | Tables, columns, enums, indexes, triggers, RLS policies |
-| **FILE_PLACEMENT_GUIDE.md** | Exact file locations & copy-paste instructions |
-| **This file (CLAUDE.md)** | Project overview & reference links |
+| **docs/ARCHITECTURE.md** | Complete design: flows, decisions, code examples |
+| **docs/DATA_MODEL.md** | Tables, columns, enums, indexes, triggers, RLS |
+| **This file (CLAUDE.md)** | Project overview & reference links for AI agents |
 
 ---
 
 ## Conventions
 
-- **Frontend:** TypeScript strict, named exports, no `any`, reuse ICT patterns
+- **Frontend:** TypeScript strict, named exports, no `any`, `@supabase/ssr` (never deprecated auth-helpers), Zod v4 validation
 - **Backend:** Type hints, Pydantic validation, docstrings, pytest tests
-- **Both:** Environment variables in `.env`, migrations tracked
-
-**→ Full conventions in docs/ARCHITECTURE.md § "Conventions" (original doc)**
+- **Both:** Environment variables in `.env`, migrations tracked in `supabase/migrations/`
+- **No direct Supabase mutations from Next.js** — all writes go through FastAPI
 
 ---
 
 ## Cost & Constraints (Free Tier)
 
-- **Render:** 750 hrs/month (= 1 always-on service)
-- **Supabase:** 500MB storage
-- **Redis:** 30MB (Render free)
-- **OpenAI embeddings:** ~$0.02/1M tokens (negligible)
-- **Claude API:** Pay-as-you-go (~$0.003/1K input tokens)
-
----
-
-## What You'll Learn
-
-**Backend:** Async Python, job queues, LLM APIs, pgvector, error handling, API design, testing
-
-**Frontend:** Supabase Auth, Realtime subscriptions, inter-service communication, ICT patterns
-
-**DevOps:** Monorepo management, GitHub Actions, Vercel + Render deployments
-
-**→ Full learning outcomes in docs/ARCHITECTURE.md § "What You'll Learn"**
-
----
-
-## Next Steps
-
-1. Read docs/ARCHITECTURE.md (complete design north star)
-2. Review FILE_PLACEMENT_GUIDE.md (file locations)
-3. Create monorepo structure
-4. Copy template files
-5. Implement backend (RAG search first)
-6. Implement frontend (auth → game view)
-7. Deploy & iterate
+- **Render:** 750 hrs/month (always-on backend + worker)
+- **Supabase:** 500MB storage (~6KB per embedding vector)
+- **Redis:** 30MB (Render Key Value)
+- **OpenAI embeddings:** ~$0.02/1M tokens
+- **Claude API:** Pay-as-you-go (`claude-sonnet-4-20250514`)
 
 ---
 
 ## References
 
 - **Full architecture:** `docs/ARCHITECTURE.md`
-- **File placement:** `FILE_PLACEMENT_GUIDE.md`
 - **GitHub repo:** https://github.com/dinokong0128/dnd-side
 - **Supabase project:** `ytxncykyfbhoyvxkocrs`
-
----
-
-## Maintenance
-
-When schema migrations, architecture decisions, or features change, update `docs/ARCHITECTURE.md` and `docs/DATA_MODEL.md` and keep this file as a lightweight reference.
+- **Vercel project:** `dnd-side.vercel.app`
+- **Linear board:** DnD Side Project
