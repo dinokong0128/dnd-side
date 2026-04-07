@@ -89,7 +89,7 @@ jobs:
           pip install -q -r requirements.txt 2>/dev/null || true
 
           # Get list of packages that need updates
-          OUTDATED=$(pip list --outdated --format=json 2>/dev/null | jq -r '.[].name' 2>/dev/null || echo "")
+          OUTDATED=$(pip list --outdated --format=json 2>/dev/null | python3 -c "import sys,json; pkgs=json.load(sys.stdin); print('\n'.join(p['name'] for p in pkgs))" 2>/dev/null || echo "")
 
           if [ -n "$OUTDATED" ]; then
             echo "updates_found=true" >> $GITHUB_OUTPUT
@@ -115,21 +115,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
           git add -A
-
-          # Create commit message file to avoid shell escaping issues
-          cat > /tmp/commit_msg.txt << 'EOF'
-chore(deps): automated dependency updates
-
-Frontend:
-- npm audit fix applied
-
-Backend:
-#- pip dependencies reviewed
-# For security details, see DEPENDENCY_AUDIT.md (available in workflow artifacts)
-# EOF
-#          git commit -F /tmp/commit_msg.txt
+          git commit -m "chore(deps): automated dependency updates"
 
       - name: Push to Develop
         if: steps.detect-changes.outputs.has_changes == 'true'
