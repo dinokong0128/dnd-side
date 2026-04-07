@@ -194,6 +194,24 @@ export function GameSessionView({
     }
   }
 
+  const handleResume = async () => {
+    setIsWaitingForDm(true)
+    try {
+      const response = await fetch(`/api/games/${gameId}/resume`, { method: 'POST' })
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.error || 'Resume failed')
+      }
+      // Status change (paused → active) arrives via Realtime games subscription
+      // Resume narration arrives via Realtime game_messages subscription
+      // isWaitingForDm will be cleared when the DM message arrives
+    } catch (error) {
+      console.error('Resume failed:', error)
+      setIsWaitingForDm(false)
+      throw error // Re-throw so SessionStatusBanner can reset its loading state
+    }
+  }
+
   return (
     <div className="dnd-page-bg flex flex-col h-screen">
       <GameHeader
@@ -208,6 +226,7 @@ export function GameSessionView({
       <SessionStatusBanner
         gameStatus={gameStatus}
         isHost={isHost}
+        onResume={handleResume}
         onEnd={() => setShowEndModal(true)}
       />
       <ChatInput

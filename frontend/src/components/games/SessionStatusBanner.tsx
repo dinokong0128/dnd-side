@@ -1,5 +1,7 @@
 'use client'
 
+import { useState } from 'react'
+
 interface SessionStatusBannerProps {
   gameStatus: string
   isHost: boolean
@@ -13,6 +15,19 @@ export function SessionStatusBanner({
   onResume,
   onEnd,
 }: SessionStatusBannerProps) {
+  const [isResuming, setIsResuming] = useState(false)
+
+  const handleResumeClick = async () => {
+    setIsResuming(true)
+    try {
+      await onResume?.()
+      // Success — don't reset isResuming; banner will unmount when
+      // Realtime changes gameStatus to 'active'
+    } catch {
+      // Failure — reset so the host can retry
+      setIsResuming(false)
+    }
+  }
   if (gameStatus === 'paused') {
     return (
       <div
@@ -57,8 +72,8 @@ export function SessionStatusBanner({
             {isHost && (
               <div style={{ display: 'flex', gap: '0.75rem' }}>
                 <button
-                  onClick={onResume}
-                  disabled
+                  onClick={handleResumeClick}
+                  disabled={isResuming}
                   className="rounded-sm px-4 py-2 font-semibold uppercase tracking-widest text-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{
                     background: 'linear-gradient(180deg, #3a9d6e, #2d6a4f)',
@@ -66,9 +81,8 @@ export function SessionStatusBanner({
                     color: 'var(--dnd-parchment)',
                     fontFamily: "'Cinzel', serif",
                   }}
-                  title="Resume functionality coming in next release"
                 >
-                  ▶ Resume
+                  {isResuming ? '⏳ Resuming…' : '▶ Resume Session'}
                 </button>
                 <button
                   onClick={onEnd}
