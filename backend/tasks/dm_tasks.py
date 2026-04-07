@@ -153,7 +153,7 @@ def generate_opening_narration(game_id: str):
 
         # 2. Fetch all players with their inventory
         players = supabase_client.table("players").select(
-            "id, character_name, character_class, hp_max"
+            "id, character_name, race, level, character_class, hp_max"
         ).eq("game_id", game_id).execute()
 
         party_lines = []
@@ -169,7 +169,7 @@ def generate_opening_narration(game_id: str):
             ) or "no equipment"
 
             party_lines.append(
-                f"- {p['character_name']}, a {p['character_class']}. "
+                f"- {p['character_name']}, a Level {p.get('level', 1)} {p.get('race', 'Human')} {p['character_class']}. "
                 f"HP: {p['hp_max']}. Equipment: {items}"
             )
 
