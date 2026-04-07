@@ -49,7 +49,9 @@ export function GameHeader({ gameName, gameStatus, isHost = false, onPause, onEn
                 onClick={onPause}
                 className="dnd-btn-secondary"
                 style={{
+                  fontFamily: "'Cinzel', serif",
                   fontSize: '0.7rem',
+                  textTransform: 'uppercase',
                   padding: '0.4rem 0.8rem',
                   letterSpacing: '0.05em',
                 }}
@@ -61,7 +63,9 @@ export function GameHeader({ gameName, gameStatus, isHost = false, onPause, onEn
                 onClick={onEnd}
                 className="dnd-btn-secondary"
                 style={{
+                  fontFamily: "'Cinzel', serif",
                   fontSize: '0.7rem',
+                  textTransform: 'uppercase',
                   padding: '0.4rem 0.8rem',
                   color: 'var(--dnd-crimson-bright)',
                   borderColor: 'rgba(139, 34, 50, 0.4)',
@@ -78,7 +82,9 @@ export function GameHeader({ gameName, gameStatus, isHost = false, onPause, onEn
               onClick={onEnd}
               className="dnd-btn-secondary"
               style={{
+                fontFamily: "'Cinzel', serif",
                 fontSize: '0.7rem',
+                textTransform: 'uppercase',
                 padding: '0.4rem 0.8rem',
                 color: 'var(--dnd-crimson-bright)',
                 borderColor: 'rgba(139, 34, 50, 0.4)',

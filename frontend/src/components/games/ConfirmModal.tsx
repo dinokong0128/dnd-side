@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 interface ConfirmModalProps {
   isOpen: boolean
@@ -23,6 +23,8 @@ export function ConfirmModal({
   variant = 'default',
   isLoading = false,
 }: ConfirmModalProps) {
+  const cancelRef = useRef<HTMLButtonElement>(null)
+
   // Handle Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -33,6 +35,8 @@ export function ConfirmModal({
 
     if (isOpen) {
       document.addEventListener('keydown', handleKeyDown)
+      // Auto-focus the Cancel button when modal opens
+      cancelRef.current?.focus()
       return () => {
         document.removeEventListener('keydown', handleKeyDown)
       }
@@ -113,6 +117,7 @@ export function ConfirmModal({
           }}
         >
           <button
+            ref={cancelRef}
             onClick={onClose}
             disabled={isLoading}
             className="dnd-btn-secondary"
