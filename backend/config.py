@@ -20,9 +20,9 @@ class Settings(BaseSettings):
     
     # Redis (Dramatiq broker)
     REDIS_URL: str = "redis://localhost:6379"
-    
+
     # Database
-    DATABASE_URL: str  # Supabase Postgres connection string
+    DATABASE_URL: str = ""  # Currently unused — all DB ops use supabase-py
 
     # Frontend
     FRONTEND_URL: str = "http://localhost:3000"

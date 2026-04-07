@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { characterSchema, type CharacterFormData } from '@/lib/validations/character'
-import { CHARACTER_CLASSES, STAT_NAMES } from '@/lib/constants/game'
+import { CHARACTER_CLASSES, CHARACTER_RACES, STAT_NAMES } from '@/lib/constants/game'
 import type { PlayerRow } from '@/lib/types/player'
 
 interface CharacterCreationFormProps {
@@ -30,6 +30,8 @@ export function CharacterCreationForm({
     defaultValues: {
       characterName: defaultValues?.characterName || '',
       characterClass: defaultValues?.characterClass || CHARACTER_CLASSES[0],
+      race: defaultValues?.race || CHARACTER_RACES[0],
+      level: defaultValues?.level || 1,
       stats: defaultValues?.stats || {
         str: 10,
         dex: 10,
@@ -52,6 +54,8 @@ export function CharacterCreationForm({
         body: JSON.stringify({
           character_name: data.characterName,
           character_class: data.characterClass,
+          race: data.race,
+          level: data.level,
           stats: data.stats,
         }),
       })
@@ -111,6 +115,45 @@ export function CharacterCreationForm({
         {errors.characterClass && (
           <p className="mt-1 text-sm text-red-600">
             {errors.characterClass.message}
+          </p>
+        )}
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-900">
+          Race
+        </label>
+        <select
+          {...register('race')}
+          className="mt-2 w-full rounded border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          {CHARACTER_RACES.map((race) => (
+            <option key={race} value={race}>
+              {race}
+            </option>
+          ))}
+        </select>
+        {errors.race && (
+          <p className="mt-1 text-sm text-red-600">
+            {errors.race.message}
+          </p>
+        )}
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-900">
+          Level
+        </label>
+        <input
+          type="number"
+          {...register('level', { valueAsNumber: true })}
+          min="1"
+          max="20"
+          className="mt-2 w-full rounded border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        {errors.level && (
+          <p className="mt-1 text-sm text-red-600">
+            {errors.level.message}
           </p>
         )}
       </div>

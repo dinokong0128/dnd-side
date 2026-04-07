@@ -51,6 +51,8 @@ export function CharacterLobbyPanel({
             ? {
                 characterName: player.character_name,
                 characterClass: player.character_class as CharacterFormData['characterClass'],
+                race: player.race as CharacterFormData['race'],
+                level: player.level,
                 stats: player.stats,
               }
             : undefined

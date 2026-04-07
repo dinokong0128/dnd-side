@@ -6,6 +6,7 @@ This module handles synchronous pre-processing before enqueueing.
 import re
 from typing import Any
 from config import supabase_client
+from constants import GAME_STATUS_ACTIVE, PLAYER_STATUS_DEAD
 
 
 def validate_action(action: Any, player: dict, game: dict) -> None:
@@ -18,9 +19,9 @@ def validate_action(action: Any, player: dict, game: dict) -> None:
         raise ValueError("Action text cannot be empty")
     if len(action.action_text) > 2000:
         raise ValueError("Action text exceeds 2000 character limit")
-    if game.get("status") not in ("active", "lobby"):
+    if game.get("status") != GAME_STATUS_ACTIVE:
         raise ValueError(f"Game is not active (status: {game.get('status')})")
-    if player.get("status") == "dead":
+    if player.get("status") == PLAYER_STATUS_DEAD:
         raise ValueError("Dead players cannot take actions")
 
 
