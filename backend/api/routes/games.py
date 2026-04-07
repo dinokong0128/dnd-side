@@ -69,3 +69,51 @@ async def get_game(game_id: str, current_user: str = Depends(get_current_user)):
     if not result.data:
         raise HTTPException(status_code=404, detail="Game not found")
     return result.data
+
+
+@router.post("/{game_id}/start", response_model=dict)
+async def start_game(
+    game_id: str,
+    current_user: str = Depends(get_current_user),
+):
+    """Start a game session — transitions lobby → active and enqueues opening narration."""
+    # 1. Fetch game
+    game = (
+        supabase_client.table("games")
+        .select("id, status, created_by")
+        .eq("id", game_id)
+        .maybe_single()
+        .execute()
+    )
+    if not game.data:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    # 2. Validate caller is host
+    if game.data["created_by"] != current_user:
+        raise HTTPException(status_code=403, detail="Only the host can start the game")
+
+    # 3. Validate status
+    if game.data["status"] != "lobby":
+        raise HTTPException(status_code=409, detail=f"Game is not in lobby status (current: {game.data['status']})")
+
+    # 4. Validate at least one player with a character
+    players = (
+        supabase_client.table("players")
+        .select("id, character_name")
+        .eq("game_id", game_id)
+        .execute()
+    )
+    players_with_characters = [p for p in (players.data or []) if p.get("character_name")]
+    if not players_with_characters:
+        raise HTTPException(status_code=400, detail="At least one player must have a character before starting")
+
+    # 5. Update status
+    supabase_client.table("games").update({
+        "status": "active",
+    }).eq("id", game_id).execute()
+
+    # 6. Enqueue opening narration
+    from tasks.dm_tasks import generate_opening_narration
+    generate_opening_narration.send(game_id)
+
+    return {"status": "active"}

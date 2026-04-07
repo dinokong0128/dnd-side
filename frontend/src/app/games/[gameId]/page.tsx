@@ -5,6 +5,8 @@ import { getPlayer, getPlayerInventory } from '@/lib/supabase/players'
 import { CharacterLobbyPanel } from '@/components/games/CharacterLobbyPanel'
 import { InviteSection } from '@/components/games/InviteSection'
 import { InventoryPanel } from '@/components/games/InventoryPanel'
+import { GameSessionView } from '@/components/games/GameSessionView'
+import { StartSessionButton } from '@/components/games/StartSessionButton'
 
 interface GamePageProps {
   params: Promise<{ gameId: string }>
@@ -36,14 +38,27 @@ export default async function GamePage({ params }: GamePageProps) {
     )
   }
 
+  // Show session view when game is active (or paused/ended)
+  if (game.status !== 'lobby') {
+    return <GameSessionView gameId={gameId} game={game} userId={user.id} />
+  }
+
+  // Show lobby view when status is 'lobby'
   return (
-    <main className="min-h-screen bg-gray-50 p-6">
+    <main className="dnd-page-bg min-h-screen p-6">
       <div className="mx-auto max-w-2xl">
         <div className="mb-6 space-y-2">
-          <h1 className="text-3xl font-bold text-gray-900">{game.name}</h1>
-          <p className="text-lg text-gray-600">
+          <h1
+            className="text-3xl font-bold tracking-wide"
+            style={{ fontFamily: "'Cinzel', serif", color: 'var(--dnd-parchment)' }}
+          >
+            {game.name}
+          </h1>
+          <p style={{ color: 'var(--dnd-parchment-dim)' }}>
             Status:{' '}
-            <span className="font-semibold capitalize">{game.status}</span>
+            <span className="font-semibold capitalize">
+              {game.status}
+            </span>
           </p>
         </div>
 
@@ -53,8 +68,11 @@ export default async function GamePage({ params }: GamePageProps) {
           </div>
         )}
 
-        <div className="rounded-lg bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-xl font-semibold text-gray-900">
+        <div className="dnd-card p-6">
+          <h2
+            className="mb-4 text-xl font-semibold tracking-wide"
+            style={{ fontFamily: "'Cinzel', serif", color: 'var(--dnd-parchment)' }}
+          >
             Your Character
           </h2>
           <CharacterLobbyPanel
@@ -71,6 +89,12 @@ export default async function GamePage({ params }: GamePageProps) {
               item_name: i.item_name,
               quantity: i.quantity,
             }))} />
+          </div>
+        )}
+
+        {game.created_by === user.id && game.status === 'lobby' && (
+          <div className="mt-6">
+            <StartSessionButton gameId={gameId} />
           </div>
         )}
       </div>
