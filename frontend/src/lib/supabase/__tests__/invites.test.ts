@@ -16,48 +16,92 @@ beforeEach(() => {
 
 describe('fetchInviteByCode', () => {
   describe('when the code is valid and unused', () => {
-    it('returns an object with the gameId', async () => {
+    it('returns a valid result with gameId and gameName', async () => {
       mockRpc.mockResolvedValue({
-        data: 'game-abc-123',
+        data: {
+          status: 'valid',
+          game_id: 'game-abc-123',
+          game_name: 'Dragon Quest',
+        },
         error: null,
       })
 
       const result = await fetchInviteByCode('VALID_CODE')
 
-      expect(result).toEqual({ gameId: 'game-abc-123' })
+      expect(result).toEqual({
+        status: 'valid',
+        gameId: 'game-abc-123',
+        gameName: 'Dragon Quest',
+      })
     })
 
-    it('calls the validate_invite_code RPC with the correct argument', async () => {
+    it('defaults gameName to empty string when missing', async () => {
       mockRpc.mockResolvedValue({
-        data: 'game-abc-123',
+        data: {
+          status: 'valid',
+          game_id: 'game-abc-123',
+        },
+        error: null,
+      })
+
+      const result = await fetchInviteByCode('VALID_CODE')
+
+      expect(result).toEqual({
+        status: 'valid',
+        gameId: 'game-abc-123',
+        gameName: '',
+      })
+    })
+
+    it('calls the validate_invite_code_v2 RPC with the correct argument', async () => {
+      mockRpc.mockResolvedValue({
+        data: {
+          status: 'valid',
+          game_id: 'game-abc-123',
+          game_name: 'Dragon Quest',
+        },
         error: null,
       })
 
       await fetchInviteByCode('MY_CODE')
 
-      expect(mockRpc).toHaveBeenCalledWith('validate_invite_code', {
+      expect(mockRpc).toHaveBeenCalledWith('validate_invite_code_v2', {
         invite_code: 'MY_CODE',
       })
     })
   })
 
   describe('when the code does not exist', () => {
-    it('returns null', async () => {
+    it('returns an invalid result', async () => {
+      mockRpc.mockResolvedValue({
+        data: { status: 'invalid' },
+        error: null,
+      })
+
+      const result = await fetchInviteByCode('NONEXISTENT')
+
+      expect(result).toEqual({ status: 'invalid' })
+    })
+
+    it('returns an invalid result when RPC data is null', async () => {
       mockRpc.mockResolvedValue({ data: null, error: null })
 
       const result = await fetchInviteByCode('NONEXISTENT')
 
-      expect(result).toBeNull()
+      expect(result).toEqual({ status: 'invalid' })
     })
   })
 
   describe('when the code has already been used', () => {
-    it('returns null because the RPC filters by used_at is null', async () => {
-      mockRpc.mockResolvedValue({ data: null, error: null })
+    it('returns a used result', async () => {
+      mockRpc.mockResolvedValue({
+        data: { status: 'used' },
+        error: null,
+      })
 
       const result = await fetchInviteByCode('USED_CODE')
 
-      expect(result).toBeNull()
+      expect(result).toEqual({ status: 'used' })
     })
   })
 
@@ -65,34 +109,37 @@ describe('fetchInviteByCode', () => {
     it('throws with a descriptive error message', async () => {
       mockRpc.mockResolvedValue({
         data: null,
-        error: { message: 'function "validate_invite_code" does not exist' },
+        error: { message: 'function "validate_invite_code_v2" does not exist' },
       })
 
       await expect(fetchInviteByCode('any')).rejects.toThrow(
-        'Failed to fetch invite: function "validate_invite_code" does not exist'
+        'Failed to validate invite: function "validate_invite_code_v2" does not exist'
       )
     })
 
     it('throws even when data is also present alongside the error', async () => {
       mockRpc.mockResolvedValue({
-        data: 'some-id',
+        data: { status: 'valid', game_id: 'x' },
         error: { message: 'partial failure' },
       })
 
       await expect(fetchInviteByCode('any')).rejects.toThrow(
-        'Failed to fetch invite: partial failure'
+        'Failed to validate invite: partial failure'
       )
     })
   })
 
   describe('when the code is an empty string', () => {
-    it('still calls the RPC and returns null if no match', async () => {
-      mockRpc.mockResolvedValue({ data: null, error: null })
+    it('still calls the RPC and returns the status it receives', async () => {
+      mockRpc.mockResolvedValue({
+        data: { status: 'invalid' },
+        error: null,
+      })
 
       const result = await fetchInviteByCode('')
 
-      expect(result).toBeNull()
-      expect(mockRpc).toHaveBeenCalledWith('validate_invite_code', {
+      expect(result).toEqual({ status: 'invalid' })
+      expect(mockRpc).toHaveBeenCalledWith('validate_invite_code_v2', {
         invite_code: '',
       })
     })

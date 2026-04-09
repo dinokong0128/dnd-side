@@ -3,57 +3,49 @@ import { ChatMessage } from '../ChatMessage'
 
 describe('ChatMessage', () => {
   it('renders DM message with Dungeon Master label', () => {
-    render(
-      <ChatMessage
-        message={{ id: '1', role: 'dm', profile_id: null, content: 'The story unfolds...' }}
-        playerName={undefined}
-      />
-    )
+    render(<ChatMessage role="dm" content="The story unfolds..." />)
 
+    expect(screen.getByText('Dungeon Master')).toBeInTheDocument()
     expect(screen.getByText(/The story unfolds/)).toBeInTheDocument()
   })
 
   it('renders player message with character name', () => {
     render(
-      <ChatMessage
-        message={{ id: '1', role: 'player', profile_id: 'user-1', content: 'I cast a spell!' }}
-        playerName="Elara"
-      />
+      <ChatMessage role="player" characterName="Elara" content="I cast a spell!" />
     )
 
+    expect(screen.getByText('Elara')).toBeInTheDocument()
     expect(screen.getByText(/I cast a spell/)).toBeInTheDocument()
   })
 
-  it('renders system message centered', () => {
-    const { container } = render(
-      <ChatMessage
-        message={{ id: '1', role: 'system', profile_id: null, content: 'Connection restored' }}
-        playerName={undefined}
-      />
-    )
+  it('renders system message without role label', () => {
+    render(<ChatMessage role="system" content="Connection restored" />)
 
-    expect(container.innerHTML).toBeTruthy()
+    expect(screen.getByText(/Connection restored/)).toBeInTheDocument()
+    expect(screen.queryByText('Dungeon Master')).not.toBeInTheDocument()
   })
 
   it('renders message content as text', () => {
     render(
       <ChatMessage
-        message={{ id: '1', role: 'dm', profile_id: null, content: 'A long narration about the world...' }}
-        playerName={undefined}
+        role="dm"
+        content="A long narration about the world..."
       />
     )
 
     expect(screen.getByText(/A long narration/)).toBeInTheDocument()
   })
 
-  it('handles missing characterName for player role', () => {
-    render(
-      <ChatMessage
-        message={{ id: '1', role: 'player', profile_id: 'user-1', content: 'Hello' }}
-        playerName={undefined}
-      />
-    )
+  it('falls back to "Unknown Character" when player role has no characterName', () => {
+    render(<ChatMessage role="player" content="Hello" />)
 
+    expect(screen.getByText('Unknown Character')).toBeInTheDocument()
     expect(screen.getByText(/Hello/)).toBeInTheDocument()
+  })
+
+  it('falls back to "Unknown Character" when player role has empty characterName', () => {
+    render(<ChatMessage role="player" characterName="" content="Hello" />)
+
+    expect(screen.getByText('Unknown Character')).toBeInTheDocument()
   })
 })
