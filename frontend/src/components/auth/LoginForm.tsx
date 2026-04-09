@@ -1,14 +1,18 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
-import Link from 'next/link'
 
 const loginSchema = z.object({
   email: z.email({ error: 'Please enter a valid email address' }),
   password: z.string().min(1, { error: 'Password is required' }),
+})
+
+const forgotPasswordSchema = z.object({
+  email: z.email({ error: 'Please enter a valid email address' }),
 })
 
 export function LoginForm() {
@@ -17,6 +21,8 @@ export function LoginForm() {
   const [password, setPassword] = useState('')
   const [mode, setMode] = useState<'password' | 'magic'>('password')
   const [magicLinkSent, setMagicLinkSent] = useState(false)
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [forgotPasswordStatus, setForgotPasswordStatus] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [formError, setFormError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -63,9 +69,7 @@ export function LoginForm() {
     setFieldErrors({})
     setFormError('')
 
-    const emailResult = z
-      .email({ error: 'Please enter a valid email address' })
-      .safeParse(email)
+    const emailResult = forgotPasswordSchema.safeParse({ email })
     if (!emailResult.success) {
       setFieldErrors({ email: emailResult.error.issues[0].message })
       return
@@ -89,6 +93,39 @@ export function LoginForm() {
       }
 
       setMagicLinkSent(true)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleForgotPasswordSubmit() {
+    setForgotPasswordStatus('')
+    setFieldErrors((prev) => {
+      const next = { ...prev }
+      delete next.email
+      return next
+    })
+
+    const parsed = forgotPasswordSchema.safeParse({ email })
+    if (!parsed.success) {
+      setFieldErrors({ email: parsed.error.issues[0].message })
+      return
+    }
+
+    setLoading(true)
+    try {
+      const supabase = createClient()
+      const redirectTo = `${window.location.origin}/auth/callback?next=/auth/reset-password`
+      const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
+        redirectTo,
+      })
+
+      if (error) {
+        setForgotPasswordStatus(error.message)
+        return
+      }
+
+      setForgotPasswordStatus('Check your inbox for a password reset link.')
     } finally {
       setLoading(false)
     }
@@ -145,6 +182,44 @@ export function LoginForm() {
                 )}
               </div>
 
+              <div>
+                <button
+                  type="button"
+                  className="dnd-link text-xs"
+                  onClick={() => {
+                    setShowForgotPassword((prev) => !prev)
+                    setForgotPasswordStatus('')
+                  }}
+                >
+                  Forgot password?
+                </button>
+              </div>
+
+              {showForgotPassword && (
+                <div className="space-y-3 rounded-md border p-3" style={{ borderColor: 'var(--dnd-brown)' }}>
+                  <div className="space-y-3">
+                    <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                      Send a password reset link to your email.
+                    </p>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      className="dnd-input"
+                      aria-label="Forgot password email"
+                    />
+                    <button type="button" className="dnd-btn-secondary" disabled={loading} onClick={handleForgotPasswordSubmit}>
+                      {loading ? 'Sending…' : 'Send reset email'}
+                    </button>
+                    {forgotPasswordStatus && (
+                      <p className="text-xs" style={{ color: forgotPasswordStatus.includes('inbox') ? 'var(--dnd-emerald)' : 'var(--error)' }}>
+                        {forgotPasswordStatus}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {formError && (
                 <div data-testid="form-error" className="dnd-error-banner">
                   {formError}
@@ -157,7 +232,7 @@ export function LoginForm() {
                 disabled={loading}
                 className="dnd-btn-primary"
               >
-                {loading ? 'Signing in\u2026' : 'Enter the Realm'}
+                {loading ? 'Signing in…' : 'Enter the Realm'}
               </button>
 
               <p className="mt-4 text-center text-xs" style={{ color: 'var(--muted)' }}>
@@ -167,6 +242,8 @@ export function LoginForm() {
                     setMode('magic')
                     setFormError('')
                     setFieldErrors({})
+                    setShowForgotPassword(false)
+                    setForgotPasswordStatus('')
                   }}
                   className="dnd-link"
                   data-testid="magic-link-toggle"
@@ -208,7 +285,7 @@ export function LoginForm() {
                 disabled={loading}
                 className="dnd-btn-primary"
               >
-                {loading ? 'Sending\u2026' : 'Send Magic Link'}
+                {loading ? 'Sending…' : 'Send Magic Link'}
               </button>
 
               <p className="mt-4 text-center text-xs" style={{ color: 'var(--muted)' }}>
