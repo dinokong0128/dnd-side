@@ -21,7 +21,7 @@ describe('GameHeader', () => {
       />
     )
 
-    expect(screen.getByText("Dragon's Lair")).toBeInTheDocument()
+    expect(screen.getByRole('heading')).toHaveTextContent("Dragon's Lair")
   })
 
   it('renders correct status badge for active status', () => {

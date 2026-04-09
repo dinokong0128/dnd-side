@@ -101,7 +101,7 @@ describe('ConfirmModal', () => {
     render(
       <ConfirmModal
         isOpen={true}
-        title="Confirm"
+        title="Confirm Title"
         body="Are you sure?"
         onClose={mockOnClose}
         onConfirm={mockOnConfirm}
@@ -109,7 +109,7 @@ describe('ConfirmModal', () => {
       />
     )
 
-    const confirmButton = screen.getByText('Confirm')
+    const confirmButton = screen.getByRole('button', { name: 'Confirm' })
     fireEvent.click(confirmButton)
 
     expect(mockOnConfirm).toHaveBeenCalled()

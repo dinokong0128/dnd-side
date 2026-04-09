@@ -64,10 +64,10 @@ describe('fetchGamesByUserId', () => {
 
     expect(mockFrom).toHaveBeenCalledWith('games')
     expect(mockSelect).toHaveBeenCalledWith(
-      'id, name, dm_persona, status, created_by, created_at'
+      'id, name, dm_persona, status, created_by, created_at, updated_at'
     )
     expect(mockEq).toHaveBeenCalledWith('created_by', 'user-xyz')
-    expect(mockOrder).toHaveBeenCalledWith('created_at', { ascending: false })
+    expect(mockOrder).toHaveBeenCalledWith('updated_at', { ascending: false })
   })
 
   it('returns empty array when user has no games', async () => {
@@ -143,7 +143,7 @@ describe('createGame', () => {
     })
 
     expect(mockSelect).toHaveBeenCalledWith(
-      'id, name, dm_persona, status, created_by, created_at'
+      'id, name, dm_persona, status, created_by, created_at, updated_at'
     )
   })
 
@@ -226,7 +226,7 @@ describe('fetchGameById', () => {
     await fetchGameById('game-1')
 
     expect(mockSelect).toHaveBeenCalledWith(
-      'id, name, dm_persona, status, created_by, created_at'
+      'id, name, dm_persona, status, created_by, created_at, updated_at'
     )
   })
 })

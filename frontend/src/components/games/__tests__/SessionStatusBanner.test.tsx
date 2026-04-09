@@ -80,12 +80,14 @@ describe('SessionStatusBanner', () => {
       />
     )
 
-    expect(screen.getByText(/Resume/i)).toBeInTheDocument()
-    expect(screen.getByText(/End/i)).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Resume Session/i })
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /End/i })).toBeInTheDocument()
   })
 
   it('hides buttons for non-host when paused', () => {
-    const { queryByText } = render(
+    render(
       <SessionStatusBanner
         gameStatus="paused"
         isHost={false}
@@ -94,14 +96,14 @@ describe('SessionStatusBanner', () => {
       />
     )
 
-    const resumeButton = queryByText(/Resume/i)
-    const endButton = queryByText(/End/i)
-    if (resumeButton) expect(resumeButton.closest('button')).not.toBeVisible()
-    if (endButton) expect(endButton.closest('button')).not.toBeVisible()
+    expect(
+      screen.queryByRole('button', { name: /Resume Session/i })
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /End/i })).not.toBeInTheDocument()
   })
 
   it('shows no buttons when ended', () => {
-    const { queryByText } = render(
+    render(
       <SessionStatusBanner
         gameStatus="ended"
         isHost={true}
@@ -110,8 +112,10 @@ describe('SessionStatusBanner', () => {
       />
     )
 
-    expect(queryByText(/Resume/i)).not.toBeInTheDocument()
-    expect(queryByText(/End/i)).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Resume Session/i })
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /End/i })).not.toBeInTheDocument()
   })
 
   it('calls onResume when Resume button is clicked (host)', () => {
@@ -124,8 +128,7 @@ describe('SessionStatusBanner', () => {
       />
     )
 
-    const resumeButton = screen.getByText(/Resume/i).closest('button')
-    fireEvent.click(resumeButton!)
+    fireEvent.click(screen.getByRole('button', { name: /Resume Session/i }))
 
     expect(mockOnResume).toHaveBeenCalled()
   })
@@ -140,8 +143,7 @@ describe('SessionStatusBanner', () => {
       />
     )
 
-    const endButton = screen.getByText(/End/i).closest('button')
-    fireEvent.click(endButton!)
+    fireEvent.click(screen.getByRole('button', { name: /End/i }))
 
     expect(mockOnEnd).toHaveBeenCalled()
   })

@@ -19,6 +19,10 @@ jest.mock('@/lib/supabase/games', () => ({
   fetchGamesByUserId: jest.fn(),
 }))
 
+jest.mock('@/components/layout/DashboardHeader', () => ({
+  DashboardHeader: () => <div data-testid="dashboard-header-mock" />,
+}))
+
 const mockCreateClient = createClient as jest.MockedFunction<typeof createClient>
 const mockFetchGamesByUserId = fetchGamesByUserId as jest.MockedFunction<
   typeof fetchGamesByUserId

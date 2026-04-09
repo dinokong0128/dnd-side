@@ -43,9 +43,7 @@ describe('GameSessionView', () => {
           return {
             select: jest.fn().mockReturnValue({
               eq: jest.fn().mockReturnValue({
-                order: jest.fn().mockReturnValue({
-                  execute: jest.fn().mockImplementation(async () => ({ data: [] })),
-                }),
+                order: jest.fn().mockResolvedValue({ data: [], error: null }),
               }),
             }),
           }
@@ -53,18 +51,18 @@ describe('GameSessionView', () => {
         if (table === 'players') {
           return {
             select: jest.fn().mockReturnValue({
-              eq: jest.fn().mockReturnValue({
-                execute: jest.fn().mockImplementation(async () => ({ data: testContext.playersData })),
-              }),
+              eq: jest
+                .fn()
+                .mockImplementation(() =>
+                  Promise.resolve({ data: testContext.playersData, error: null })
+                ),
             }),
           }
         }
         // Default mock for any other table
         return {
           select: jest.fn().mockReturnValue({
-            eq: jest.fn().mockReturnValue({
-              execute: jest.fn().mockImplementation(async () => ({ data: [] })),
-            }),
+            eq: jest.fn().mockResolvedValue({ data: [], error: null }),
           }),
         }
       }),
