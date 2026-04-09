@@ -32,7 +32,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const protectedPrefixes = ['/dashboard', '/games']
+  const protectedPrefixes = ['/dashboard', '/games', '/account']
   const isProtectedRoute = protectedPrefixes.some(
     (prefix) =>
       request.nextUrl.pathname === prefix ||

@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { fetchGamesByUserId } from '@/lib/supabase/games'
 import type { Game } from '@/lib/supabase/games'
+import { DashboardHeader } from '@/components/layout/DashboardHeader'
 
 function getStatusBadgeClass(status: string): string {
   switch (status) {
@@ -94,8 +95,9 @@ export default async function DashboardPage() {
   const games = await fetchGamesByUserId(user.id)
 
   return (
-    <div className="dnd-page-bg min-h-screen px-4 py-12">
-      <div className="mx-auto max-w-2xl">
+    <div className="dnd-page-bg min-h-screen">
+      <DashboardHeader />
+      <div className="mx-auto max-w-2xl px-4 py-12">
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="dnd-heading text-2xl font-bold">Your Campaigns</h1>

@@ -7,6 +7,7 @@ import { InviteSection } from '@/components/games/InviteSection'
 import { InventoryPanel } from '@/components/games/InventoryPanel'
 import { GameSessionView } from '@/components/games/GameSessionView'
 import { StartSessionButton } from '@/components/games/StartSessionButton'
+import { DashboardHeader } from '@/components/layout/DashboardHeader'
 
 interface GamePageProps {
   params: Promise<{ gameId: string }>
@@ -45,8 +46,9 @@ export default async function GamePage({ params }: GamePageProps) {
 
   // Show lobby view when status is 'lobby'
   return (
-    <main className="dnd-page-bg min-h-screen p-6">
-      <div className="mx-auto max-w-2xl">
+    <main className="dnd-page-bg min-h-screen">
+      <DashboardHeader />
+      <div className="mx-auto max-w-2xl p-6">
         <div className="mb-6 space-y-2">
           <h1
             className="text-3xl font-bold tracking-wide"
