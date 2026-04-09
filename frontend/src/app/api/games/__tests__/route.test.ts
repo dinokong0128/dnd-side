@@ -103,6 +103,23 @@ describe('POST /api/games', () => {
     expect(await res.json()).toEqual({ id: 'game-new', name: 'Test' })
   })
 
+  it('forwards an omitted dm_persona as undefined (zod treats it as optional)', async () => {
+    mockAuthed()
+    ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      status: 201,
+      json: async () => ({ id: 'game-new', name: 'Test' }),
+    })
+
+    await POST(makeRequest({ name: 'Test' }))
+
+    const body = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[0][1].body as string
+    )
+    expect(body).toEqual({ name: 'Test' })
+    expect(body.dm_persona).toBeUndefined()
+  })
+
   it('forwards backend error response and status', async () => {
     mockAuthed()
     ;(global.fetch as jest.Mock).mockResolvedValueOnce({

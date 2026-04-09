@@ -98,6 +98,22 @@ describe('POST /api/games/[gameId]/actions', () => {
     })
   })
 
+  it(`accepts action_text at exactly ${ACTION_MAX_LENGTH} chars`, async () => {
+    mockAuthed()
+    ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      status: 202,
+      json: async () => ({ message_id: 'msg-1' }),
+    })
+
+    const res = await POST(
+      makeRequest({ action_text: 'a'.repeat(ACTION_MAX_LENGTH) }),
+      { params: Promise.resolve({ gameId: 'game-1' }) }
+    )
+
+    expect(res.status).toBe(202)
+  })
+
   it('proxies trimmed action_text to backend with bearer token and returns 202', async () => {
     mockAuthed()
     ;(global.fetch as jest.Mock).mockResolvedValueOnce({

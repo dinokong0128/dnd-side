@@ -26,7 +26,7 @@ beforeEach(() => {
 })
 
 describe('POST /api/auth/logout', () => {
-  it('calls signOut and redirects to /', async () => {
+  it('calls signOut and redirects to the site root with status 307', async () => {
     mockSignOut.mockResolvedValue({ error: null })
 
     const request = new NextRequest(
@@ -36,8 +36,20 @@ describe('POST /api/auth/logout', () => {
     const res = await POST(request)
 
     expect(mockSignOut).toHaveBeenCalledTimes(1)
-    // NextResponse.redirect uses 307 by default
-    expect([307, 308]).toContain(res.status)
+    // NextResponse.redirect() without an explicit status returns 307.
+    expect(res.status).toBe(307)
     expect(res.headers.get('location')).toBe('http://localhost:3000/')
+  })
+
+  it('resolves the redirect URL relative to request.nextUrl.origin', async () => {
+    mockSignOut.mockResolvedValue({ error: null })
+
+    const request = new NextRequest(
+      new URL('https://dnd-side.vercel.app/api/auth/logout'),
+      { method: 'POST' }
+    )
+    const res = await POST(request)
+
+    expect(res.headers.get('location')).toBe('https://dnd-side.vercel.app/')
   })
 })

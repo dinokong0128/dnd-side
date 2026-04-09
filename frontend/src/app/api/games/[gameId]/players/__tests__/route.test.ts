@@ -101,12 +101,13 @@ describe('POST /api/games/[gameId]/players', () => {
     expect(await res.text()).toBe(backendText)
   })
 
-  it('forwards backend error status with error payload as text', async () => {
+  it('forwards backend error status with error payload as raw text (no re-serialization)', async () => {
     mockAuthed()
+    const backendErrorText = JSON.stringify({ detail: 'Character exists' })
     ;(global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: false,
       status: 422,
-      text: async () => JSON.stringify({ detail: 'Character exists' }),
+      text: async () => backendErrorText,
     })
 
     const res = await POST(makeRequest(sampleBody), {
@@ -114,8 +115,10 @@ describe('POST /api/games/[gameId]/players', () => {
     })
 
     expect(res.status).toBe(422)
-    const parsed = await res.json()
-    expect(parsed).toEqual({ detail: 'Character exists' })
+    // The route must NOT re-wrap or re-stringify the backend body — the
+    // response text must equal the backend response text byte-for-byte.
+    expect(await res.text()).toBe(backendErrorText)
+    expect(res.headers.get('content-type')).toBe('application/json')
   })
 
   it('returns 500 on an unexpected exception', async () => {
