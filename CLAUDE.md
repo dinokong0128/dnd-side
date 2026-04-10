@@ -176,6 +176,7 @@ Seven tables in Supabase (`ytxncykyfbhoyvxkocrs`):
 |---|---|
 | **docs/ARCHITECTURE.md** | Complete design: flows, decisions, code examples |
 | **docs/DATA_MODEL.md** | Tables, columns, enums, indexes, triggers, RLS |
+| **docs/TDD_WORKFLOW.md** | Test file placement, mocking rules, and stub patterns per layer |
 | **This file (CLAUDE.md)** | Project overview & reference links for AI agents |
 
 ---
@@ -186,6 +187,17 @@ Seven tables in Supabase (`ytxncykyfbhoyvxkocrs`):
 - **Backend:** Type hints, Pydantic validation, docstrings, pytest tests
 - **Both:** Environment variables in `.env`, migrations tracked in `supabase/migrations/`
 - **No direct Supabase mutations from Next.js** — all writes go through FastAPI
+
+---
+
+## 🧪 TDD Skeleton Workflow
+
+Before writing any production code for a Linear issue, produce three artifacts in order:
+1. **Spec doc** — ACs from the issue, layers touched, mock boundary per layer
+2. **Failing test stubs** — runnable stubs that fail (not error) immediately
+3. **Implementation scaffold** — minimum stubs needed for test imports to resolve
+
+**→ File placement conventions, mocking rules per layer, and examples: `docs/TDD_WORKFLOW.md`**
 
 ---
 
