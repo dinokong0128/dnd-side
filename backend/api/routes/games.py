@@ -1,7 +1,7 @@
 """Games endpoints: create, list, and retrieve games."""
-from fastapi import APIRouter, Depends, HTTPException, status
+
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from typing import Optional
 from config import supabase_client
 from api.dependencies import get_current_user
 
@@ -10,12 +10,14 @@ router = APIRouter()
 
 class CreateGameInput(BaseModel):
     """Input for creating a new game."""
+
     name: str
     dm_persona: str = "A classic high-fantasy D&D adventure."
 
 
 class GameOut(BaseModel):
     """Game response model."""
+
     id: str
     name: str
     dm_persona: str
@@ -33,7 +35,13 @@ async def create_game(
     """Create a new game owned by the authenticated user."""
     result = (
         supabase_client.table("games")
-        .insert({"name": payload.name, "dm_persona": payload.dm_persona, "created_by": current_user})
+        .insert(
+            {
+                "name": payload.name,
+                "dm_persona": payload.dm_persona,
+                "created_by": current_user,
+            }
+        )
         .select("id, name, dm_persona, status, created_by, created_at, updated_at")
         .single()
         .execute()
@@ -105,10 +113,14 @@ async def start_game(
             raise HTTPException(status_code=409, detail="Game is already active")
         # No messages yet — opening narration never delivered, re-enqueue
         from tasks.dm_tasks import generate_opening_narration
+
         generate_opening_narration.send(game_id)
         return {"status": "active"}
     elif game.data["status"] != "lobby":
-        raise HTTPException(status_code=409, detail=f"Game is not in lobby status (current: {game.data['status']})")
+        raise HTTPException(
+            status_code=409,
+            detail=f"Game is not in lobby status (current: {game.data['status']})",
+        )
 
     # 4. Validate at least one player with a character
     players = (
@@ -117,17 +129,25 @@ async def start_game(
         .eq("game_id", game_id)
         .execute()
     )
-    players_with_characters = [p for p in (players.data or []) if p.get("character_name")]
+    players_with_characters = [
+        p for p in (players.data or []) if p.get("character_name")
+    ]
     if not players_with_characters:
-        raise HTTPException(status_code=400, detail="At least one player must have a character before starting")
+        raise HTTPException(
+            status_code=400,
+            detail="At least one player must have a character before starting",
+        )
 
     # 5. Update status
-    supabase_client.table("games").update({
-        "status": "active",
-    }).eq("id", game_id).execute()
+    supabase_client.table("games").update(
+        {
+            "status": "active",
+        }
+    ).eq("id", game_id).execute()
 
     # 6. Enqueue opening narration
     from tasks.dm_tasks import generate_opening_narration
+
     generate_opening_narration.send(game_id)
 
     return {"status": "active"}
@@ -151,14 +171,20 @@ async def pause_game(
     if game.data["created_by"] != current_user:
         raise HTTPException(status_code=403, detail="Only the host can pause the game")
     if game.data["status"] != "active":
-        raise HTTPException(status_code=409, detail=f"Can only pause an active game (current: {game.data['status']})")
+        raise HTTPException(
+            status_code=409,
+            detail=f"Can only pause an active game (current: {game.data['status']})",
+        )
 
-    supabase_client.table("games").update({
-        "status": "paused",
-    }).eq("id", game_id).execute()
+    supabase_client.table("games").update(
+        {
+            "status": "paused",
+        }
+    ).eq("id", game_id).execute()
 
     # Best-effort DM message — status change is already committed
     from tasks.dm_tasks import generate_pause_message
+
     generate_pause_message.send(game_id)
 
     return {"status": "paused"}
@@ -182,14 +208,20 @@ async def end_game(
     if game.data["created_by"] != current_user:
         raise HTTPException(status_code=403, detail="Only the host can end the game")
     if game.data["status"] not in ("active", "paused"):
-        raise HTTPException(status_code=409, detail=f"Can only end an active or paused game (current: {game.data['status']})")
+        raise HTTPException(
+            status_code=409,
+            detail=f"Can only end an active or paused game (current: {game.data['status']})",
+        )
 
-    supabase_client.table("games").update({
-        "status": "ended",
-    }).eq("id", game_id).execute()
+    supabase_client.table("games").update(
+        {
+            "status": "ended",
+        }
+    ).eq("id", game_id).execute()
 
     # Best-effort DM message
     from tasks.dm_tasks import generate_end_message
+
     generate_end_message.send(game_id)
 
     return {"status": "ended"}
@@ -213,13 +245,19 @@ async def resume_game(
     if game.data["created_by"] != current_user:
         raise HTTPException(status_code=403, detail="Only the host can resume the game")
     if game.data["status"] != "paused":
-        raise HTTPException(status_code=409, detail=f"Can only resume a paused game (current: {game.data['status']})")
+        raise HTTPException(
+            status_code=409,
+            detail=f"Can only resume a paused game (current: {game.data['status']})",
+        )
 
-    supabase_client.table("games").update({
-        "status": "active",
-    }).eq("id", game_id).execute()
+    supabase_client.table("games").update(
+        {
+            "status": "active",
+        }
+    ).eq("id", game_id).execute()
 
     from tasks.dm_tasks import generate_resume_narration
+
     generate_resume_narration.send(game_id)
 
     return {"status": "active"}

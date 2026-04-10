@@ -4,10 +4,10 @@ Dramatiq tasks for async work:
 - dm_response_task: Call Claude, extract events, broadcast
 - aggregation_task: Background summaries of long campaigns
 """
+
 import dramatiq
 from typing import List, Dict, Any
 import json
-import uuid
 from datetime import datetime
 import logging
 import re
@@ -20,6 +20,7 @@ from services.embedding_service import embed_text
 from constants import MESSAGE_ROLE_DM, MESSAGE_ROLE_SYSTEM, EVENT_SOURCE_CLAUDE
 
 logger = logging.getLogger(__name__)
+
 
 @dramatiq.actor(max_retries=3, min_backoff=1000)
 def dm_response_task(
@@ -48,23 +49,33 @@ def dm_response_task(
     """
 
     logger.info(f"[dm_response_task] Starting for game={game_id}, message={message_id}")
-    
+
     try:
         # Step 1: Fetch game state
-        game = supabase_client.table("games").select("*").match(
-            {"id": game_id}
-        ).single().execute()
-        
-        players = supabase_client.table("players").select("*").match(
-            {"game_id": game_id}
-        ).execute()
+        game = (
+            supabase_client.table("games")
+            .select("*")
+            .match({"id": game_id})
+            .single()
+            .execute()
+        )
+
+        players = (
+            supabase_client.table("players")
+            .select("*")
+            .match({"game_id": game_id})
+            .execute()
+        )
 
         # Step 1b: Fetch last 20 messages for context
-        recent_messages = supabase_client.table("game_messages").select(
-            "role, profile_id, content"
-        ).eq("game_id", game_id).order(
-            "created_at", desc=True
-        ).limit(20).execute()
+        recent_messages = (
+            supabase_client.table("game_messages")
+            .select("role, profile_id, content")
+            .eq("game_id", game_id)
+            .order("created_at", desc=True)
+            .limit(20)
+            .execute()
+        )
 
         # Reverse to chronological order and format
         message_history = []
@@ -74,26 +85,41 @@ def dm_response_task(
             elif msg["role"] == "player":
                 # Find character name for this profile_id
                 player_name = next(
-                    (p["character_name"] for p in players.data
-                     if p.get("profile_id") == msg.get("profile_id")),
-                    "Unknown Player"
+                    (
+                        p["character_name"]
+                        for p in players.data
+                        if p.get("profile_id") == msg.get("profile_id")
+                    ),
+                    "Unknown Player",
                 )
                 message_history.append(f"{player_name}: {msg['content']}")
             # Skip system messages in context
 
-        message_history_text = "\n\n".join(message_history) if message_history else "No messages yet."
+        message_history_text = (
+            "\n\n".join(message_history) if message_history else "No messages yet."
+        )
 
         # Step 1c: Fetch player inventory
         party_lines = []
         for p in players.data:
-            inv = supabase_client.table("player_inventory").select(
-                "item_name, quantity"
-            ).eq("player_id", p["id"]).execute()
+            inv = (
+                supabase_client.table("player_inventory")
+                .select("item_name, quantity")
+                .eq("player_id", p["id"])
+                .execute()
+            )
 
-            items = ", ".join(
-                f"{i['item_name']} (x{i['quantity']})" if i["quantity"] > 1 else i["item_name"]
-                for i in (inv.data or [])
-            ) or "no equipment"
+            items = (
+                ", ".join(
+                    (
+                        f"{i['item_name']} (x{i['quantity']})"
+                        if i["quantity"] > 1
+                        else i["item_name"]
+                    )
+                    for i in (inv.data or [])
+                )
+                or "no equipment"
+            )
 
             party_lines.append(
                 f"- {p['character_name']}, Level {p.get('level', 1)} "
@@ -128,7 +154,7 @@ RULES:
 The acting player's action:
 "{action_text}"
 """
-        
+
         # Step 3: Call Claude API
         response = anthropic_client.messages.create(
             model="claude-sonnet-4-20250514",
@@ -141,7 +167,7 @@ The acting player's action:
                 }
             ],
         )
-        
+
         dm_response = response.content[0].text
         logger.info(f"[dm_response_task] Claude responded: {len(dm_response)} chars")
 
@@ -154,22 +180,24 @@ The acting player's action:
         for event in events:
             event_embedding = openai_client.embeddings.create(
                 model="text-embedding-3-small",
-                input=event['description'],
+                input=event["description"],
                 dimensions=1536,
             )
 
-            event_rows.append({
-                "game_id": game_id,
-                "event_type": event['type'],
-                "summary": event['description'],
-                "embedding": event_embedding.data[0].embedding,
-                "source": EVENT_SOURCE_CLAUDE,
-            })
+            event_rows.append(
+                {
+                    "game_id": game_id,
+                    "event_type": event["type"],
+                    "summary": event["description"],
+                    "embedding": event_embedding.data[0].embedding,
+                    "source": EVENT_SOURCE_CLAUDE,
+                }
+            )
 
         # Step 6: Strip event markers from the displayed message
         clean_response = re.sub(
             r'<event\s+type=["\'][^"\']+["\']>(.*?)</event>',
-            r'\1',
+            r"\1",
             dm_response,
             flags=re.DOTALL,
         ).strip()
@@ -183,7 +211,7 @@ The acting player's action:
         }
 
         supabase_client.table("game_messages").insert(response_message).execute()
-        logger.info(f"[dm_response_task] Inserted DM response")
+        logger.info("[dm_response_task] Inserted DM response")
 
         # Step 8: Insert events to game_events
         if event_rows:
@@ -191,9 +219,11 @@ The acting player's action:
             logger.info(f"[dm_response_task] Inserted {len(event_rows)} events")
 
         # Step 9: Update game state
-        supabase_client.table("games").update({
-            "updated_at": datetime.utcnow().isoformat(),
-        }).match({"id": game_id}).execute()
+        supabase_client.table("games").update(
+            {
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+        ).match({"id": game_id}).execute()
 
         logger.info(f"[dm_response_task] Success! game_id={game_id}")
 
@@ -211,18 +241,21 @@ The acting player's action:
             # Only insert error message when retries are exhausted (attempt 4+)
             if attempt_num > 3:
                 try:
-                    supabase_client.table("game_messages").insert({
-                        "game_id": game_id,
-                        "role": MESSAGE_ROLE_SYSTEM,
-                        "profile_id": None,
-                        "content": "The Dungeon Master encountered an error. Please try your action again.",
-                    }).execute()
+                    supabase_client.table("game_messages").insert(
+                        {
+                            "game_id": game_id,
+                            "role": MESSAGE_ROLE_SYSTEM,
+                            "profile_id": None,
+                            "content": "The Dungeon Master encountered an error. Please try your action again.",
+                        }
+                    ).execute()
                 except Exception:
                     logger.error("[dm_response_task] Failed to insert error message")
         except Exception as redis_error:
             logger.error(f"[dm_response_task] Failed to track failures: {redis_error}")
 
         raise  # Let Dramatiq retry
+
 
 @dramatiq.actor(max_retries=3, min_backoff=1000)
 def generate_opening_narration(game_id: str):
@@ -234,26 +267,43 @@ def generate_opening_narration(game_id: str):
 
     try:
         # 1. Fetch game
-        game = supabase_client.table("games").select(
-            "id, name, dm_persona"
-        ).eq("id", game_id).single().execute()
+        game = (
+            supabase_client.table("games")
+            .select("id, name, dm_persona")
+            .eq("id", game_id)
+            .single()
+            .execute()
+        )
 
         # 2. Fetch all players with their inventory
-        players = supabase_client.table("players").select(
-            "id, character_name, race, level, character_class, hp_max"
-        ).eq("game_id", game_id).execute()
+        players = (
+            supabase_client.table("players")
+            .select("id, character_name, race, level, character_class, hp_max")
+            .eq("game_id", game_id)
+            .execute()
+        )
 
         party_lines = []
-        for p in (players.data or []):
+        for p in players.data or []:
             # Fetch inventory for this player
-            inv = supabase_client.table("player_inventory").select(
-                "item_name, quantity"
-            ).eq("player_id", p["id"]).execute()
+            inv = (
+                supabase_client.table("player_inventory")
+                .select("item_name, quantity")
+                .eq("player_id", p["id"])
+                .execute()
+            )
 
-            items = ", ".join(
-                f"{i['item_name']} (x{i['quantity']})" if i["quantity"] > 1 else i["item_name"]
-                for i in (inv.data or [])
-            ) or "no equipment"
+            items = (
+                ", ".join(
+                    (
+                        f"{i['item_name']} (x{i['quantity']})"
+                        if i["quantity"] > 1
+                        else i["item_name"]
+                    )
+                    for i in (inv.data or [])
+                )
+                or "no equipment"
+            )
 
             party_lines.append(
                 f"- {p['character_name']}, a Level {p.get('level', 1)} {p.get('race', 'Human')} {p['character_class']}. "
@@ -286,20 +336,26 @@ Write 3–4 paragraphs. Do not break the fourth wall."""
         )
 
         dm_response = response.content[0].text
-        logger.info(f"[generate_opening_narration] Claude responded: {len(dm_response)} chars")
+        logger.info(
+            f"[generate_opening_narration] Claude responded: {len(dm_response)} chars"
+        )
 
         # 5. Insert DM message
-        supabase_client.table("game_messages").insert({
-            "game_id": game_id,
-            "role": "dm",
-            "profile_id": None,
-            "content": dm_response,
-        }).execute()
+        supabase_client.table("game_messages").insert(
+            {
+                "game_id": game_id,
+                "role": "dm",
+                "profile_id": None,
+                "content": dm_response,
+            }
+        ).execute()
 
         # 6. Update game timestamp
-        supabase_client.table("games").update({
-            "updated_at": datetime.utcnow().isoformat(),
-        }).eq("id", game_id).execute()
+        supabase_client.table("games").update(
+            {
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+        ).eq("id", game_id).execute()
 
         logger.info(f"[generate_opening_narration] Success! game_id={game_id}")
 
@@ -307,24 +363,31 @@ Write 3–4 paragraphs. Do not break the fourth wall."""
         logger.error(f"[generate_opening_narration] Error: {str(e)}", exc_info=True)
         # Insert error message so clients know something went wrong
         try:
-            supabase_client.table("game_messages").insert({
-                "game_id": game_id,
-                "role": "system",
-                "profile_id": None,
-                "content": "The Dungeon Master encountered an error while preparing the adventure. Please try starting the session again.",
-            }).execute()
+            supabase_client.table("game_messages").insert(
+                {
+                    "game_id": game_id,
+                    "role": "system",
+                    "profile_id": None,
+                    "content": "The Dungeon Master encountered an error while preparing the adventure. Please try starting the session again.",
+                }
+            ).execute()
         except Exception:
             logger.error("[generate_opening_narration] Failed to insert error message")
         raise  # Let Dramatiq retry
+
 
 @dramatiq.actor(max_retries=2, min_backoff=1000)
 def generate_pause_message(game_id: str):
     """Generate a short in-world pause message."""
     logger.info(f"[generate_pause_message] Starting for game={game_id}")
     try:
-        game = supabase_client.table("games").select(
-            "dm_persona"
-        ).eq("id", game_id).single().execute()
+        game = (
+            supabase_client.table("games")
+            .select("dm_persona")
+            .eq("id", game_id)
+            .single()
+            .execute()
+        )
 
         response = anthropic_client.messages.create(
             model="claude-sonnet-4-20250514",
@@ -338,12 +401,14 @@ def generate_pause_message(game_id: str):
             messages=[{"role": "user", "content": "Pause the session."}],
         )
 
-        supabase_client.table("game_messages").insert({
-            "game_id": game_id,
-            "role": "dm",
-            "profile_id": None,
-            "content": response.content[0].text,
-        }).execute()
+        supabase_client.table("game_messages").insert(
+            {
+                "game_id": game_id,
+                "role": "dm",
+                "profile_id": None,
+                "content": response.content[0].text,
+            }
+        ).execute()
 
         logger.info(f"[generate_pause_message] Success for game={game_id}")
     except Exception as e:
@@ -351,14 +416,19 @@ def generate_pause_message(game_id: str):
         # Best-effort — don't insert error message, status is already changed
         raise
 
+
 @dramatiq.actor(max_retries=2, min_backoff=1000)
 def generate_end_message(game_id: str):
     """Generate a short in-world closing narration."""
     logger.info(f"[generate_end_message] Starting for game={game_id}")
     try:
-        game = supabase_client.table("games").select(
-            "dm_persona"
-        ).eq("id", game_id).single().execute()
+        game = (
+            supabase_client.table("games")
+            .select("dm_persona")
+            .eq("id", game_id)
+            .single()
+            .execute()
+        )
 
         response = anthropic_client.messages.create(
             model="claude-sonnet-4-20250514",
@@ -373,12 +443,14 @@ def generate_end_message(game_id: str):
             messages=[{"role": "user", "content": "End the session."}],
         )
 
-        supabase_client.table("game_messages").insert({
-            "game_id": game_id,
-            "role": "dm",
-            "profile_id": None,
-            "content": response.content[0].text,
-        }).execute()
+        supabase_client.table("game_messages").insert(
+            {
+                "game_id": game_id,
+                "role": "dm",
+                "profile_id": None,
+                "content": response.content[0].text,
+            }
+        ).execute()
 
         logger.info(f"[generate_end_message] Success for game={game_id}")
     except Exception as e:
@@ -387,6 +459,7 @@ def generate_end_message(game_id: str):
 
 
 RESUME_CONTEXT_MESSAGES = 20
+
 
 @dramatiq.actor(max_retries=3, min_backoff=1000)
 def generate_resume_narration(game_id: str):
@@ -403,17 +476,26 @@ def generate_resume_narration(game_id: str):
 
     try:
         # 1. Fetch game
-        game = supabase_client.table("games").select(
-            "id, name, dm_persona"
-        ).eq("id", game_id).single().execute()
+        game = (
+            supabase_client.table("games")
+            .select("id, name, dm_persona")
+            .eq("id", game_id)
+            .single()
+            .execute()
+        )
 
         # 2. Fetch all players
-        players = supabase_client.table("players").select(
-            "id, profile_id, character_name, race, level, character_class, hp_current, hp_max"
-        ).eq("game_id", game_id).execute()
+        players = (
+            supabase_client.table("players")
+            .select(
+                "id, profile_id, character_name, race, level, character_class, hp_current, hp_max"
+            )
+            .eq("game_id", game_id)
+            .execute()
+        )
 
         party_lines = []
-        for p in (players.data or []):
+        for p in players.data or []:
             party_lines.append(
                 f"- {p['character_name']}, Level {p.get('level', 1)} "
                 f"{p.get('race', 'Human')} {p['character_class']}. "
@@ -422,11 +504,14 @@ def generate_resume_narration(game_id: str):
         party_roster = "\n".join(party_lines)
 
         # 3. Fetch last 20 messages
-        recent_messages = supabase_client.table("game_messages").select(
-            "role, profile_id, content"
-        ).eq("game_id", game_id).order(
-            "created_at", desc=True
-        ).limit(RESUME_CONTEXT_MESSAGES).execute()
+        recent_messages = (
+            supabase_client.table("game_messages")
+            .select("role, profile_id, content")
+            .eq("game_id", game_id)
+            .order("created_at", desc=True)
+            .limit(RESUME_CONTEXT_MESSAGES)
+            .execute()
+        )
 
         # Build a profile_id → character_name map for message formatting
         player_name_map = {
@@ -447,7 +532,11 @@ def generate_resume_narration(game_id: str):
                 last_player_message = msg["content"]  # Track latest player message
             # Skip system messages in context
 
-        message_history_text = "\n\n".join(message_history_lines) if message_history_lines else "No messages yet."
+        message_history_text = (
+            "\n\n".join(message_history_lines)
+            if message_history_lines
+            else "No messages yet."
+        )
 
         # 4. RAG: embed latest player message and search game_events
         rag_text = ""
@@ -464,14 +553,20 @@ def generate_resume_narration(game_id: str):
                         )
                     rag_text = "\n".join(rag_lines)
             except Exception as rag_error:
-                logger.warning(f"[generate_resume_narration] RAG search failed (non-fatal): {rag_error}")
+                logger.warning(
+                    f"[generate_resume_narration] RAG search failed (non-fatal): {rag_error}"
+                )
                 # Continue without RAG — message history alone is sufficient
 
         # 5. Build system prompt
-        rag_section = f"""Relevant past events from campaign memory:
+        rag_section = (
+            f"""Relevant past events from campaign memory:
 ---
 {rag_text}
----""" if rag_text else "No past campaign events recorded yet."
+---"""
+            if rag_text
+            else "No past campaign events recorded yet."
+        )
 
         system_prompt = f"""You are {game.data['dm_persona']}. You are resuming a D&D 5e campaign session called "{game.data['name']}" after a pause.
 
@@ -503,56 +598,70 @@ Write 2–3 paragraphs."""
         )
 
         dm_response = response.content[0].text
-        logger.info(f"[generate_resume_narration] Claude responded: {len(dm_response)} chars")
+        logger.info(
+            f"[generate_resume_narration] Claude responded: {len(dm_response)} chars"
+        )
 
         # 7. Insert DM message
-        supabase_client.table("game_messages").insert({
-            "game_id": game_id,
-            "role": "dm",
-            "profile_id": None,
-            "content": dm_response,
-        }).execute()
+        supabase_client.table("game_messages").insert(
+            {
+                "game_id": game_id,
+                "role": "dm",
+                "profile_id": None,
+                "content": dm_response,
+            }
+        ).execute()
 
         # 8. Update game timestamp
-        supabase_client.table("games").update({
-            "updated_at": datetime.utcnow().isoformat(),
-        }).eq("id", game_id).execute()
+        supabase_client.table("games").update(
+            {
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+        ).eq("id", game_id).execute()
 
         logger.info(f"[generate_resume_narration] Success! game_id={game_id}")
 
     except Exception as e:
         logger.error(f"[generate_resume_narration] Error: {str(e)}", exc_info=True)
         try:
-            supabase_client.table("game_messages").insert({
-                "game_id": game_id,
-                "role": "system",
-                "profile_id": None,
-                "content": "The Dungeon Master encountered an error while resuming the adventure. The host can try resuming again.",
-            }).execute()
+            supabase_client.table("game_messages").insert(
+                {
+                    "game_id": game_id,
+                    "role": "system",
+                    "profile_id": None,
+                    "content": "The Dungeon Master encountered an error while resuming the adventure. The host can try resuming again.",
+                }
+            ).execute()
         except Exception:
             logger.error("[generate_resume_narration] Failed to insert error message")
         raise
+
 
 @dramatiq.actor()
 def aggregation_task(game_id: str):
     """
     Background task: Summarize long campaigns
-    
+
     Called periodically (e.g., after 50 messages) to generate:
     - Campaign summary
     - Key events
     - Character arcs
-    
+
     Useful for RAG context size management
     """
     logger.info(f"[aggregation_task] Running for game={game_id}")
-    
+
     # Fetch recent messages
-    messages = supabase_client.table("game_messages").select("*").match(
-        {"game_id": game_id}
-    ).order("created_at", desc=True).limit(50).execute()
-    
+    _messages = (  # noqa: F841
+        supabase_client.table("game_messages")
+        .select("*")
+        .match({"game_id": game_id})
+        .order("created_at", desc=True)
+        .limit(50)
+        .execute()
+    )
+
     # TODO: Call Claude to summarize
     # Insert summary to a new table: campaign_summaries
-    
+
     logger.info(f"[aggregation_task] Complete for game={game_id}")

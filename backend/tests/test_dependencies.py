@@ -1,4 +1,5 @@
 """Tests for authentication dependencies."""
+
 import pytest
 from unittest.mock import patch, MagicMock
 from fastapi import HTTPException
@@ -18,6 +19,7 @@ class TestGetCurrentUser:
         with patch("api.dependencies.supabase_client") as mock_sb:
             mock_sb.auth.get_user.return_value = mock_response
             from api.dependencies import get_current_user
+
             result = await get_current_user(token="valid-jwt-token")
             assert result == "user-uuid-123"
             mock_sb.auth.get_user.assert_called_once_with("valid-jwt-token")
@@ -31,6 +33,7 @@ class TestGetCurrentUser:
         with patch("api.dependencies.supabase_client") as mock_sb:
             mock_sb.auth.get_user.return_value = mock_response
             from api.dependencies import get_current_user
+
             with pytest.raises(HTTPException) as exc_info:
                 await get_current_user(token="invalid-token")
             assert exc_info.value.status_code == 401
@@ -42,6 +45,7 @@ class TestGetCurrentUser:
         with patch("api.dependencies.supabase_client") as mock_sb:
             mock_sb.auth.get_user.return_value = None
             from api.dependencies import get_current_user
+
             with pytest.raises(HTTPException) as exc_info:
                 await get_current_user(token="some-token")
             assert exc_info.value.status_code == 401
@@ -55,6 +59,7 @@ class TestGetCurrentUser:
         with patch("api.dependencies.supabase_client") as mock_sb:
             mock_sb.auth.get_user.return_value = mock_response
             from api.dependencies import get_current_user
+
             with pytest.raises(HTTPException) as exc_info:
                 await get_current_user(token="bad-token")
             assert exc_info.value.headers == {"WWW-Authenticate": "Bearer"}

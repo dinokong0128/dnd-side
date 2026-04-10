@@ -1,4 +1,5 @@
 """Custom middleware setup for the FastAPI application."""
+
 import logging
 from fastapi import FastAPI
 

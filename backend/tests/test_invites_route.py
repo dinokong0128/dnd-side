@@ -1,8 +1,8 @@
 """Tests for the invites API routes."""
+
 import pytest
 from unittest.mock import MagicMock, patch
 from tests.conftest import SAMPLE_GAME
-
 
 SAMPLE_INVITE = {
     "id": "invite-uuid-1",
@@ -27,8 +27,12 @@ class TestCreateInvite:
         mock_insert_result.data = [SAMPLE_INVITE]
 
         with patch("api.routes.invites.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
-            mock_sb.table.return_value.insert.return_value.execute.return_value = mock_insert_result
+            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                mock_game_result
+            )
+            mock_sb.table.return_value.insert.return_value.execute.return_value = (
+                mock_insert_result
+            )
 
             response = client.post("/games/game-uuid-1/invites")
 
@@ -43,7 +47,9 @@ class TestCreateInvite:
         mock_game_result.data = None
 
         with patch("api.routes.invites.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
+            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                mock_game_result
+            )
 
             response = client.post("/games/nonexistent-uuid/invites")
 
@@ -56,7 +62,9 @@ class TestCreateInvite:
         mock_game_result.data = {**LOBBY_GAME, "created_by": "other-user-uuid"}
 
         with patch("api.routes.invites.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
+            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                mock_game_result
+            )
 
             response = client.post("/games/game-uuid-1/invites")
 
@@ -69,12 +77,16 @@ class TestCreateInvite:
         mock_game_result.data = {**SAMPLE_GAME, "status": "active"}
 
         with patch("api.routes.invites.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
+            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                mock_game_result
+            )
 
             response = client.post("/games/game-uuid-1/invites")
 
         assert response.status_code == 403
-        assert response.json()["detail"] == "Can only invite players when game is in lobby"
+        assert (
+            response.json()["detail"] == "Can only invite players when game is in lobby"
+        )
 
     def test_create_invite_db_failure(self, client):
         """Should return 500 when database insert fails."""
@@ -85,8 +97,12 @@ class TestCreateInvite:
         mock_insert_result.data = None
 
         with patch("api.routes.invites.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
-            mock_sb.table.return_value.insert.return_value.execute.return_value = mock_insert_result
+            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                mock_game_result
+            )
+            mock_sb.table.return_value.insert.return_value.execute.return_value = (
+                mock_insert_result
+            )
 
             response = client.post("/games/game-uuid-1/invites")
 
@@ -107,8 +123,12 @@ class TestCreateInvite:
         mock_insert_result.data = [SAMPLE_INVITE]
 
         with patch("api.routes.invites.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
-            mock_sb.table.return_value.insert.return_value.execute.return_value = mock_insert_result
+            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                mock_game_result
+            )
+            mock_sb.table.return_value.insert.return_value.execute.return_value = (
+                mock_insert_result
+            )
 
             response = client.post("/games/game-uuid-1/invites")
 

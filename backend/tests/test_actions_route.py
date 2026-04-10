@@ -1,4 +1,5 @@
 """Tests for the actions API route."""
+
 import pytest
 from unittest.mock import MagicMock, patch
 from tests.conftest import SAMPLE_GAME, SAMPLE_PLAYER
@@ -19,26 +20,36 @@ class TestCreateAction:
         def table_side_effect(name):
             mock = MagicMock()
             if name == "players":
-                mock.select.return_value.match.return_value.single.return_value.execute.return_value = mock_player_result
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = (
+                    mock_player_result
+                )
             elif name == "games":
-                mock.select.return_value.match.return_value.single.return_value.execute.return_value = mock_game_result
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = (
+                    mock_game_result
+                )
             elif name == "game_messages":
                 mock.insert.return_value.execute.return_value = mock_insert_result
             return mock
 
-        with patch("api.routes.actions.supabase_client") as mock_sb, \
-             patch("api.routes.actions.openai_client") as mock_openai, \
-             patch("api.routes.actions.dm_response_task") as mock_task, \
-             patch("api.routes.actions.search_rag", return_value=[]):
+        with patch("api.routes.actions.supabase_client") as mock_sb, patch(
+            "api.routes.actions.openai_client"
+        ) as mock_openai, patch(
+            "api.routes.actions.dm_response_task"
+        ) as mock_task, patch(
+            "api.routes.actions.search_rag", return_value=[]
+        ):
             mock_sb.table.side_effect = table_side_effect
 
             mock_embedding = MagicMock()
             mock_embedding.data = [MagicMock(embedding=[0.1] * 1536)]
             mock_openai.embeddings.create.return_value = mock_embedding
 
-            response = client.post("/games/game-uuid-1/actions", json={
-                "action_text": "I attack the dragon!",
-            })
+            response = client.post(
+                "/games/game-uuid-1/actions",
+                json={
+                    "action_text": "I attack the dragon!",
+                },
+            )
 
         assert response.status_code == 202
         data = response.json()
@@ -53,27 +64,38 @@ class TestCreateAction:
         mock_player_result.data = None
 
         with patch("api.routes.actions.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.match.return_value.single.return_value.execute.return_value = mock_player_result
+            mock_sb.table.return_value.select.return_value.match.return_value.single.return_value.execute.return_value = (
+                mock_player_result
+            )
 
-            response = client.post("/games/game-uuid-1/actions", json={
-                "action_text": "I attack!",
-            })
+            response = client.post(
+                "/games/game-uuid-1/actions",
+                json={
+                    "action_text": "I attack!",
+                },
+            )
 
         assert response.status_code == 403
 
     def test_create_action_missing_action_text(self, client):
         """Should return 422 when action_text is missing."""
-        response = client.post("/games/game-uuid-1/actions", json={
-            "player_id": "player-uuid-1",
-        })
+        response = client.post(
+            "/games/game-uuid-1/actions",
+            json={
+                "player_id": "player-uuid-1",
+            },
+        )
         assert response.status_code == 422
 
     def test_create_action_unauthorized(self, unauthed_client):
         """Should return 401 when no auth token is provided."""
-        response = unauthed_client.post("/games/game-uuid-1/actions", json={
-            "player_id": "player-uuid-1",
-            "action_text": "I attack!",
-        })
+        response = unauthed_client.post(
+            "/games/game-uuid-1/actions",
+            json={
+                "player_id": "player-uuid-1",
+                "action_text": "I attack!",
+            },
+        )
         assert response.status_code == 401
 
     def test_create_action_invalid_game_state(self, client):
@@ -87,18 +109,24 @@ class TestCreateAction:
         def table_side_effect(name):
             mock = MagicMock()
             if name == "players":
-                mock.select.return_value.match.return_value.single.return_value.execute.return_value = mock_player_result
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = (
+                    mock_player_result
+                )
             elif name == "games":
-                mock.select.return_value.match.return_value.single.return_value.execute.return_value = mock_game_result
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = (
+                    mock_game_result
+                )
             return mock
 
         with patch("api.routes.actions.supabase_client") as mock_sb:
             mock_sb.table.side_effect = table_side_effect
 
-            response = client.post("/games/game-uuid-1/actions", json={
-                "action_text": "I attack!",
-            })
+            response = client.post(
+                "/games/game-uuid-1/actions",
+                json={
+                    "action_text": "I attack!",
+                },
+            )
 
         assert response.status_code == 500
         assert "not active" in response.json()["detail"]
-

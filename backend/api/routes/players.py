@@ -1,7 +1,8 @@
 """Players endpoints: create and manage player characters."""
+
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from config import supabase_client
 from api.dependencies import get_current_user
@@ -123,7 +124,10 @@ async def upsert_player(
             },
             on_conflict="game_id,profile_id",
         )
-        .select("id, game_id, profile_id, character_name, character_class, race, level, hp_current, hp_max, stats, status, joined_at")
+        .select(
+            "id, game_id, profile_id, character_name, character_class, "
+            "race, level, hp_current, hp_max, stats, status, joined_at"
+        )
         .single()
         .execute()
     )
@@ -142,12 +146,20 @@ async def upsert_player(
         starting_items = CLASS_STARTING_INVENTORY.get(body.character_class, [])
         if starting_items:
             rows = [
-                {"player_id": player_id, "item_name": item["item_name"], "quantity": item["quantity"]}
+                {
+                    "player_id": player_id,
+                    "item_name": item["item_name"],
+                    "quantity": item["quantity"],
+                }
                 for item in starting_items
             ]
             supabase_client.table("player_inventory").insert(rows).execute()
     except Exception as e:
-        logger.warning("Failed to populate inventory for player %s: %s", upsert_result.data.get("id"), e)
+        logger.warning(
+            "Failed to populate inventory for player %s: %s",
+            upsert_result.data.get("id"),
+            e,
+        )
 
     return upsert_result.data
 

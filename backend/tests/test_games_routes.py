@@ -1,4 +1,5 @@
 """Tests for the games API routes."""
+
 import pytest
 from unittest.mock import MagicMock, patch
 from tests.conftest import SAMPLE_GAME
@@ -13,12 +14,17 @@ class TestCreateGame:
         mock_result.data = SAMPLE_GAME
 
         with patch("api.routes.games.supabase_client") as mock_sb:
-            mock_sb.table.return_value.insert.return_value.select.return_value.single.return_value.execute.return_value = mock_result
+            mock_sb.table.return_value.insert.return_value.select.return_value.single.return_value.execute.return_value = (
+                mock_result
+            )
 
-            response = client.post("/games/", json={
-                "name": "Dragon's Lair",
-                "dm_persona": "A dark and mysterious DM.",
-            })
+            response = client.post(
+                "/games/",
+                json={
+                    "name": "Dragon's Lair",
+                    "dm_persona": "A dark and mysterious DM.",
+                },
+            )
 
         assert response.status_code == 201
         data = response.json()
@@ -35,7 +41,9 @@ class TestCreateGame:
         }
 
         with patch("api.routes.games.supabase_client") as mock_sb:
-            mock_sb.table.return_value.insert.return_value.select.return_value.single.return_value.execute.return_value = mock_result
+            mock_sb.table.return_value.insert.return_value.select.return_value.single.return_value.execute.return_value = (
+                mock_result
+            )
             response = client.post("/games/", json={"name": "Test Game"})
 
         assert response.status_code == 201
@@ -56,7 +64,9 @@ class TestCreateGame:
         mock_result.data = None
 
         with patch("api.routes.games.supabase_client") as mock_sb:
-            mock_sb.table.return_value.insert.return_value.select.return_value.single.return_value.execute.return_value = mock_result
+            mock_sb.table.return_value.insert.return_value.select.return_value.single.return_value.execute.return_value = (
+                mock_result
+            )
             response = client.post("/games/", json={"name": "Test Game"})
 
         assert response.status_code == 500
@@ -76,7 +86,9 @@ class TestListGames:
         mock_result.data = [SAMPLE_GAME]
 
         with patch("api.routes.games.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute.return_value = mock_result
+            mock_sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute.return_value = (
+                mock_result
+            )
             response = client.get("/games/")
 
         assert response.status_code == 200
@@ -90,7 +102,9 @@ class TestListGames:
         mock_result.data = []
 
         with patch("api.routes.games.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute.return_value = mock_result
+            mock_sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute.return_value = (
+                mock_result
+            )
             response = client.get("/games/")
 
         assert response.status_code == 200
@@ -102,7 +116,9 @@ class TestListGames:
         mock_result.data = None
 
         with patch("api.routes.games.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute.return_value = mock_result
+            mock_sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute.return_value = (
+                mock_result
+            )
             response = client.get("/games/")
 
         assert response.status_code == 200
@@ -115,7 +131,9 @@ class TestListGames:
         mock_result.data = [SAMPLE_GAME, game2]
 
         with patch("api.routes.games.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute.return_value = mock_result
+            mock_sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute.return_value = (
+                mock_result
+            )
             response = client.get("/games/")
 
         assert response.status_code == 200
@@ -136,7 +154,9 @@ class TestGetGame:
         mock_result.data = SAMPLE_GAME
 
         with patch("api.routes.games.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_result
+            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                mock_result
+            )
             response = client.get("/games/game-uuid-1")
 
         assert response.status_code == 200
@@ -150,7 +170,9 @@ class TestGetGame:
         mock_result.data = None
 
         with patch("api.routes.games.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_result
+            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                mock_result
+            )
             response = client.get("/games/nonexistent-uuid")
 
         assert response.status_code == 404
@@ -182,14 +204,21 @@ class TestStartGame:
         def table_side_effect(name):
             mock = MagicMock()
             if name == "games":
-                mock.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
-                mock.update.return_value.eq.return_value.select.return_value.single.return_value.execute.return_value = mock_update_result
+                mock.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                    mock_game_result
+                )
+                mock.update.return_value.eq.return_value.select.return_value.single.return_value.execute.return_value = (
+                    mock_update_result
+                )
             elif name == "players":
-                mock.select.return_value.eq.return_value.execute.return_value = mock_players_result
+                mock.select.return_value.eq.return_value.execute.return_value = (
+                    mock_players_result
+                )
             return mock
 
-        with patch("api.routes.games.supabase_client") as mock_sb, \
-             patch("tasks.dm_tasks.generate_opening_narration") as mock_task:
+        with patch("api.routes.games.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.generate_opening_narration"
+        ) as mock_task:
             mock_sb.table.side_effect = table_side_effect
 
             response = client.post("/games/game-uuid-1/start")
@@ -206,7 +235,9 @@ class TestStartGame:
         mock_game_result.data = other_user_game
 
         with patch("api.routes.games.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
+            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                mock_game_result
+            )
             response = client.post("/games/game-uuid-1/start")
 
         assert response.status_code == 403
@@ -217,7 +248,9 @@ class TestStartGame:
         mock_game_result.data = SAMPLE_GAME  # status='active'
 
         with patch("api.routes.games.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
+            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                mock_game_result
+            )
             response = client.post("/games/game-uuid-1/start")
 
         assert response.status_code == 409
@@ -236,9 +269,13 @@ class TestStartGame:
         def table_side_effect(name):
             mock = MagicMock()
             if name == "games":
-                mock.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
+                mock.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                    mock_game_result
+                )
             elif name == "players":
-                mock.select.return_value.eq.return_value.execute.return_value = mock_players_result
+                mock.select.return_value.eq.return_value.execute.return_value = (
+                    mock_players_result
+                )
             return mock
 
         with patch("api.routes.games.supabase_client") as mock_sb:
@@ -253,7 +290,9 @@ class TestStartGame:
         mock_game_result.data = None
 
         with patch("api.routes.games.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
+            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                mock_game_result
+            )
             response = client.post("/games/game-uuid-1/start")
 
         assert response.status_code == 404
@@ -274,15 +313,22 @@ class TestStartGame:
         def table_side_effect(name):
             mock = MagicMock()
             if name == "games":
-                mock.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
+                mock.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                    mock_game_result
+                )
             elif name == "players":
-                mock.select.return_value.eq.return_value.execute.return_value = mock_players_result
+                mock.select.return_value.eq.return_value.execute.return_value = (
+                    mock_players_result
+                )
             elif name == "game_messages":
-                mock.select.return_value.eq.return_value.execute.return_value = mock_messages_result
+                mock.select.return_value.eq.return_value.limit.return_value.execute.return_value = (
+                    mock_messages_result
+                )
             return mock
 
-        with patch("api.routes.games.supabase_client") as mock_sb, \
-             patch("tasks.dm_tasks.generate_opening_narration") as mock_task:
+        with patch("api.routes.games.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.generate_opening_narration"
+        ) as mock_task:
             mock_sb.table.side_effect = table_side_effect
             response = client.post("/games/game-uuid-1/start")
 
@@ -305,11 +351,17 @@ class TestStartGame:
         def table_side_effect(name):
             mock = MagicMock()
             if name == "games":
-                mock.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
+                mock.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                    mock_game_result
+                )
             elif name == "players":
-                mock.select.return_value.eq.return_value.execute.return_value = mock_players_result
+                mock.select.return_value.eq.return_value.execute.return_value = (
+                    mock_players_result
+                )
             elif name == "game_messages":
-                mock.select.return_value.eq.return_value.execute.return_value = mock_messages_result
+                mock.select.return_value.eq.return_value.execute.return_value = (
+                    mock_messages_result
+                )
             return mock
 
         with patch("api.routes.games.supabase_client") as mock_sb:
@@ -333,12 +385,17 @@ class TestPauseGame:
         def table_side_effect(name):
             mock = MagicMock()
             if name == "games":
-                mock.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
-                mock.update.return_value.eq.return_value.select.return_value.single.return_value.execute.return_value = mock_update_result
+                mock.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                    mock_game_result
+                )
+                mock.update.return_value.eq.return_value.select.return_value.single.return_value.execute.return_value = (
+                    mock_update_result
+                )
             return mock
 
-        with patch("api.routes.games.supabase_client") as mock_sb, \
-             patch("tasks.dm_tasks.generate_pause_message") as mock_task:
+        with patch("api.routes.games.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.generate_pause_message"
+        ) as mock_task:
             mock_sb.table.side_effect = table_side_effect
             response = client.post("/games/game-uuid-1/pause")
 
@@ -354,7 +411,9 @@ class TestPauseGame:
         mock_game_result.data = other_user_game
 
         with patch("api.routes.games.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
+            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                mock_game_result
+            )
             response = client.post("/games/game-uuid-1/pause")
 
         assert response.status_code == 403
@@ -366,7 +425,9 @@ class TestPauseGame:
             mock_game_result.data = {**SAMPLE_GAME, "status": status}
 
             with patch("api.routes.games.supabase_client") as mock_sb:
-                mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
+                mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                    mock_game_result
+                )
                 response = client.post("/games/game-uuid-1/pause")
 
             assert response.status_code == 409
@@ -377,7 +438,9 @@ class TestPauseGame:
         mock_game_result.data = None
 
         with patch("api.routes.games.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
+            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                mock_game_result
+            )
             response = client.post("/games/game-uuid-1/pause")
 
         assert response.status_code == 404
@@ -397,11 +460,17 @@ class TestEndGame:
         def table_side_effect(name):
             mock = MagicMock()
             if name == "games":
-                mock.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
-                mock.update.return_value.eq.return_value.select.return_value.single.return_value.execute.return_value = mock_update_result
+                mock.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                    mock_game_result
+                )
+                mock.update.return_value.eq.return_value.select.return_value.single.return_value.execute.return_value = (
+                    mock_update_result
+                )
             return mock
 
-        with patch("api.routes.games.supabase_client") as mock_sb:
+        with patch("api.routes.games.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.generate_end_message"
+        ):
             mock_sb.table.side_effect = table_side_effect
             response = client.post("/games/game-uuid-1/end")
 
@@ -421,11 +490,17 @@ class TestEndGame:
         def table_side_effect(name):
             mock = MagicMock()
             if name == "games":
-                mock.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
-                mock.update.return_value.eq.return_value.select.return_value.single.return_value.execute.return_value = mock_update_result
+                mock.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                    mock_game_result
+                )
+                mock.update.return_value.eq.return_value.select.return_value.single.return_value.execute.return_value = (
+                    mock_update_result
+                )
             return mock
 
-        with patch("api.routes.games.supabase_client") as mock_sb:
+        with patch("api.routes.games.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.generate_end_message"
+        ):
             mock_sb.table.side_effect = table_side_effect
             response = client.post("/games/game-uuid-1/end")
 
@@ -440,7 +515,9 @@ class TestEndGame:
         mock_game_result.data = other_user_game
 
         with patch("api.routes.games.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
+            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                mock_game_result
+            )
             response = client.post("/games/game-uuid-1/end")
 
         assert response.status_code == 403
@@ -452,7 +529,9 @@ class TestEndGame:
         mock_game_result.data = lobby_game
 
         with patch("api.routes.games.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
+            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                mock_game_result
+            )
             response = client.post("/games/game-uuid-1/end")
 
         assert response.status_code == 409
@@ -464,7 +543,9 @@ class TestEndGame:
         mock_game_result.data = ended_game
 
         with patch("api.routes.games.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
+            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                mock_game_result
+            )
             response = client.post("/games/game-uuid-1/end")
 
         assert response.status_code == 409
@@ -475,7 +556,9 @@ class TestEndGame:
         mock_game_result.data = None
 
         with patch("api.routes.games.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
+            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                mock_game_result
+            )
             response = client.post("/games/game-uuid-1/end")
 
         assert response.status_code == 404
@@ -496,12 +579,17 @@ class TestResumeGame:
         def table_side_effect(name):
             mock = MagicMock()
             if name == "games":
-                mock.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
-                mock.update.return_value.eq.return_value.select.return_value.single.return_value.execute.return_value = mock_update_result
+                mock.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                    mock_game_result
+                )
+                mock.update.return_value.eq.return_value.select.return_value.single.return_value.execute.return_value = (
+                    mock_update_result
+                )
             return mock
 
-        with patch("api.routes.games.supabase_client") as mock_sb, \
-             patch("tasks.dm_tasks.generate_resume_narration") as mock_task:
+        with patch("api.routes.games.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.generate_resume_narration"
+        ) as mock_task:
             mock_sb.table.side_effect = table_side_effect
             response = client.post("/games/game-uuid-1/resume")
 
@@ -517,7 +605,9 @@ class TestResumeGame:
         mock_game_result.data = other_user_game
 
         with patch("api.routes.games.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
+            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                mock_game_result
+            )
             response = client.post("/games/game-uuid-1/resume")
 
         assert response.status_code == 403
@@ -529,7 +619,9 @@ class TestResumeGame:
             mock_game_result.data = {**SAMPLE_GAME, "status": status}
 
             with patch("api.routes.games.supabase_client") as mock_sb:
-                mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
+                mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                    mock_game_result
+                )
                 response = client.post("/games/game-uuid-1/resume")
 
             assert response.status_code == 409
@@ -540,7 +632,9 @@ class TestResumeGame:
         mock_game_result.data = None
 
         with patch("api.routes.games.supabase_client") as mock_sb:
-            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_game_result
+            mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+                mock_game_result
+            )
             response = client.post("/games/game-uuid-1/resume")
 
         assert response.status_code == 404

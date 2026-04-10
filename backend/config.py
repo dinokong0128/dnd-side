@@ -2,22 +2,24 @@
 """
 Configuration and settings for D&D backend
 """
-from pydantic_settings import BaseSettings
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 import os
 
+
 class Settings(BaseSettings):
     """Application settings from environment variables"""
-    
+
     # Supabase
     SUPABASE_URL: str
     SUPABASE_SERVICE_ROLE_KEY: str  # Use service role for backend mutations
     SUPABASE_ANON_KEY: str  # For verifying JWT tokens
-    
+
     # External APIs
     ANTHROPIC_API_KEY: str
     OPENAI_API_KEY: str
-    
+
     # Redis (Dramatiq broker)
     REDIS_URL: str = "redis://localhost:6379"
 
@@ -26,20 +28,19 @@ class Settings(BaseSettings):
 
     # Frontend
     FRONTEND_URL: str = "http://localhost:3000"
-    
+
     # CORS
     ALLOWED_ORIGINS: List[str] = [
         "http://localhost:3000",  # Local dev
-        "https://*.vercel.app",   # Production Vercel
+        "https://*.vercel.app",  # Production Vercel
     ]
-    
+
     # API
     DEBUG: bool = os.getenv("DEBUG", "False").lower() == "true"
     LOG_LEVEL: str = "INFO"
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
+
 
 # Load settings
 settings = Settings()

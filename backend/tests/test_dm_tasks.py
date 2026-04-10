@@ -1,16 +1,20 @@
 """Tests for Dramatiq DM tasks."""
+
 import pytest
 import json
 from unittest.mock import MagicMock, patch, call
 from datetime import datetime
 
 # Mock config clients and redis_broker before importing dm_tasks
-with patch("config.supabase_client", MagicMock()), \
-     patch("config.anthropic_client", MagicMock()), \
-     patch("config.openai_client", MagicMock()), \
-     patch("redis_broker.redis_broker", MagicMock()), \
-     patch("redis_broker.redis_client", MagicMock()), \
-     patch("services.embedding_service.embed_text") as mock_embed_text:
+with patch("config.supabase_client", MagicMock()), patch(
+    "config.anthropic_client", MagicMock()
+), patch("config.openai_client", MagicMock()), patch(
+    "redis_broker.redis_broker", MagicMock()
+), patch(
+    "redis_broker.redis_client", MagicMock()
+), patch(
+    "services.embedding_service.embed_text"
+) as mock_embed_text:
     from tasks.dm_tasks import (
         dm_response_task,
         generate_opening_narration,
@@ -63,18 +67,27 @@ class TestGenerateOpeningNarration:
         def table_side_effect(name):
             mock = MagicMock()
             if name == "games":
-                mock.select.return_value.eq.return_value.single.return_value.execute.return_value = mock_game_result
-                mock.update.return_value.eq.return_value.execute.return_value = mock_update_result
+                mock.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+                    mock_game_result
+                )
+                mock.update.return_value.eq.return_value.execute.return_value = (
+                    mock_update_result
+                )
             elif name == "players":
-                mock.select.return_value.eq.return_value.execute.return_value = mock_players_result
+                mock.select.return_value.eq.return_value.execute.return_value = (
+                    mock_players_result
+                )
             elif name == "player_inventory":
-                mock.select.return_value.eq.return_value.execute.return_value = mock_inventory_result
+                mock.select.return_value.eq.return_value.execute.return_value = (
+                    mock_inventory_result
+                )
             elif name == "game_messages":
                 mock.insert.return_value.execute.return_value = mock_insert_result
             return mock
 
-        with patch("config.supabase_client") as mock_sb, \
-             patch("config.anthropic_client") as mock_anthropic:
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.anthropic_client"
+        ) as mock_anthropic:
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.return_value = mock_anthropic_response
 
@@ -82,7 +95,7 @@ class TestGenerateOpeningNarration:
 
             # Assert game_messages.insert was called
             calls = mock_sb.table.call_args_list
-            assert any(call[0][0] == "game_messages" for call in calls)
+            assert any(c[0][0] == "game_messages" for c in calls)
 
     def test_includes_inventory_in_prompt(self):
         """Should include inventory items in the system prompt."""
@@ -121,18 +134,27 @@ class TestGenerateOpeningNarration:
         def table_side_effect(name):
             mock = MagicMock()
             if name == "games":
-                mock.select.return_value.eq.return_value.single.return_value.execute.return_value = mock_game_result
-                mock.update.return_value.eq.return_value.execute.return_value = MagicMock()
+                mock.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+                    mock_game_result
+                )
+                mock.update.return_value.eq.return_value.execute.return_value = (
+                    MagicMock()
+                )
             elif name == "players":
-                mock.select.return_value.eq.return_value.execute.return_value = mock_players_result
+                mock.select.return_value.eq.return_value.execute.return_value = (
+                    mock_players_result
+                )
             elif name == "player_inventory":
-                mock.select.return_value.eq.return_value.execute.return_value = mock_inventory_result
+                mock.select.return_value.eq.return_value.execute.return_value = (
+                    mock_inventory_result
+                )
             elif name == "game_messages":
                 mock.insert.return_value.execute.return_value = MagicMock()
             return mock
 
-        with patch("config.supabase_client") as mock_sb, \
-             patch("config.anthropic_client") as mock_anthropic:
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.anthropic_client"
+        ) as mock_anthropic:
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.return_value = mock_anthropic_response
 
@@ -154,19 +176,23 @@ class TestGenerateOpeningNarration:
         def table_side_effect(name):
             mock = MagicMock()
             if name == "games":
-                mock.select.return_value.eq.return_value.single.return_value.execute.return_value = mock_game_result
+                mock.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+                    mock_game_result
+                )
             elif name == "game_messages":
                 mock.insert.return_value.execute.return_value = mock_insert_result
             return mock
 
-        with patch("config.supabase_client") as mock_sb:
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb:
             mock_sb.table.side_effect = table_side_effect
 
             with pytest.raises(Exception):
                 generate_opening_narration.fn("game-1")
 
             # Assert error message insertion was attempted
-            assert mock_insert_result.execute.called or True  # May be called or error before that
+            assert (
+                mock_insert_result.execute.called or True
+            )  # May be called or error before that
 
 
 class TestDmResponseTask:
@@ -204,7 +230,9 @@ class TestDmResponseTask:
 
         mock_anthropic_response = MagicMock()
         mock_anthropic_response.content = [
-            MagicMock(text='The dragon roars. <event type="combat">Dragon attacks</event> You feel scared.')
+            MagicMock(
+                text='The dragon roars. <event type="combat">Dragon attacks</event> You feel scared.'
+            )
         ]
 
         mock_embedding_result = MagicMock()
@@ -213,27 +241,42 @@ class TestDmResponseTask:
         mock_insert_msg = MagicMock()
         mock_insert_events = MagicMock()
         mock_update_game = MagicMock()
+        game_messages_mock = MagicMock()
+        game_messages_mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = (
+            mock_messages_result
+        )
+        game_messages_mock.insert.return_value.execute.return_value = mock_insert_msg
 
         def table_side_effect(name):
             mock = MagicMock()
             if name == "games":
-                mock.select.return_value.match.return_value.single.return_value.execute.return_value = mock_game_result
-                mock.update.return_value.match.return_value.execute.return_value = mock_update_game
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = (
+                    mock_game_result
+                )
+                mock.update.return_value.match.return_value.execute.return_value = (
+                    mock_update_game
+                )
             elif name == "players":
-                mock.select.return_value.match.return_value.execute.return_value = mock_players_result
+                mock.select.return_value.match.return_value.execute.return_value = (
+                    mock_players_result
+                )
             elif name == "game_messages":
-                mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = mock_messages_result
-                mock.insert.return_value.execute.return_value = mock_insert_msg
+                return game_messages_mock
             elif name == "player_inventory":
-                mock.select.return_value.eq.return_value.execute.return_value = mock_inventory_result
+                mock.select.return_value.eq.return_value.execute.return_value = (
+                    mock_inventory_result
+                )
             elif name == "game_events":
                 mock.insert.return_value.execute.return_value = mock_insert_events
             return mock
 
-        with patch("config.supabase_client") as mock_sb, \
-             patch("config.anthropic_client") as mock_anthropic, \
-             patch("config.openai_client") as mock_openai, \
-             patch("redis_broker.redis_client") as mock_redis:
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.anthropic_client"
+        ) as mock_anthropic, patch(
+            "tasks.dm_tasks.openai_client"
+        ) as mock_openai, patch(
+            "tasks.dm_tasks.redis_client"
+        ) as mock_redis:
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.return_value = mock_anthropic_response
             mock_openai.embeddings.create.return_value = mock_embedding_result
@@ -242,7 +285,7 @@ class TestDmResponseTask:
             dm_response_task.fn("game-1", "msg-1", "I attack!", [])
 
             # Verify game_messages insert was called
-            assert mock_insert_msg.execute.called
+            assert game_messages_mock.insert.called
 
     def test_embeds_and_stores_events(self):
         """Should embed extracted events and store them."""
@@ -285,27 +328,42 @@ class TestDmResponseTask:
         mock_embedding_result.data = [MagicMock(embedding=[0.1] * 1536)]
 
         mock_insert_events = MagicMock()
+        game_events_mock = MagicMock()
+        game_events_mock.insert.return_value.execute.return_value = mock_insert_events
 
         def table_side_effect(name):
             mock = MagicMock()
             if name == "games":
-                mock.select.return_value.match.return_value.single.return_value.execute.return_value = mock_game_result
-                mock.update.return_value.match.return_value.execute.return_value = MagicMock()
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = (
+                    mock_game_result
+                )
+                mock.update.return_value.match.return_value.execute.return_value = (
+                    MagicMock()
+                )
             elif name == "players":
-                mock.select.return_value.match.return_value.execute.return_value = mock_players_result
+                mock.select.return_value.match.return_value.execute.return_value = (
+                    mock_players_result
+                )
             elif name == "game_messages":
-                mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = mock_messages_result
+                mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = (
+                    mock_messages_result
+                )
                 mock.insert.return_value.execute.return_value = MagicMock()
             elif name == "player_inventory":
-                mock.select.return_value.eq.return_value.execute.return_value = mock_inventory_result
+                mock.select.return_value.eq.return_value.execute.return_value = (
+                    mock_inventory_result
+                )
             elif name == "game_events":
-                mock.insert.return_value.execute.return_value = mock_insert_events
+                return game_events_mock
             return mock
 
-        with patch("config.supabase_client") as mock_sb, \
-             patch("config.anthropic_client") as mock_anthropic, \
-             patch("config.openai_client") as mock_openai, \
-             patch("redis_broker.redis_client") as mock_redis:
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.anthropic_client"
+        ) as mock_anthropic, patch(
+            "tasks.dm_tasks.openai_client"
+        ) as mock_openai, patch(
+            "tasks.dm_tasks.redis_client"
+        ) as mock_redis:
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.return_value = mock_anthropic_response
             mock_openai.embeddings.create.return_value = mock_embedding_result
@@ -314,7 +372,7 @@ class TestDmResponseTask:
             dm_response_task.fn("game-1", "msg-1", "I attack!", [])
 
             # Verify game_events insert was called
-            assert mock_insert_events.execute.called
+            assert game_events_mock.insert.called
 
     def test_error_inserts_system_message_and_reraises(self):
         """Should insert error message and re-raise on failure."""
@@ -326,13 +384,16 @@ class TestDmResponseTask:
         def table_side_effect(name):
             mock = MagicMock()
             if name == "games":
-                mock.select.return_value.match.return_value.single.return_value.execute.return_value = mock_game_result
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = (
+                    mock_game_result
+                )
             elif name == "game_messages":
                 mock.insert.return_value.execute.return_value = mock_insert_result
             return mock
 
-        with patch("config.supabase_client") as mock_sb, \
-             patch("redis_broker.redis_client") as mock_redis:
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.redis_client"
+        ) as mock_redis:
             mock_sb.table.side_effect = table_side_effect
             mock_redis.incr.return_value = 4  # Simulate retries exhausted
 
@@ -354,24 +415,29 @@ class TestGeneratePauseMessage:
         mock_anthropic_response.content = [MagicMock(text="The world pauses...")]
 
         mock_insert_result = MagicMock()
+        game_messages_mock = MagicMock()
+        game_messages_mock.insert.return_value.execute.return_value = mock_insert_result
 
         def table_side_effect(name):
             mock = MagicMock()
             if name == "games":
-                mock.select.return_value.eq.return_value.single.return_value.execute.return_value = mock_game_result
+                mock.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+                    mock_game_result
+                )
             elif name == "game_messages":
-                mock.insert.return_value.execute.return_value = mock_insert_result
+                return game_messages_mock
             return mock
 
-        with patch("config.supabase_client") as mock_sb, \
-             patch("config.anthropic_client") as mock_anthropic:
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.anthropic_client"
+        ) as mock_anthropic:
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.return_value = mock_anthropic_response
 
             generate_pause_message.fn("game-1")
 
             # Verify message was inserted
-            assert mock_insert_result.execute.called
+            assert game_messages_mock.insert.called
 
     def test_uses_correct_prompt(self):
         """Should use prompt mentioning pause in system message."""
@@ -386,13 +452,16 @@ class TestGeneratePauseMessage:
         def table_side_effect(name):
             mock = MagicMock()
             if name == "games":
-                mock.select.return_value.eq.return_value.single.return_value.execute.return_value = mock_game_result
+                mock.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+                    mock_game_result
+                )
             elif name == "game_messages":
                 mock.insert.return_value.execute.return_value = MagicMock()
             return mock
 
-        with patch("config.supabase_client") as mock_sb, \
-             patch("config.anthropic_client") as mock_anthropic:
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.anthropic_client"
+        ) as mock_anthropic:
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.return_value = mock_anthropic_response
 
@@ -419,24 +488,29 @@ class TestGenerateEndMessage:
         mock_anthropic_response.content = [MagicMock(text="The adventure ends...")]
 
         mock_insert_result = MagicMock()
+        game_messages_mock = MagicMock()
+        game_messages_mock.insert.return_value.execute.return_value = mock_insert_result
 
         def table_side_effect(name):
             mock = MagicMock()
             if name == "games":
-                mock.select.return_value.eq.return_value.single.return_value.execute.return_value = mock_game_result
+                mock.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+                    mock_game_result
+                )
             elif name == "game_messages":
-                mock.insert.return_value.execute.return_value = mock_insert_result
+                return game_messages_mock
             return mock
 
-        with patch("config.supabase_client") as mock_sb, \
-             patch("config.anthropic_client") as mock_anthropic:
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.anthropic_client"
+        ) as mock_anthropic:
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.return_value = mock_anthropic_response
 
             generate_end_message.fn("game-1")
 
             # Verify message was inserted
-            assert mock_insert_result.execute.called
+            assert game_messages_mock.insert.called
 
     def test_uses_correct_prompt(self):
         """Should use prompt mentioning ending in system message."""
@@ -451,13 +525,16 @@ class TestGenerateEndMessage:
         def table_side_effect(name):
             mock = MagicMock()
             if name == "games":
-                mock.select.return_value.eq.return_value.single.return_value.execute.return_value = mock_game_result
+                mock.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+                    mock_game_result
+                )
             elif name == "game_messages":
                 mock.insert.return_value.execute.return_value = MagicMock()
             return mock
 
-        with patch("config.supabase_client") as mock_sb, \
-             patch("config.anthropic_client") as mock_anthropic:
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.anthropic_client"
+        ) as mock_anthropic:
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.return_value = mock_anthropic_response
 
@@ -515,19 +592,30 @@ class TestGenerateResumeNarration:
         def table_side_effect(name):
             mock = MagicMock()
             if name == "games":
-                mock.select.return_value.eq.return_value.single.return_value.execute.return_value = mock_game_result
-                mock.update.return_value.eq.return_value.execute.return_value = mock_update_result
+                mock.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+                    mock_game_result
+                )
+                mock.update.return_value.eq.return_value.execute.return_value = (
+                    mock_update_result
+                )
             elif name == "players":
-                mock.select.return_value.eq.return_value.execute.return_value = mock_players_result
+                mock.select.return_value.eq.return_value.execute.return_value = (
+                    mock_players_result
+                )
             elif name == "game_messages":
-                mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = mock_messages_result
+                mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = (
+                    mock_messages_result
+                )
                 mock.insert.return_value.execute.return_value = MagicMock()
             return mock
 
-        with patch("config.supabase_client") as mock_sb, \
-             patch("config.anthropic_client") as mock_anthropic, \
-             patch("services.dm_service.search_rag", return_value=rag_results), \
-             patch("services.embedding_service.embed_text", return_value=[0.1] * 1536):
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.anthropic_client"
+        ) as mock_anthropic, patch(
+            "tasks.dm_tasks.search_rag", return_value=rag_results
+        ), patch(
+            "tasks.dm_tasks.embed_text", return_value=[0.1] * 1536
+        ):
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.return_value = mock_anthropic_response
 
@@ -570,19 +658,28 @@ class TestGenerateResumeNarration:
         def table_side_effect(name):
             mock = MagicMock()
             if name == "games":
-                mock.select.return_value.eq.return_value.single.return_value.execute.return_value = mock_game_result
-                mock.update.return_value.eq.return_value.execute.return_value = MagicMock()
+                mock.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+                    mock_game_result
+                )
+                mock.update.return_value.eq.return_value.execute.return_value = (
+                    MagicMock()
+                )
             elif name == "players":
-                mock.select.return_value.eq.return_value.execute.return_value = mock_players_result
+                mock.select.return_value.eq.return_value.execute.return_value = (
+                    mock_players_result
+                )
             elif name == "game_messages":
-                mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = mock_messages_result
+                mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = (
+                    mock_messages_result
+                )
                 mock.insert.return_value.execute.return_value = MagicMock()
             return mock
 
-        with patch("config.supabase_client") as mock_sb, \
-             patch("config.anthropic_client") as mock_anthropic, \
-             patch("services.dm_service.search_rag") as mock_rag, \
-             patch("services.embedding_service.embed_text") as mock_embed:
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.anthropic_client"
+        ) as mock_anthropic, patch("tasks.dm_tasks.search_rag") as mock_rag, patch(
+            "tasks.dm_tasks.embed_text"
+        ) as mock_embed:
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.return_value = mock_anthropic_response
 
@@ -630,19 +727,30 @@ class TestGenerateResumeNarration:
         def table_side_effect(name):
             mock = MagicMock()
             if name == "games":
-                mock.select.return_value.eq.return_value.single.return_value.execute.return_value = mock_game_result
-                mock.update.return_value.eq.return_value.execute.return_value = MagicMock()
+                mock.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+                    mock_game_result
+                )
+                mock.update.return_value.eq.return_value.execute.return_value = (
+                    MagicMock()
+                )
             elif name == "players":
-                mock.select.return_value.eq.return_value.execute.return_value = mock_players_result
+                mock.select.return_value.eq.return_value.execute.return_value = (
+                    mock_players_result
+                )
             elif name == "game_messages":
-                mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = mock_messages_result
+                mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = (
+                    mock_messages_result
+                )
                 mock.insert.return_value.execute.return_value = MagicMock()
             return mock
 
-        with patch("config.supabase_client") as mock_sb, \
-             patch("config.anthropic_client") as mock_anthropic, \
-             patch("services.dm_service.search_rag", side_effect=Exception("RAG failed")), \
-             patch("services.embedding_service.embed_text", return_value=[0.1] * 1536):
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.anthropic_client"
+        ) as mock_anthropic, patch(
+            "tasks.dm_tasks.search_rag", side_effect=Exception("RAG failed")
+        ), patch(
+            "tasks.dm_tasks.embed_text", return_value=[0.1] * 1536
+        ):
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.return_value = mock_anthropic_response
 
@@ -662,12 +770,14 @@ class TestGenerateResumeNarration:
         def table_side_effect(name):
             mock = MagicMock()
             if name == "games":
-                mock.select.return_value.eq.return_value.single.return_value.execute.return_value = mock_game_result
+                mock.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+                    mock_game_result
+                )
             elif name == "game_messages":
                 mock.insert.return_value.execute.return_value = mock_insert_result
             return mock
 
-        with patch("config.supabase_client") as mock_sb:
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb:
             mock_sb.table.side_effect = table_side_effect
 
             with pytest.raises(Exception):

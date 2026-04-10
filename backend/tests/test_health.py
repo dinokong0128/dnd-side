@@ -1,4 +1,5 @@
 """Tests for the health check endpoint."""
+
 import pytest
 from unittest.mock import patch, AsyncMock
 
@@ -6,14 +7,24 @@ from unittest.mock import patch, AsyncMock
 @pytest.fixture
 def health_client():
     """TestClient that doesn't need auth for health check."""
-    with patch("config.supabase_client"), \
-         patch("config.openai_client"), \
-         patch("config.anthropic_client"), \
-         patch("main._check_supabase", new_callable=AsyncMock, return_value={"ok": True, "latency_ms": 42}), \
-         patch("main._check_redis", new_callable=AsyncMock, return_value={"ok": True, "latency_ms": 3}), \
-         patch("main._check_env_vars", new_callable=AsyncMock, return_value={"ok": True, "missing": []}):
+    with patch("config.supabase_client"), patch("config.openai_client"), patch(
+        "config.anthropic_client"
+    ), patch(
+        "main._check_supabase",
+        new_callable=AsyncMock,
+        return_value={"ok": True, "latency_ms": 42},
+    ), patch(
+        "main._check_redis",
+        new_callable=AsyncMock,
+        return_value={"ok": True, "latency_ms": 3},
+    ), patch(
+        "main._check_env_vars",
+        new_callable=AsyncMock,
+        return_value={"ok": True, "missing": []},
+    ):
         from main import app
         from fastapi.testclient import TestClient
+
         yield TestClient(app)
 
 
@@ -69,7 +80,11 @@ class TestHealthEndpoint:
 
     def test_health_returns_503_when_supabase_down(self, health_client):
         """When Supabase is unreachable, /health should return 503."""
-        with patch("main._check_supabase", new_callable=AsyncMock, return_value={"ok": False, "error": "connection refused"}):
+        with patch(
+            "main._check_supabase",
+            new_callable=AsyncMock,
+            return_value={"ok": False, "error": "connection refused"},
+        ):
             response = health_client.get("/health")
         assert response.status_code == 503
         assert response.json()["status"] == "degraded"

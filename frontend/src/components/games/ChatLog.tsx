@@ -13,17 +13,21 @@ interface ChatLogProps {
 export function ChatLog({ messages, playerMap, isLoading }: ChatLogProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const bottomSentinelRef = useRef<HTMLDivElement>(null)
-  const [isAtBottom, setIsAtBottom] = useState(true)
+  // isAtBottom doesn't need to be state since it doesn't drive rendering directly.
+  // Using a ref avoids calling setState inside an effect when new messages arrive.
+  const isAtBottomRef = useRef(true)
   const [hasNewMessages, setHasNewMessages] = useState(false)
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (isAtBottom && bottomSentinelRef.current) {
+    if (isAtBottomRef.current && bottomSentinelRef.current) {
       bottomSentinelRef.current.scrollIntoView({ behavior: 'smooth' })
-    } else if (!isAtBottom) {
+    } else if (!isAtBottomRef.current) {
+      // Intentional: notify user of new content when scrolled away.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setHasNewMessages(true)
     }
-  }, [messages, isAtBottom])
+  }, [messages])
 
   // Handle scroll to detect if at bottom
   const handleScroll = () => {
@@ -32,7 +36,7 @@ export function ChatLog({ messages, playerMap, isLoading }: ChatLogProps) {
     const { scrollHeight, scrollTop, clientHeight } = scrollContainerRef.current
     const atBottom = scrollHeight - scrollTop - clientHeight < 100
 
-    setIsAtBottom(atBottom)
+    isAtBottomRef.current = atBottom
     if (atBottom) {
       setHasNewMessages(false)
     }
@@ -42,7 +46,7 @@ export function ChatLog({ messages, playerMap, isLoading }: ChatLogProps) {
   const scrollToBottom = () => {
     if (bottomSentinelRef.current) {
       bottomSentinelRef.current.scrollIntoView({ behavior: 'smooth' })
-      setIsAtBottom(true)
+      isAtBottomRef.current = true
       setHasNewMessages(false)
     }
   }

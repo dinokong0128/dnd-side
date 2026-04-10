@@ -1,4 +1,5 @@
 """OpenAI embedding helper."""
+
 from config import openai_client
 
 
