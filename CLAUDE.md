@@ -1,6 +1,6 @@
 # D&D Multiplayer App — Project Context
 
-**Last Updated:** April 6, 2026
+**Last Updated:** April 10, 2026
 **Status:** MVP in active development (~50% complete)
 **Repository:** `dinokong0128/dnd-side` (GitHub, `develop` branch)
 **Detailed Architecture:** See `docs/ARCHITECTURE.md`
@@ -17,7 +17,7 @@ A multiplayer D&D app where Claude acts as the Dungeon Master. Players send acti
 
 | Component | Technology | Host |
 |---|---|---|
-| Frontend | Next.js 16 (App Router, TypeScript strict) | Vercel |
+| Frontend | Next.js 16.2.3 (App Router, TypeScript strict) | Vercel |
 | Backend | FastAPI + Python | Render |
 | Database | Supabase (Postgres + pgvector + Realtime) | Managed |
 | Job Queue | Dramatiq + Redis | Render (Key Value) |
@@ -46,12 +46,12 @@ A multiplayer D&D app where Claude acts as the Dungeon Master. Players send acti
 
 ```
 dnd-side/
-├── frontend/          # Next.js 16 (App Router, TypeScript)
+├── frontend/          # Next.js 16.2.3 (App Router, TypeScript)
 │   ├── src/
 │   │   ├── app/       # Pages, API routes (proxy layer only)
 │   │   ├── components/
 │   │   ├── lib/       # Supabase clients, types, validations
-│   │   └── proxy.ts   # Auth middleware (Next.js 16 convention)
+│   │   └── proxy.ts   # Auth middleware (Next.js 16.2.3 convention)
 │   └── e2e/           # Playwright end-to-end tests
 ├── backend/           # FastAPI (Render)
 │   ├── api/routes/    # games, players, actions, invites
@@ -96,7 +96,7 @@ Seven tables in Supabase (`ytxncykyfbhoyvxkocrs`):
 | Job Queue | Dramatiq + Redis | Lightweight, Render-compatible |
 | Auth | Supabase JWT | Built-in, integrates with RLS |
 | Realtime | Supabase Changes | Native Postgres, no extra infra |
-| Auth middleware | `proxy.ts` (not `middleware.ts`) | Next.js 16 convention |
+| Auth middleware | `proxy.ts` (not `middleware.ts`) | Next.js 16.2.3 convention |
 
 **→ Full rationale in `docs/ARCHITECTURE.md`**
 
@@ -146,7 +146,7 @@ Seven tables in Supabase (`ytxncykyfbhoyvxkocrs`):
 5. Parse Claude response for `<event type="...">...</event>` markers
 6. Embed extracted events + insert to `game_events`
 
-**`proxy.ts`:** Next.js 16 renamed `middleware.ts` → `proxy.ts` and `middleware()` → `proxy()`. Handles JWT session refresh + route protection for `/dashboard` and `/games/*`.
+**`proxy.ts`:** Next.js 16.2.3 renamed `middleware.ts` → `proxy.ts` and `middleware()` → `proxy()`. Handles JWT session refresh + route protection for `/dashboard` and `/games/*`.
 
 **Service role key:** Required for all `game_events` writes and DM `game_messages` inserts. Never expose in `NEXT_PUBLIC_` env vars.
 

@@ -1,6 +1,6 @@
 # D&D Multiplayer App — Architecture & Tech Stack
 
-**Last Updated:** April 6, 2026
+**Last Updated:** April 10, 2026
 **Status:** MVP in active development
 **Repository:** `dinokong0128/dnd-side` (`develop` branch)
 
@@ -10,7 +10,7 @@
 
 | Layer | Technology | Hosting | Notes |
 |---|---|---|---|
-| **Frontend** | Next.js 16 (App Router, TypeScript strict) | Vercel | Proxy layer only — no direct DB mutations |
+| **Frontend** | Next.js 16.2.3 (App Router, TypeScript strict) | Vercel | Proxy layer only — no direct DB mutations |
 | **Backend** | FastAPI + Python | Render (free tier, always-on) | All business logic + AI orchestration |
 | **Database** | Supabase (Postgres + pgvector + Realtime) | Managed | `ytxncykyfbhoyvxkocrs` |
 | **Job Queue** | Dramatiq + Redis | Render (Key Value) | Named service: `dnd-redis` |
@@ -78,7 +78,7 @@ dnd-side/
 ├── .github/workflows/
 │   └── dependency-check.yml
 │
-├── frontend/                      # Next.js 16 (Vercel)
+├── frontend/                      # Next.js 16.2.3 (Vercel)
 │   ├── src/
 │   │   ├── app/
 │   │   │   ├── layout.tsx
@@ -108,7 +108,7 @@ dnd-side/
 │   │       ├── types/         # player.ts
 │   │       ├── validations/   # character.ts (Zod)
 │   │       └── constants/     # game.ts
-│   ├── proxy.ts               # Auth middleware (Next.js 16 — replaces middleware.ts)
+│   ├── proxy.ts               # Auth middleware (Next.js 16.2.3 — replaces middleware.ts)
 │   ├── e2e/                   # Playwright tests
 │   ├── next.config.ts
 │   ├── tsconfig.json
@@ -169,7 +169,7 @@ dnd-side/
 
 ### Frontend (Next.js):
 ```typescript
-// proxy.ts — Next.js 16 convention (replaces middleware.ts)
+// proxy.ts — Next.js 16.2.3 convention (replaces middleware.ts)
 // Exported function is proxy(), not middleware()
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   // Uses getUser() (validates with auth server) not getSession() (cookies only)
