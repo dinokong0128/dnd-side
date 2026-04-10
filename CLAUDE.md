@@ -1,6 +1,6 @@
 # D&D Multiplayer App — Project Context
 
-**Last Updated:** April 10, 2026
+**Last Updated:** April 6, 2026
 **Status:** MVP in active development (~50% complete)
 **Repository:** `dinokong0128/dnd-side` (GitHub, `develop` branch)
 **Detailed Architecture:** See `docs/ARCHITECTURE.md`
@@ -17,7 +17,7 @@ A multiplayer D&D app where Claude acts as the Dungeon Master. Players send acti
 
 | Component | Technology | Host |
 |---|---|---|
-| Frontend | Next.js 16.2.3 (App Router, TypeScript strict) | Vercel |
+| Frontend | Next.js 16 (App Router, TypeScript strict) | Vercel |
 | Backend | FastAPI + Python | Render |
 | Database | Supabase (Postgres + pgvector + Realtime) | Managed |
 | Job Queue | Dramatiq + Redis | Render (Key Value) |

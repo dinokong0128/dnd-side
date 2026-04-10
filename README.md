@@ -18,7 +18,7 @@ A multiplayer D&D web app where **Claude acts as the Dungeon Master**. Players s
 
 | Layer | Technology |
 |---|---|
-| Frontend | Next.js 16.2.3, TypeScript strict, Tailwind 4, Zod v4 |
+| Frontend | Next.js 16, TypeScript strict, Tailwind 4, Zod v4 |
 | Backend | FastAPI (Python), Dramatiq + Redis (job queue) |
 | Database | Supabase — Postgres + pgvector + Realtime |
 | Auth | Supabase Auth (JWT) |
@@ -84,8 +84,8 @@ dnd-side/
 
 ### Prerequisites
 
-- Node.js 22+
-- Python 3.13+
+- Node.js 20+
+- Python 3.11+
 - A running Redis instance (or use Docker: `docker run -p 6379:6379 redis`)
 - Supabase project (or local Supabase CLI)
 

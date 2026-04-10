@@ -1,6 +1,6 @@
 # D&D Multiplayer App — Architecture & Tech Stack
 
-**Last Updated:** April 10, 2026
+**Last Updated:** April 6, 2026
 **Status:** MVP in active development
 **Repository:** `dinokong0128/dnd-side` (`develop` branch)
 
@@ -10,7 +10,7 @@
 
 | Layer | Technology | Hosting | Notes |
 |---|---|---|---|
-| **Frontend** | Next.js 16.2.3 (App Router, TypeScript strict) | Vercel | Proxy layer only — no direct DB mutations |
+| **Frontend** | Next.js 16 (App Router, TypeScript strict) | Vercel | Proxy layer only — no direct DB mutations |
 | **Backend** | FastAPI + Python | Render (free tier, always-on) | All business logic + AI orchestration |
 | **Database** | Supabase (Postgres + pgvector + Realtime) | Managed | `ytxncykyfbhoyvxkocrs` |
 | **Job Queue** | Dramatiq + Redis | Render (Key Value) | Named service: `dnd-redis` |
