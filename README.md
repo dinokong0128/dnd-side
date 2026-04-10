@@ -61,7 +61,7 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design, and [`do
 
 ```
 dnd-side/
-├── frontend/               # Next.js 16.2.3 app (Vercel)
+├── frontend/               # Next.js 16 app (Vercel)
 │   ├── src/
 │   │   ├── app/            # Pages + API proxy routes
 │   │   ├── components/     # Auth + game UI components
@@ -161,7 +161,7 @@ cd frontend && npx playwright test
 
 **Embeddings are server-side.** Both action embeddings (for RAG search) and event embeddings (for storage) happen in the FastAPI backend, keeping OpenAI API keys off the client.
 
-**`proxy.ts`, not `middleware.ts`.** This project uses Next.js 16.2.3, which renamed the file convention from `middleware.ts` → `proxy.ts` and the export from `middleware()` → `proxy()`.
+**`proxy.ts`, not `middleware.ts`.** This project uses Next.js 16, which renamed the file convention from `middleware.ts` → `proxy.ts` and the export from `middleware()` → `proxy()`.
 
 **`game_events` inserts require service role.** There is no RLS insert policy on `game_events` — writes go through FastAPI using `SUPABASE_SERVICE_ROLE_KEY`. This prevents clients from injecting false narrative memory.
 
