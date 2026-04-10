@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { render, screen, waitFor } from '@testing-library/react'
 import { GameSessionView } from '../GameSessionView'
 import * as supabaseModule from '@/lib/supabase/client'
@@ -32,7 +33,7 @@ jest.mock('../TypingIndicator', () => ({
 }))
 
 describe('GameSessionView', () => {
-  let testContext: { playersData: any[] } = { playersData: [] }
+  const testContext: { playersData: any[] } = { playersData: [] }
   let mockSupabaseClient: any
 
   beforeEach(() => {

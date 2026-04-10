@@ -1,7 +1,9 @@
 """Shared pytest fixtures for backend tests."""
+
 import os
 import pytest
 from unittest.mock import MagicMock, patch
+from fastapi.testclient import TestClient
 
 # Set dummy environment variables before any config import
 os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
@@ -55,12 +57,11 @@ def client(mock_supabase, mock_auth_user):
 def unauthed_client(mock_supabase):
     """FastAPI TestClient without auth override (will require real token)."""
     from main import app
+
     app.dependency_overrides.clear()
     yield TestClient(app)
     app.dependency_overrides.clear()
 
-
-from fastapi.testclient import TestClient
 
 SAMPLE_GAME = {
     "id": "game-uuid-1",
@@ -68,6 +69,7 @@ SAMPLE_GAME = {
     "dm_persona": "A dark and mysterious DM.",
     "status": "active",
     "created_at": "2026-03-22T10:00:00Z",
+    "updated_at": "2026-03-22T10:00:00Z",
     "created_by": "test-user-uuid-1234",
 }
 

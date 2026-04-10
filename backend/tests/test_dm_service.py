@@ -1,11 +1,16 @@
 """Tests for the DM orchestration service."""
+
 import pytest
 from unittest.mock import MagicMock, patch
 
 # Mock config.supabase_client before importing dm_service to avoid
 # real Supabase client initialization during test collection.
 with patch("config.supabase_client", MagicMock()):
-    from services.dm_service import validate_action, search_rag, extract_events_from_response
+    from services.dm_service import (
+        validate_action,
+        search_rag,
+        extract_events_from_response,
+    )
 
 
 class TestValidateAction:
@@ -102,7 +107,7 @@ class TestExtractEventsFromResponse:
         """Should parse multiple events."""
         text = (
             '<event type="combat">Thorin strikes the goblin</event> '
-            'The treasure glows. '
+            "The treasure glows. "
             '<event type="discovery">Party finds the Amulet of Power</event>'
         )
         events = extract_events_from_response(text)
@@ -159,9 +164,16 @@ class TestSearchRag:
     @patch("services.dm_service.supabase_client")
     def test_search_rag_calls_rpc(self, mock_sb):
         """Should call the match_game_events RPC with correct params."""
-        mock_sb.rpc.return_value.execute.return_value = MagicMock(data=[
-            {"id": "evt-1", "event_type": "combat", "summary": "Fight", "similarity": 0.9},
-        ])
+        mock_sb.rpc.return_value.execute.return_value = MagicMock(
+            data=[
+                {
+                    "id": "evt-1",
+                    "event_type": "combat",
+                    "summary": "Fight",
+                    "similarity": 0.9,
+                },
+            ]
+        )
 
         embedding = [0.1] * 1536
         results = search_rag("game-uuid-1", embedding, top_k=3)
@@ -194,11 +206,28 @@ class TestSearchRag:
     @patch("services.dm_service.supabase_client")
     def test_search_rag_returns_multiple_results(self, mock_sb):
         """Should return multiple matching events."""
-        mock_sb.rpc.return_value.execute.return_value = MagicMock(data=[
-            {"id": "evt-1", "event_type": "combat", "summary": "Fight 1", "similarity": 0.95},
-            {"id": "evt-2", "event_type": "discovery", "summary": "Found item", "similarity": 0.85},
-            {"id": "evt-3", "event_type": "dialogue", "summary": "NPC talk", "similarity": 0.75},
-        ])
+        mock_sb.rpc.return_value.execute.return_value = MagicMock(
+            data=[
+                {
+                    "id": "evt-1",
+                    "event_type": "combat",
+                    "summary": "Fight 1",
+                    "similarity": 0.95,
+                },
+                {
+                    "id": "evt-2",
+                    "event_type": "discovery",
+                    "summary": "Found item",
+                    "similarity": 0.85,
+                },
+                {
+                    "id": "evt-3",
+                    "event_type": "dialogue",
+                    "summary": "NPC talk",
+                    "similarity": 0.75,
+                },
+            ]
+        )
 
         results = search_rag("game-uuid-1", [0.1] * 1536, top_k=3)
         assert len(results) == 3

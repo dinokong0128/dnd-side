@@ -1,10 +1,12 @@
 """Player domain model."""
+
 from pydantic import BaseModel
-from typing import Optional, Any
+from typing import Any
 
 
 class Player(BaseModel):
     """Represents a player in a D&D game."""
+
     id: str
     game_id: str
     profile_id: str

@@ -2,6 +2,7 @@
 """
 Dramatiq broker setup with Redis
 """
+
 import dramatiq
 from dramatiq.brokers.redis import RedisBroker
 from redis import Redis

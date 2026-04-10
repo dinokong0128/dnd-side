@@ -3,6 +3,7 @@ DM orchestration service — RAG search and action validation.
 Embedding and Claude calls happen in the Dramatiq worker (dm_tasks.py).
 This module handles synchronous pre-processing before enqueueing.
 """
+
 import re
 from typing import Any
 from config import supabase_client
@@ -25,7 +26,9 @@ def validate_action(action: Any, player: dict, game: dict) -> None:
         raise ValueError("Dead players cannot take actions")
 
 
-def search_rag(game_id: str, embedding: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+def search_rag(
+    game_id: str, embedding: list[float], top_k: int = 5
+) -> list[dict[str, Any]]:
     """
     Cosine similarity search on game_events using pgvector <=> operator.
     Returns the top_k most relevant past events for RAG context injection.

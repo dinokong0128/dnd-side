@@ -1,7 +1,7 @@
 """Tests for player inventory population and read endpoint."""
+
 import pytest
 from unittest.mock import MagicMock, patch
-
 
 SAMPLE_GAME_LOBBY = {
     "id": "game-uuid-1",
@@ -18,6 +18,8 @@ SAMPLE_UPSERT_RESULT = {
     "profile_id": "test-user-uuid-1234",
     "character_name": "Thorin",
     "character_class": "Fighter",
+    "race": "Human",
+    "level": 1,
     "hp_current": 12,
     "hp_max": 12,
     "stats": {"str": 16, "dex": 12, "con": 14, "int": 10, "wis": 10, "cha": 8},
@@ -26,11 +28,46 @@ SAMPLE_UPSERT_RESULT = {
 }
 
 SAMPLE_INVENTORY = [
-    {"id": "inv-1", "player_id": "player-uuid-1", "item_name": "Chain Mail", "quantity": 1, "properties": None, "created_at": "2026-03-22T10:00:00Z"},
-    {"id": "inv-2", "player_id": "player-uuid-1", "item_name": "Explorer's Pack", "quantity": 1, "properties": None, "created_at": "2026-03-22T10:00:00Z"},
-    {"id": "inv-3", "player_id": "player-uuid-1", "item_name": "Handaxe", "quantity": 5, "properties": None, "created_at": "2026-03-22T10:00:00Z"},
-    {"id": "inv-4", "player_id": "player-uuid-1", "item_name": "Longsword", "quantity": 1, "properties": None, "created_at": "2026-03-22T10:00:00Z"},
-    {"id": "inv-5", "player_id": "player-uuid-1", "item_name": "Shield", "quantity": 1, "properties": None, "created_at": "2026-03-22T10:00:00Z"},
+    {
+        "id": "inv-1",
+        "player_id": "player-uuid-1",
+        "item_name": "Chain Mail",
+        "quantity": 1,
+        "properties": None,
+        "created_at": "2026-03-22T10:00:00Z",
+    },
+    {
+        "id": "inv-2",
+        "player_id": "player-uuid-1",
+        "item_name": "Explorer's Pack",
+        "quantity": 1,
+        "properties": None,
+        "created_at": "2026-03-22T10:00:00Z",
+    },
+    {
+        "id": "inv-3",
+        "player_id": "player-uuid-1",
+        "item_name": "Handaxe",
+        "quantity": 5,
+        "properties": None,
+        "created_at": "2026-03-22T10:00:00Z",
+    },
+    {
+        "id": "inv-4",
+        "player_id": "player-uuid-1",
+        "item_name": "Longsword",
+        "quantity": 1,
+        "properties": None,
+        "created_at": "2026-03-22T10:00:00Z",
+    },
+    {
+        "id": "inv-5",
+        "player_id": "player-uuid-1",
+        "item_name": "Shield",
+        "quantity": 1,
+        "properties": None,
+        "created_at": "2026-03-22T10:00:00Z",
+    },
 ]
 
 PLAYER_POST_BODY = {
@@ -42,8 +79,14 @@ PLAYER_POST_BODY = {
 
 def _make_table_router(games_mock, players_mock, inventory_mock):
     """Return a side_effect function that routes table() calls by name."""
+
     def table_router(name):
-        return {"games": games_mock, "players": players_mock, "player_inventory": inventory_mock}[name]
+        return {
+            "games": games_mock,
+            "players": players_mock,
+            "player_inventory": inventory_mock,
+        }[name]
+
     return table_router
 
 
@@ -56,25 +99,33 @@ class TestInventoryPopulation:
         games_mock = MagicMock()
         game_result = MagicMock()
         game_result.data = SAMPLE_GAME_LOBBY
-        games_mock.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = game_result
+        games_mock.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+            game_result
+        )
 
         # Players table mock
         players_mock = MagicMock()
         upsert_result = MagicMock()
         upsert_result.data = SAMPLE_UPSERT_RESULT
-        players_mock.upsert.return_value.select.return_value.single.return_value.execute.return_value = upsert_result
+        players_mock.upsert.return_value.select.return_value.single.return_value.execute.return_value = (
+            upsert_result
+        )
 
         # Inventory table mock
         inventory_mock = MagicMock()
         delete_result = MagicMock()
         delete_result.data = []
-        inventory_mock.delete.return_value.eq.return_value.execute.return_value = delete_result
+        inventory_mock.delete.return_value.eq.return_value.execute.return_value = (
+            delete_result
+        )
         insert_result = MagicMock()
         insert_result.data = SAMPLE_INVENTORY
         inventory_mock.insert.return_value.execute.return_value = insert_result
 
         with patch("api.routes.players.supabase_client") as mock_sb:
-            mock_sb.table.side_effect = _make_table_router(games_mock, players_mock, inventory_mock)
+            mock_sb.table.side_effect = _make_table_router(
+                games_mock, players_mock, inventory_mock
+            )
 
             response = client.post("/games/game-uuid-1/players", json=PLAYER_POST_BODY)
 
@@ -98,20 +149,28 @@ class TestInventoryPopulation:
         games_mock = MagicMock()
         game_result = MagicMock()
         game_result.data = SAMPLE_GAME_LOBBY
-        games_mock.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = game_result
+        games_mock.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+            game_result
+        )
 
         # Players table mock
         players_mock = MagicMock()
         upsert_result = MagicMock()
         upsert_result.data = SAMPLE_UPSERT_RESULT
-        players_mock.upsert.return_value.select.return_value.single.return_value.execute.return_value = upsert_result
+        players_mock.upsert.return_value.select.return_value.single.return_value.execute.return_value = (
+            upsert_result
+        )
 
         # Inventory table mock — delete raises an exception
         inventory_mock = MagicMock()
-        inventory_mock.delete.return_value.eq.return_value.execute.side_effect = Exception("DB error")
+        inventory_mock.delete.return_value.eq.return_value.execute.side_effect = (
+            Exception("DB error")
+        )
 
         with patch("api.routes.players.supabase_client") as mock_sb:
-            mock_sb.table.side_effect = _make_table_router(games_mock, players_mock, inventory_mock)
+            mock_sb.table.side_effect = _make_table_router(
+                games_mock, players_mock, inventory_mock
+            )
 
             response = client.post("/games/game-uuid-1/players", json=PLAYER_POST_BODY)
 
@@ -129,16 +188,23 @@ class TestGetPlayerInventory:
         players_mock = MagicMock()
         player_result = MagicMock()
         player_result.data = {"id": "player-uuid-1"}
-        players_mock.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = player_result
+        players_mock.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+            player_result
+        )
 
         # Inventory table mock
         inventory_mock = MagicMock()
         inv_result = MagicMock()
         inv_result.data = SAMPLE_INVENTORY
-        inventory_mock.select.return_value.eq.return_value.order.return_value.execute.return_value = inv_result
+        inventory_mock.select.return_value.eq.return_value.order.return_value.execute.return_value = (
+            inv_result
+        )
 
         with patch("api.routes.players.supabase_client") as mock_sb:
-            mock_sb.table.side_effect = lambda name: {"players": players_mock, "player_inventory": inventory_mock}[name]
+            mock_sb.table.side_effect = lambda name: {
+                "players": players_mock,
+                "player_inventory": inventory_mock,
+            }[name]
 
             response = client.get("/games/game-uuid-1/players/inventory")
 
@@ -152,7 +218,9 @@ class TestGetPlayerInventory:
         players_mock = MagicMock()
         player_result = MagicMock()
         player_result.data = None
-        players_mock.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = player_result
+        players_mock.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+            player_result
+        )
 
         with patch("api.routes.players.supabase_client") as mock_sb:
             mock_sb.table.side_effect = lambda name: {"players": players_mock}[name]

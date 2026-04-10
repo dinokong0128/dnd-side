@@ -3,10 +3,11 @@
 Actions endpoint: POST /games/{gameId}/actions
 Validates action, embeds, queues Dramatiq task
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+
+from fastapi import APIRouter, Depends, HTTPException
 import uuid
 
-from config import supabase_client, openai_client, settings
+from config import supabase_client, openai_client
 from api.dependencies import get_current_user
 from models.action import ActionInput, ActionResponse
 from services.dm_service import validate_action, search_rag
@@ -14,6 +15,7 @@ from tasks.dm_tasks import dm_response_task
 from constants import MESSAGE_ROLE_PLAYER
 
 router = APIRouter()
+
 
 @router.post("/{gameId}/actions", response_model=ActionResponse, status_code=202)
 async def create_action(
@@ -23,7 +25,7 @@ async def create_action(
 ):
     """
     Player sends action → Backend queues DM response task
-    
+
     Flow:
     1. Validate action (Pydantic)
     2. Check player is in game & valid player_id
@@ -32,26 +34,31 @@ async def create_action(
     5. RAG search on game_events
     6. Queue Dramatiq task: dm_response_task(game_id, action_id)
     7. Return 202 Accepted immediately
-    
+
     DM response happens async in worker → broadcast via Supabase Realtime
     """
-    
+
     try:
         # Step 1: Verify player is in this game
-        player = supabase_client.table("players").select("*").match(
-            {"game_id": gameId, "profile_id": current_user}
-        ).single().execute()
+        player = (
+            supabase_client.table("players")
+            .select("*")
+            .match({"game_id": gameId, "profile_id": current_user})
+            .single()
+            .execute()
+        )
 
         if not player.data:
-            raise HTTPException(
-                status_code=403,
-                detail="Player not in this game"
-            )
+            raise HTTPException(status_code=403, detail="Player not in this game")
 
         # Step 2: Validate action against game rules
-        game = supabase_client.table("games").select("*").match(
-            {"id": gameId}
-        ).single().execute()
+        game = (
+            supabase_client.table("games")
+            .select("*")
+            .match({"id": gameId})
+            .single()
+            .execute()
+        )
 
         validate_action(action, player.data, game.data)
 
@@ -93,11 +100,10 @@ async def create_action(
             game_id=gameId,
             status="queued",
         )
-    
+
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Error processing action: {str(e)}"
+            status_code=500, detail=f"Error processing action: {str(e)}"
         )

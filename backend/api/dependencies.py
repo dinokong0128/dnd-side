@@ -3,6 +3,7 @@ JWT auth dependency — verifies Supabase-issued JWTs.
 Uses the service-role client to call auth.get_user(token) which validates
 the JWT against Supabase's key without us needing the JWT secret.
 """
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from config import supabase_client

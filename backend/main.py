@@ -2,6 +2,9 @@
 """
 FastAPI app + Dramatiq worker setup for D&D Multiplayer backend
 """
+
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -10,18 +13,28 @@ import os
 import time
 import asyncio
 from dramatiq import get_broker
-from redis import Redis
 
 from config import settings, supabase_client
-from redis_broker import redis_broker, redis_client, dramatiq_app
+from redis_broker import redis_client
 from api.middleware import add_middleware
 from api.routes import games, players, actions, invites
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup and shutdown lifecycle handler."""
+    logging.info("Backend starting up...")
+    logging.info(f"Dramatiq broker: {get_broker()}")
+    yield
+    logging.info("Backend shutting down...")
+
 
 # Initialize FastAPI app
 app = FastAPI(
     title="D&D Multiplayer API",
     description="Backend for multiplayer D&D game with Claude DM",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # CORS for frontend
@@ -41,6 +54,7 @@ app.include_router(games.router, prefix="/games", tags=["games"])
 app.include_router(players.router, prefix="/games", tags=["players"])
 app.include_router(actions.router, prefix="/games", tags=["actions"])
 app.include_router(invites.router, prefix="/games", tags=["invites"])
+
 
 @app.get("/health")
 async def health_check():
@@ -117,17 +131,8 @@ async def _check_env_vars() -> dict:
 
     return {"ok": True, "missing": []}
 
-@app.on_event("startup")
-async def startup():
-    """Initialize connections on startup"""
-    logging.info("Backend starting up...")
-    logging.info(f"Dramatiq broker: {get_broker()}")
-
-@app.on_event("shutdown")
-async def shutdown():
-    """Cleanup on shutdown"""
-    logging.info("Backend shutting down...")
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

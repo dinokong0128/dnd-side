@@ -1,0 +1,9 @@
+[flake8]
+max-line-length = 120
+# E402: module-level imports after statements — intentional in config.py (clients depend on settings)
+extend-ignore = E402
+# Test files use long Supabase mock chains and may import pytest for fixtures
+# tasks/dm_tasks.py contains inherently long multi-line f-string system prompts
+per-file-ignores =
+    tests/*.py: E501,F401
+    tasks/dm_tasks.py: E501

@@ -1,4 +1,5 @@
 """Tests for the embedding service."""
+
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -15,6 +16,7 @@ class TestEmbedText:
         mock_openai.embeddings.create.return_value = mock_response
 
         from services.embedding_service import embed_text
+
         result = embed_text("Hello world")
 
         assert result == expected_embedding
@@ -28,6 +30,7 @@ class TestEmbedText:
         mock_openai.embeddings.create.return_value = mock_response
 
         from services.embedding_service import embed_text
+
         embed_text("test input")
 
         mock_openai.embeddings.create.assert_called_once_with(
@@ -44,6 +47,7 @@ class TestEmbedText:
         mock_openai.embeddings.create.return_value = mock_response
 
         from services.embedding_service import embed_text
+
         result = embed_text("test", dimensions=768)
 
         mock_openai.embeddings.create.assert_called_once_with(
@@ -61,6 +65,7 @@ class TestEmbedText:
         mock_openai.embeddings.create.return_value = mock_response
 
         from services.embedding_service import embed_text
+
         embed_text("test")
 
         call_kwargs = mock_openai.embeddings.create.call_args[1]

@@ -1,4 +1,5 @@
 """Invite endpoints: generate invite codes for games."""
+
 import secrets
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -10,6 +11,7 @@ router = APIRouter()
 
 class InviteOut(BaseModel):
     """Invite response model."""
+
     code: str
     invite_url: str
 
@@ -33,10 +35,14 @@ async def create_invite(
 
     game = game_result.data
     if game["created_by"] != current_user:
-        raise HTTPException(status_code=403, detail="Only the game creator can generate invites")
+        raise HTTPException(
+            status_code=403, detail="Only the game creator can generate invites"
+        )
 
     if game["status"] != "lobby":
-        raise HTTPException(status_code=403, detail="Can only invite players when game is in lobby")
+        raise HTTPException(
+            status_code=403, detail="Can only invite players when game is in lobby"
+        )
 
     # Generate a URL-safe random code
     code = secrets.token_urlsafe(16)
