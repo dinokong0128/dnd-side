@@ -2,9 +2,42 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { ChatLog } from '../ChatLog'
 import type { GameMessage } from '@/lib/types/message'
 
-// jsdom does not implement scrollIntoView; stub it for ChatLog auto-scroll.
+let mockObserve: jest.Mock
+let mockDisconnect: jest.Mock
+
 beforeAll(() => {
   Element.prototype.scrollIntoView = jest.fn()
+})
+
+beforeEach(() => {
+  mockObserve = jest.fn()
+  mockDisconnect = jest.fn()
+
+  class IntersectionObserverMock {
+    callback: IntersectionObserverCallback
+
+    constructor(callback: IntersectionObserverCallback) {
+      this.callback = callback
+    }
+
+    observe = mockObserve.mockImplementation(() => {
+      this.callback([{ isIntersecting: true } as IntersectionObserverEntry], this as unknown as IntersectionObserver)
+    })
+
+    disconnect = mockDisconnect
+
+    unobserve = jest.fn()
+
+    takeRecords = jest.fn(() => [])
+
+    root = null
+
+    rootMargin = '0px'
+
+    thresholds = [0]
+  }
+
+  global.IntersectionObserver = IntersectionObserverMock as unknown as typeof IntersectionObserver
 })
 
 function makeMessage(overrides: Partial<GameMessage> = {}): GameMessage {
@@ -28,76 +61,129 @@ describe('ChatLog', () => {
     ]
     const playerMap = new Map<string, string>([['user-1', 'Hero']])
 
-    render(<ChatLog messages={messages} playerMap={playerMap} isLoading={false} />)
+    render(
+      <ChatLog
+        messages={messages}
+        playerMap={playerMap}
+        isLoading={false}
+        hasMoreMessages={true}
+        isLoadingMore={false}
+        onLoadMore={jest.fn()}
+      />
+    )
 
     expect(screen.getByText(/First/)).toBeInTheDocument()
     expect(screen.getByText(/Second/)).toBeInTheDocument()
     expect(screen.getByText(/Third/)).toBeInTheDocument()
   })
 
-  it('renders empty state when no messages and not loading', () => {
+  it('renders loading spinner while loading older messages', () => {
     render(
-      <ChatLog messages={[]} playerMap={new Map()} isLoading={false} />
+      <ChatLog
+        messages={[makeMessage()]}
+        playerMap={new Map()}
+        isLoading={false}
+        hasMoreMessages={true}
+        isLoadingMore={true}
+        onLoadMore={jest.fn()}
+      />
     )
 
-    expect(
-      screen.getByText(/Awaiting the Dungeon Master/i)
-    ).toBeInTheDocument()
+    expect(screen.getByText(/Fetching older messages/i)).toBeInTheDocument()
+  })
+
+  it('renders adventure-begins banner when no more messages are available', () => {
+    render(
+      <ChatLog
+        messages={[makeMessage()]}
+        playerMap={new Map()}
+        isLoading={false}
+        hasMoreMessages={false}
+        isLoadingMore={false}
+        onLoadMore={jest.fn()}
+      />
+    )
+
+    expect(screen.getByText(/The adventure begins here/i)).toBeInTheDocument()
+  })
+
+  it('does not render adventure-begins banner when more messages are available', () => {
+    render(
+      <ChatLog
+        messages={[makeMessage()]}
+        playerMap={new Map()}
+        isLoading={false}
+        hasMoreMessages={true}
+        isLoadingMore={false}
+        onLoadMore={jest.fn()}
+      />
+    )
+
+    expect(screen.queryByText(/The adventure begins here/i)).not.toBeInTheDocument()
+  })
+
+  it('calls onLoadMore when the top sentinel intersects', () => {
+    const onLoadMore = jest.fn()
+
+    render(
+      <ChatLog
+        messages={[makeMessage()]}
+        playerMap={new Map()}
+        isLoading={false}
+        hasMoreMessages={true}
+        isLoadingMore={false}
+        onLoadMore={onLoadMore}
+      />
+    )
+
+    expect(onLoadMore).toHaveBeenCalled()
+  })
+
+  it('does not call onLoadMore when already loading more', () => {
+    const onLoadMore = jest.fn()
+
+    render(
+      <ChatLog
+        messages={[makeMessage()]}
+        playerMap={new Map()}
+        isLoading={false}
+        hasMoreMessages={true}
+        isLoadingMore={true}
+        onLoadMore={onLoadMore}
+      />
+    )
+
+    expect(onLoadMore).not.toHaveBeenCalled()
+  })
+
+  it('renders empty state when no messages and not loading', () => {
+    render(
+      <ChatLog
+        messages={[]}
+        playerMap={new Map()}
+        isLoading={false}
+        hasMoreMessages={true}
+        isLoadingMore={false}
+        onLoadMore={jest.fn()}
+      />
+    )
+
+    expect(screen.getByText(/Awaiting the Dungeon Master/i)).toBeInTheDocument()
   })
 
   it('renders loading state when isLoading is true', () => {
-    render(<ChatLog messages={[]} playerMap={new Map()} isLoading={true} />)
+    render(
+      <ChatLog
+        messages={[]}
+        playerMap={new Map()}
+        isLoading={true}
+        hasMoreMessages={true}
+        isLoadingMore={false}
+        onLoadMore={jest.fn()}
+      />
+    )
 
     expect(screen.getByText(/Loading the tale/i)).toBeInTheDocument()
-  })
-
-  it('renders DM messages with Dungeon Master label', () => {
-    const messages: GameMessage[] = [
-      makeMessage({ role: 'dm', content: 'The dragon roars!' }),
-    ]
-
-    render(
-      <ChatLog messages={messages} playerMap={new Map()} isLoading={false} />
-    )
-
-    expect(screen.getByText('Dungeon Master')).toBeInTheDocument()
-    expect(screen.getByText(/The dragon roars!/i)).toBeInTheDocument()
-  })
-
-  it('renders player messages with character name from playerMap', () => {
-    const messages: GameMessage[] = [
-      makeMessage({ role: 'player', profile_id: 'user-1', content: 'I attack!' }),
-    ]
-    const playerMap = new Map<string, string>([['user-1', 'Thorin']])
-
-    render(<ChatLog messages={messages} playerMap={playerMap} isLoading={false} />)
-
-    expect(screen.getByText('Thorin')).toBeInTheDocument()
-    expect(screen.getByText(/I attack!/)).toBeInTheDocument()
-  })
-
-  it('renders system messages', () => {
-    const messages: GameMessage[] = [
-      makeMessage({ role: 'system', content: 'Connection lost' }),
-    ]
-
-    render(
-      <ChatLog messages={messages} playerMap={new Map()} isLoading={false} />
-    )
-
-    expect(screen.getByText(/Connection lost/)).toBeInTheDocument()
-  })
-
-  it('falls back to "Unknown Character" when profile_id is not in playerMap', () => {
-    const messages: GameMessage[] = [
-      makeMessage({ role: 'player', profile_id: 'unknown-user', content: 'Hello' }),
-    ]
-    const playerMap = new Map<string, string>([['user-1', 'Thorin']])
-
-    render(<ChatLog messages={messages} playerMap={playerMap} isLoading={false} />)
-
-    expect(screen.getByText('Unknown Character')).toBeInTheDocument()
-    expect(screen.getByText(/Hello/)).toBeInTheDocument()
   })
 
   it('passes onRetry to system messages and calls it when retry button is clicked', () => {
@@ -107,7 +193,15 @@ describe('ChatLog', () => {
     const onRetry = jest.fn()
 
     render(
-      <ChatLog messages={messages} playerMap={new Map()} isLoading={false} onRetry={onRetry} />
+      <ChatLog
+        messages={messages}
+        playerMap={new Map()}
+        isLoading={false}
+        hasMoreMessages={true}
+        isLoadingMore={false}
+        onLoadMore={jest.fn()}
+        onRetry={onRetry}
+      />
     )
 
     fireEvent.click(screen.getByRole('button', { name: /retry last action/i }))

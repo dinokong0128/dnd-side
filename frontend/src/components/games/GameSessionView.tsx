@@ -10,6 +10,7 @@ import { ChatInput } from './ChatInput'
 import { TypingIndicator } from './TypingIndicator'
 import { ConfirmModal } from './ConfirmModal'
 import { SessionStatusBanner } from './SessionStatusBanner'
+import { CHAT_PAGE_SIZE } from '@/lib/constants/game'
 
 interface GameSessionViewProps {
   gameId: string
@@ -33,6 +34,9 @@ export function GameSessionView({
   const [isActionLoading, setIsActionLoading] = useState(false)
   const [showRetryTimeout, setShowRetryTimeout] = useState(false)
   const [lastPlayerAction, setLastPlayerAction] = useState<string | null>(null)
+  const [hasMoreMessages, setHasMoreMessages] = useState(true)
+  const [oldestCreatedAt, setOldestCreatedAt] = useState<string | null>(null)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isHost = game.created_by === userId
@@ -43,21 +47,38 @@ export function GameSessionView({
 
     const initializeSession = async () => {
       try {
-        // Fetch all game messages
-        const { data: messagesData } = await supabase
+        const messagesPromise = supabase
           .from('game_messages')
           .select('*')
           .eq('game_id', gameId)
-          .order('created_at', { ascending: true })
+          .order('created_at', { ascending: false })
+          .limit(CHAT_PAGE_SIZE)
 
-        const msgs = (messagesData || []) as GameMessage[]
-        setMessages(msgs)
+        const latestMessagePromise = supabase
+          .from('game_messages')
+          .select('role')
+          .eq('game_id', gameId)
+          .order('created_at', { ascending: false })
+          .limit(1)
 
         // Fetch all players for this game
-        const { data: playersData } = await supabase
+        const playersPromise = supabase
           .from('players')
           .select('id, profile_id, character_name')
           .eq('game_id', gameId)
+
+        const [{ data: messagesData }, { data: latestData }, { data: playersData }] =
+          await Promise.all([messagesPromise, latestMessagePromise, playersPromise])
+
+        const msgs = ((messagesData || []) as GameMessage[]).reverse()
+        setMessages(msgs)
+
+        if (msgs.length < CHAT_PAGE_SIZE) {
+          setHasMoreMessages(false)
+        }
+        if (msgs.length > 0) {
+          setOldestCreatedAt(msgs[0].created_at)
+        }
 
         // Build playerMap (profile_id -> character_name)
         const map = new Map<string, string>()
@@ -75,12 +96,11 @@ export function GameSessionView({
         // Check if current user has a character in this game
         setHasCharacter(map.has(userId))
 
-        // Determine if waiting for DM
-        if (msgs.length === 0) {
+        const latestMsg = latestData?.[0]
+        if (!latestMsg) {
           setIsWaitingForDm(true)
         } else {
-          const lastMsg = msgs[msgs.length - 1]
-          setIsWaitingForDm(lastMsg.role === 'player')
+          setIsWaitingForDm(latestMsg.role === 'player')
         }
 
         setIsLoading(false)
@@ -139,6 +159,36 @@ export function GameSessionView({
       gamesSubscription?.unsubscribe()
     }
   }, [gameId, userId])
+
+  const handleLoadMore = async () => {
+    if (isLoadingMore || !hasMoreMessages || !oldestCreatedAt) return
+
+    setIsLoadingMore(true)
+    try {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('game_messages')
+        .select('*')
+        .eq('game_id', gameId)
+        .lt('created_at', oldestCreatedAt)
+        .order('created_at', { ascending: false })
+        .limit(CHAT_PAGE_SIZE)
+
+      const older = ((data || []) as GameMessage[]).reverse()
+      if (older.length === 0) {
+        setHasMoreMessages(false)
+        return
+      }
+
+      setMessages((prev) => [...older, ...prev])
+      setOldestCreatedAt(older[0].created_at)
+      if (older.length < CHAT_PAGE_SIZE) {
+        setHasMoreMessages(false)
+      }
+    } finally {
+      setIsLoadingMore(false)
+    }
+  }
 
   // Track the last player action for retry
   useEffect(() => {
@@ -258,6 +308,9 @@ export function GameSessionView({
         messages={messages}
         playerMap={playerMap}
         isLoading={isLoading}
+        hasMoreMessages={hasMoreMessages}
+        isLoadingMore={isLoadingMore}
+        onLoadMore={handleLoadMore}
         onRetry={handleRetryLastAction}
       />
       {isWaitingForDm && gameStatus === 'active' && <TypingIndicator />}
