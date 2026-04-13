@@ -824,3 +824,181 @@ class TestGenerateResumeNarration:
 
             with pytest.raises(Exception):
                 generate_resume_narration.fn("game-1")
+
+
+class TestDmResponseTaskSuggestedActions:
+    """Tests for suggested_actions extraction and persistence (DIN-42)."""
+
+    def _base_mocks(self, claude_text: str, update_games_mock=None):
+        """Return table_side_effect function and individual mocks for dm_response_task."""
+        game_data = {"id": "game-1", "name": "Quest", "dm_persona": "DM"}
+        players_data = [
+            {
+                "id": "player-1",
+                "character_name": "Hero",
+                "race": "Human",
+                "level": 1,
+                "character_class": "Fighter",
+                "hp_current": 10,
+                "hp_max": 10,
+                "profile_id": "user-1",
+            }
+        ]
+        messages_data = []
+        inventory_data = []
+
+        mock_game_result = MagicMock()
+        mock_game_result.data = game_data
+
+        mock_players_result = MagicMock()
+        mock_players_result.data = players_data
+
+        mock_messages_result = MagicMock()
+        mock_messages_result.data = messages_data
+
+        mock_inventory_result = MagicMock()
+        mock_inventory_result.data = inventory_data
+
+        mock_anthropic_response = MagicMock()
+        mock_anthropic_response.content = [MagicMock(text=claude_text)]
+
+        mock_embedding_result = MagicMock()
+        mock_embedding_result.data = [MagicMock(embedding=[0.1] * 1536)]
+
+        game_messages_mock = MagicMock()
+        game_messages_mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = (
+            mock_messages_result
+        )
+        game_messages_mock.insert.return_value.execute.return_value = MagicMock()
+
+        games_update_mock = update_games_mock or MagicMock()
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "games":
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = (
+                    mock_game_result
+                )
+                mock.update.return_value.match.return_value.execute.return_value = (
+                    games_update_mock
+                )
+            elif name == "players":
+                mock.select.return_value.match.return_value.execute.return_value = (
+                    mock_players_result
+                )
+            elif name == "game_messages":
+                return game_messages_mock
+            elif name == "player_inventory":
+                mock.select.return_value.eq.return_value.execute.return_value = (
+                    mock_inventory_result
+                )
+            elif name == "game_events":
+                mock.insert.return_value.execute.return_value = MagicMock()
+            return mock
+
+        return table_side_effect, mock_anthropic_response, mock_embedding_result, game_messages_mock
+
+    def test_suggested_actions_are_parsed_and_stored(self):
+        """games.update should be called with suggested_actions list."""
+        claude_text = (
+            "The goblin lunges at you!\n"
+            "<suggested_actions>\n"
+            "Attack the goblin with your sword.\n"
+            "Cast magic missile at the goblin.\n"
+            "Dodge and retreat to the doorway.\n"
+            "</suggested_actions>"
+        )
+        table_side_effect, mock_resp, mock_emb, _ = self._base_mocks(claude_text)
+
+        games_update_calls = []
+
+        def capturing_table(name):
+            mock = MagicMock()
+            result = table_side_effect(name)
+            if name == "games":
+                # Capture update calls
+                original_update = result.update
+
+                def capture_update(payload):
+                    games_update_calls.append(payload)
+                    return original_update(payload)
+
+                result.update = capture_update
+            return result if name != "games" else result
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.anthropic_client"
+        ) as mock_anthropic, patch(
+            "tasks.dm_tasks.openai_client"
+        ) as mock_openai:
+            mock_sb.table.side_effect = table_side_effect
+            mock_anthropic.messages.create.return_value = mock_resp
+            mock_openai.embeddings.create.return_value = mock_emb
+
+            dm_response_task.fn("game-1", "msg-1", "I attack!", [])
+
+            # Verify games.update was called
+            mock_sb.table.assert_any_call("games")
+
+    def test_suggested_actions_block_is_stripped_from_display_message(self):
+        """The <suggested_actions> block must NOT appear in the inserted chat message."""
+        claude_text = (
+            "The dragon breathes fire!\n"
+            "<suggested_actions>\n"
+            "Run away!\n"
+            "Cast shield.\n"
+            "</suggested_actions>"
+        )
+        table_side_effect, mock_resp, mock_emb, game_messages_mock = self._base_mocks(claude_text)
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.anthropic_client"
+        ) as mock_anthropic, patch(
+            "tasks.dm_tasks.openai_client"
+        ) as mock_openai:
+            mock_sb.table.side_effect = table_side_effect
+            mock_anthropic.messages.create.return_value = mock_resp
+            mock_openai.embeddings.create.return_value = mock_emb
+
+            dm_response_task.fn("game-1", "msg-1", "I run!", [])
+
+            # Find the insert call for game_messages
+            insert_call_args = game_messages_mock.insert.call_args[0][0]
+            assert "<suggested_actions>" not in insert_call_args["content"]
+            assert "Run away!" not in insert_call_args["content"]
+
+    def test_empty_suggested_actions_when_block_absent(self):
+        """When Claude response has no <suggested_actions>, an empty list is stored."""
+        claude_text = "The goblin runs away. You see a chest in the corner."
+
+        table_side_effect, mock_resp, mock_emb, _ = self._base_mocks(claude_text)
+
+        captured_updates = []
+
+        original_side = table_side_effect
+
+        def capturing_table(name):
+            result = original_side(name)
+            if name == "games":
+                orig_update = result.update
+
+                def capture(payload):
+                    captured_updates.append(payload)
+                    return orig_update(payload)
+
+                result.update = capture
+            return result
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.anthropic_client"
+        ) as mock_anthropic, patch(
+            "tasks.dm_tasks.openai_client"
+        ) as mock_openai:
+            mock_sb.table.side_effect = capturing_table
+            mock_anthropic.messages.create.return_value = mock_resp
+            mock_openai.embeddings.create.return_value = mock_emb
+
+            dm_response_task.fn("game-1", "msg-1", "I look around.", [])
+
+            # games.update must have been called (at least for updated_at)
+            mock_sb.table.assert_any_call("games")

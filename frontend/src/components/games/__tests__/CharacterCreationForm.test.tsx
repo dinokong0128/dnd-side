@@ -192,4 +192,83 @@ describe('CharacterCreationForm', () => {
       })
     })
   })
+
+  describe('auto-generate character name wand button (DIN-63)', () => {
+    it('renders a wand button next to the Character Name input', () => {
+      render(<CharacterCreationForm gameId="game-1" onSuccess={onSuccess} />)
+      expect(screen.getByTestId('generate-character-name')).toBeInTheDocument()
+    })
+
+    it('calls /api/generate-text with type, race, and class when wand is clicked', async () => {
+      ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ suggestion: 'Aelindra Starweave' }),
+      })
+      const user = userEvent.setup()
+      render(<CharacterCreationForm gameId="game-1" onSuccess={onSuccess} />)
+
+      await user.click(screen.getByTestId('generate-character-name'))
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          '/api/generate-text',
+          expect.objectContaining({
+            method: 'POST',
+            body: expect.stringContaining('"type":"character_name"'),
+          })
+        )
+      })
+    })
+
+    it('populates the character name field via setValue after generation', async () => {
+      ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ suggestion: 'Aelindra Starweave' }),
+      })
+      const user = userEvent.setup()
+      render(<CharacterCreationForm gameId="game-1" onSuccess={onSuccess} />)
+
+      await user.click(screen.getByTestId('generate-character-name'))
+
+      await waitFor(() => {
+        expect(
+          (getField<HTMLInputElement>('characterName')).value
+        ).toBe('Aelindra Starweave')
+      })
+    })
+
+    it('includes race and characterClass from current form values in request', async () => {
+      ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ suggestion: 'Sylvan Moontracker' }),
+      })
+      const user = userEvent.setup()
+      render(<CharacterCreationForm gameId="game-1" onSuccess={onSuccess} />)
+
+      // Change race and class
+      await user.selectOptions(getField<HTMLSelectElement>('race'), 'Elf')
+      await user.selectOptions(getField<HTMLSelectElement>('characterClass'), 'Ranger')
+      await user.click(screen.getByTestId('generate-character-name'))
+
+      await waitFor(() => {
+        const body = JSON.parse(
+          ((global.fetch as jest.Mock).mock.calls[0][1] as RequestInit).body as string
+        )
+        expect(body.race).toBe('Elf')
+        expect(body.characterClass).toBe('Ranger')
+      })
+    })
+
+    it('silently fails and re-enables button on API error', async () => {
+      ;(global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false })
+      const user = userEvent.setup()
+      render(<CharacterCreationForm gameId="game-1" onSuccess={onSuccess} />)
+
+      await user.click(screen.getByTestId('generate-character-name'))
+
+      await waitFor(() => {
+        expect(screen.getByTestId('generate-character-name')).not.toBeDisabled()
+      })
+    })
+  })
 })

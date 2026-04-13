@@ -13,6 +13,28 @@ interface CharacterCreationFormProps {
   onSuccess: (player: PlayerRow) => void
 }
 
+function SpinnerSvg() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 15 15"
+      fill="none"
+      style={{ animation: 'spin 0.75s linear infinite', display: 'block' }}
+    >
+      <circle
+        cx="7.5"
+        cy="7.5"
+        r="5.5"
+        stroke="#8a7234"
+        strokeWidth="1.5"
+        strokeDasharray="16 18"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
 export function CharacterCreationForm({
   gameId,
   defaultValues,
@@ -20,11 +42,14 @@ export function CharacterCreationForm({
 }: CharacterCreationFormProps) {
   const [loading, setLoading] = useState(false)
   const [formError, setFormError] = useState('')
+  const [isGeneratingCharName, setIsGeneratingCharName] = useState(false)
 
   const {
     register,
     handleSubmit,
     formState: { errors },
+    setValue,
+    watch,
   } = useForm<CharacterFormData>({
     resolver: zodResolver(characterSchema),
     defaultValues: {
@@ -42,6 +67,31 @@ export function CharacterCreationForm({
       },
     },
   })
+
+  const watchedRace = watch('race')
+  const watchedClass = watch('characterClass')
+
+  async function handleGenerateCharName() {
+    setIsGeneratingCharName(true)
+    try {
+      const res = await fetch('/api/generate-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'character_name',
+          race: watchedRace,
+          characterClass: watchedClass,
+        }),
+      })
+      if (!res.ok) return
+      const { suggestion } = await res.json()
+      if (suggestion) setValue('characterName', suggestion)
+    } catch {
+      // silent fail
+    } finally {
+      setIsGeneratingCharName(false)
+    }
+  }
 
   async function onSubmit(data: CharacterFormData) {
     setLoading(true)
@@ -77,6 +127,7 @@ export function CharacterCreationForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       {formError && (
         <div className="rounded bg-red-50 p-4 text-red-800">{formError}</div>
       )}
@@ -85,12 +136,43 @@ export function CharacterCreationForm({
         <label className="block text-sm font-medium text-gray-900">
           Character Name
         </label>
-        <input
-          type="text"
-          {...register('characterName')}
-          className="mt-2 w-full rounded border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="Enter character name"
-        />
+        <div style={{ position: 'relative' }}>
+          <input
+            type="text"
+            {...register('characterName')}
+            className="mt-2 w-full rounded border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Enter character name"
+            style={{ paddingRight: '38px' }}
+          />
+          <button
+            type="button"
+            data-testid="generate-character-name"
+            disabled={isGeneratingCharName}
+            onClick={handleGenerateCharName}
+            title="Generate character name"
+            style={{
+              position: 'absolute',
+              right: '8px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: '26px',
+              height: '26px',
+              background: 'transparent',
+              border: 'none',
+              cursor: isGeneratingCharName ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0,
+              fontSize: '15px',
+              lineHeight: 1,
+              opacity: isGeneratingCharName ? 1 : 0.55,
+              marginTop: '8px',
+            }}
+          >
+            {isGeneratingCharName ? <SpinnerSvg /> : '✨'}
+          </button>
+        </div>
         {errors.characterName && (
           <p className="mt-1 text-sm text-red-600">
             {errors.characterName.message}

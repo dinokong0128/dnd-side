@@ -333,4 +333,105 @@ describe('CreateGameForm', () => {
       })
     })
   })
+
+  describe('auto-generate wand buttons (DIN-63)', () => {
+    it('renders a wand button next to the Campaign Name input', () => {
+      render(<CreateGameForm />)
+      expect(screen.getByTestId('generate-game-name')).toBeInTheDocument()
+    })
+
+    it('renders a wand button next to the DM Persona textarea', () => {
+      render(<CreateGameForm />)
+      expect(screen.getByTestId('generate-dm-persona')).toBeInTheDocument()
+    })
+
+    it('calls /api/generate-text with type=game_name and populates the input', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ suggestion: 'The Shattered Crown' }),
+      })
+      const user = userEvent.setup()
+      render(<CreateGameForm />)
+
+      await user.click(screen.getByTestId('generate-game-name'))
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledWith(
+          '/api/generate-text',
+          expect.objectContaining({
+            method: 'POST',
+            body: JSON.stringify({ type: 'game_name' }),
+          })
+        )
+      })
+
+      await waitFor(() => {
+        expect(
+          (screen.getByTestId('game-name-input') as HTMLInputElement).value
+        ).toBe('The Shattered Crown')
+      })
+    })
+
+    it('calls /api/generate-text with type=dm_persona and populates the textarea', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ suggestion: 'A gritty pirate campaign.' }),
+      })
+      const user = userEvent.setup()
+      render(<CreateGameForm />)
+
+      await user.click(screen.getByTestId('generate-dm-persona'))
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledWith(
+          '/api/generate-text',
+          expect.objectContaining({
+            method: 'POST',
+            body: JSON.stringify({ type: 'dm_persona' }),
+          })
+        )
+      })
+
+      await waitFor(() => {
+        expect(
+          (screen.getByTestId('dm-persona-input') as HTMLTextAreaElement).value
+        ).toBe('A gritty pirate campaign.')
+      })
+    })
+
+    it('disables wand button during in-flight request and re-enables after', async () => {
+      let resolveFetch!: (value: unknown) => void
+      mockFetch.mockReturnValueOnce(
+        new Promise((resolve) => { resolveFetch = resolve })
+      )
+      const user = userEvent.setup()
+      render(<CreateGameForm />)
+
+      await user.click(screen.getByTestId('generate-game-name'))
+
+      expect(screen.getByTestId('generate-game-name')).toBeDisabled()
+
+      resolveFetch({ ok: true, json: () => Promise.resolve({ suggestion: 'Test' }) })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('generate-game-name')).not.toBeDisabled()
+      })
+    })
+
+    it('silently fails and re-enables button when API returns error', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: false })
+      const user = userEvent.setup()
+      render(<CreateGameForm />)
+
+      const nameInput = screen.getByTestId('game-name-input') as HTMLInputElement
+      const prevValue = nameInput.value
+
+      await user.click(screen.getByTestId('generate-game-name'))
+
+      await waitFor(() => {
+        expect(screen.getByTestId('generate-game-name')).not.toBeDisabled()
+      })
+      expect(nameInput.value).toBe(prevValue)
+    })
+  })
 })

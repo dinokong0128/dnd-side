@@ -29,6 +29,7 @@ const sampleGame: Game = {
   created_by: 'user-1',
   created_at: '2026-03-22T00:00:00Z',
   updated_at: '2026-03-22T00:00:00Z',
+  suggested_actions: null,
 }
 
 const sampleGame2: Game = {
@@ -39,6 +40,7 @@ const sampleGame2: Game = {
   created_by: 'user-1',
   created_at: '2026-03-23T00:00:00Z',
   updated_at: '2026-03-23T00:00:00Z',
+  suggested_actions: null,
 }
 
 describe('fetchGamesByUserId', () => {
@@ -64,7 +66,7 @@ describe('fetchGamesByUserId', () => {
 
     expect(mockFrom).toHaveBeenCalledWith('games')
     expect(mockSelect).toHaveBeenCalledWith(
-      'id, name, dm_persona, status, created_by, created_at, updated_at'
+      'id, name, dm_persona, status, created_by, created_at, updated_at, suggested_actions'
     )
     expect(mockEq).toHaveBeenCalledWith('created_by', 'user-xyz')
     expect(mockOrder).toHaveBeenCalledWith('updated_at', { ascending: false })
@@ -143,7 +145,7 @@ describe('createGame', () => {
     })
 
     expect(mockSelect).toHaveBeenCalledWith(
-      'id, name, dm_persona, status, created_by, created_at, updated_at'
+      'id, name, dm_persona, status, created_by, created_at, updated_at, suggested_actions'
     )
   })
 
@@ -226,7 +228,7 @@ describe('fetchGameById', () => {
     await fetchGameById('game-1')
 
     expect(mockSelect).toHaveBeenCalledWith(
-      'id, name, dm_persona, status, created_by, created_at, updated_at'
+      'id, name, dm_persona, status, created_by, created_at, updated_at, suggested_actions'
     )
   })
 })

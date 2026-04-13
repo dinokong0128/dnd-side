@@ -17,7 +17,7 @@ from dramatiq import get_broker
 from config import settings, supabase_client
 from redis_broker import redis_client
 from api.middleware import add_middleware
-from api.routes import games, players, actions, invites
+from api.routes import games, players, actions, invites, messages
 
 
 @asynccontextmanager
@@ -54,6 +54,7 @@ app.include_router(games.router, prefix="/games", tags=["games"])
 app.include_router(players.router, prefix="/games", tags=["players"])
 app.include_router(actions.router, prefix="/games", tags=["actions"])
 app.include_router(invites.router, prefix="/games", tags=["invites"])
+app.include_router(messages.router, prefix="/games", tags=["messages"])
 
 
 @app.get("/health")

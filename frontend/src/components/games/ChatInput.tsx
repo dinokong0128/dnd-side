@@ -7,6 +7,7 @@ interface ChatInputProps {
   isWaitingForDm: boolean
   hasCharacter?: boolean
   onSubmit?: (text: string) => void
+  suggestedActions?: string[]
 }
 
 export function ChatInput({
@@ -14,9 +15,17 @@ export function ChatInput({
   isWaitingForDm,
   hasCharacter,
   onSubmit,
+  suggestedActions,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [text, setText] = useState('')
+  const [suggestionIdx, setSuggestionIdx] = useState(0)
+  // React docs pattern for adjusting state when a prop changes (avoids useEffect)
+  const [prevSuggestedActions, setPrevSuggestedActions] = useState(suggestedActions)
+  if (prevSuggestedActions !== suggestedActions) {
+    setPrevSuggestedActions(suggestedActions)
+    setSuggestionIdx(0)
+  }
 
   const getPlaceholder = () => {
     if (gameStatus === 'lobby') {
@@ -36,6 +45,16 @@ export function ChatInput({
 
   const isDisabled = gameStatus !== 'active' || isWaitingForDm || hasCharacter !== true
   const canSend = gameStatus === 'active' && !isWaitingForDm && hasCharacter === true && text.trim().length > 0
+
+  const hasSuggestions = Boolean(
+    suggestedActions && suggestedActions.length > 0 && !isDisabled
+  )
+
+  const handleCycle = () => {
+    if (!suggestedActions || suggestedActions.length === 0) return
+    setText(suggestedActions[suggestionIdx])
+    setSuggestionIdx((prev) => (prev + 1) % suggestedActions.length)
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -80,6 +99,21 @@ export function ChatInput({
       }}
     >
       <div className="mx-auto max-w-3xl p-4">
+        {hasSuggestions && (
+          <div
+            style={{
+              fontFamily: "'Cinzel', serif",
+              fontSize: '10px',
+              letterSpacing: '0.08em',
+              color: '#8a7234',
+              textTransform: 'uppercase',
+              marginBottom: '6px',
+            }}
+          >
+            Suggestion {suggestionIdx === 0 ? suggestedActions!.length : suggestionIdx} of{' '}
+            {suggestedActions!.length} · click ✨ to cycle
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="flex gap-3 items-end">
           <textarea
             ref={textareaRef}
@@ -95,6 +129,30 @@ export function ChatInput({
               maxHeight: '96px',
             }}
           />
+          {suggestedActions !== undefined && (
+            <button
+              type="button"
+              data-testid="cycle-suggestion"
+              onClick={handleCycle}
+              disabled={!hasSuggestions}
+              title="Cycle action suggestion"
+              style={{
+                flexShrink: 0,
+                width: '42px',
+                height: '40px',
+                background: hasSuggestions ? 'rgba(201,168,76,0.08)' : '#0f0d0a',
+                border: hasSuggestions ? '1px solid #8a7234' : '1px solid #3a332b',
+                borderRadius: '0.375rem',
+                fontSize: '18px',
+                lineHeight: 1,
+                opacity: hasSuggestions ? 1 : 0.3,
+                cursor: hasSuggestions ? 'pointer' : 'not-allowed',
+                transition: 'all 0.2s',
+              }}
+            >
+              ✨
+            </button>
+          )}
           <button
             type="submit"
             disabled={!canSend}

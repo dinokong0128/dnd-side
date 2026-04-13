@@ -152,6 +152,13 @@ RULES:
    <event type="combat|discovery|dialogue|death|milestone">Brief factual description</event>
 6. End with a clear invitation for the party to act
 7. Do not list game mechanics or stat changes — narrate them naturally
+8. After your narrative response, produce 2–10 short suggested actions the player could
+   take next (imperative mood, ~10 words each). Wrap them in:
+   <suggested_actions>
+   Pick the lock using your thieves' tools.
+   Search the walls for a hidden mechanism.
+   ...
+   </suggested_actions>
 
 The acting player's action:
 "{action_text}"
@@ -196,11 +203,31 @@ The acting player's action:
                 }
             )
 
-        # Step 6: Strip event markers from the displayed message
+        # Step 6: Parse suggested actions block
+        suggested_actions_match = re.search(
+            r'<suggested_actions>(.*?)</suggested_actions>',
+            dm_response,
+            flags=re.DOTALL,
+        )
+        suggested_actions: list[str] = []
+        if suggested_actions_match:
+            suggested_actions = [
+                line.strip()
+                for line in suggested_actions_match.group(1).splitlines()
+                if line.strip()
+            ]
+
+        # Strip event markers from the displayed message, then strip suggested_actions block
         clean_response = re.sub(
             r'<event\s+type=["\'][^"\']+["\']>(.*?)</event>',
             r"\1",
             dm_response,
+            flags=re.DOTALL,
+        )
+        clean_response = re.sub(
+            r'<suggested_actions>.*?</suggested_actions>',
+            '',
+            clean_response,
             flags=re.DOTALL,
         ).strip()
 
@@ -220,10 +247,11 @@ The acting player's action:
             supabase_client.table("game_events").insert(event_rows).execute()
             logger.info(f"[dm_response_task] Inserted {len(event_rows)} events")
 
-        # Step 9: Update game state
+        # Step 9: Update game state (including suggested_actions)
         supabase_client.table("games").update(
             {
                 "updated_at": datetime.utcnow().isoformat(),
+                "suggested_actions": suggested_actions,
             }
         ).match({"id": game_id}).execute()
 

@@ -24,12 +24,13 @@ jest.mock('../ChatLog', () => ({
 }))
 
 jest.mock('../ChatInput', () => ({
-  ChatInput: ({ hasCharacter, gameStatus, isWaitingForDm, onSubmit }: any) => (
+  ChatInput: ({ hasCharacter, gameStatus, isWaitingForDm, onSubmit, suggestedActions }: any) => (
     <div data-testid="chat-input">
       <div data-testid="has-character">{hasCharacter ? 'true' : 'false'}</div>
       <div data-testid="game-status">{gameStatus}</div>
       <div data-testid="is-waiting">{isWaitingForDm ? 'true' : 'false'}</div>
       <div data-testid="has-on-submit">{onSubmit ? 'true' : 'false'}</div>
+      <div data-testid="suggested-actions">{JSON.stringify(suggestedActions ?? null)}</div>
     </div>
   ),
 }))
@@ -45,6 +46,15 @@ jest.mock('../ConfirmModal', () => ({
 jest.mock('../SessionStatusBanner', () => ({
   SessionStatusBanner: () => null,
 }))
+
+/** Build a chainable Supabase channel mock. `.on()` returns `this`. */
+function makeChannelMock(unsubscribeFn = jest.fn()) {
+  const mock: any = {
+    subscribe: jest.fn().mockReturnValue({ unsubscribe: unsubscribeFn }),
+  }
+  mock.on = jest.fn().mockReturnValue(mock)
+  return mock
+}
 
 describe('GameSessionView', () => {
   const testContext: {
@@ -141,13 +151,7 @@ describe('GameSessionView', () => {
           }),
         }
       }),
-      channel: jest.fn().mockReturnValue({
-        on: jest.fn().mockReturnValue({
-          subscribe: jest.fn().mockReturnValue({
-            unsubscribe: jest.fn(),
-          }),
-        }),
-      }),
+      channel: jest.fn().mockReturnValue(makeChannelMock()),
     }
 
     ;(supabaseModule.createClient as jest.Mock).mockReturnValue(mockSupabaseClient)
@@ -166,6 +170,7 @@ describe('GameSessionView', () => {
     created_at: '2026-01-01T00:00:00Z',
     created_by: 'user-1',
     updated_at: '2026-01-01T00:00:00Z',
+    suggested_actions: null,
   }
 
   it('renders game header with correct game name', async () => {
@@ -193,13 +198,7 @@ describe('GameSessionView', () => {
 
   it('safely unsubscribes from Realtime on unmount', async () => {
     const mockUnsubscribe = jest.fn()
-    mockSupabaseClient.channel.mockReturnValue({
-      on: jest.fn().mockReturnValue({
-        subscribe: jest.fn().mockReturnValue({
-          unsubscribe: mockUnsubscribe,
-        }),
-      }),
-    })
+    mockSupabaseClient.channel.mockReturnValue(makeChannelMock(mockUnsubscribe))
 
     const { unmount } = render(
       <GameSessionView gameId="game-1" game={mockGame} userId="user-1" />
@@ -366,6 +365,110 @@ describe('GameSessionView', () => {
     })
   })
 
+  describe('DM suggested actions (DIN-42)', () => {
+    it('passes null suggestedActions to ChatInput when game has no suggested_actions', async () => {
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+
+      await waitFor(() => {
+        expect(screen.getByTestId('suggested-actions')).toBeInTheDocument()
+      })
+
+      expect(screen.getByTestId('suggested-actions')).toHaveTextContent('[]')
+    })
+
+    it('initialises suggestedActions from game.suggested_actions prop', async () => {
+      const gameWithSuggestions = {
+        ...mockGame,
+        suggested_actions: ['Attack the goblin', 'Cast a spell', 'Run away'],
+      }
+
+      render(<GameSessionView gameId="game-1" game={gameWithSuggestions} userId="user-1" />)
+
+      await waitFor(() => {
+        expect(screen.getByTestId('suggested-actions')).toBeInTheDocument()
+      })
+
+      const el = screen.getByTestId('suggested-actions')
+      expect(JSON.parse(el.textContent!)).toEqual(['Attack the goblin', 'Cast a spell', 'Run away'])
+    })
+
+    it('updates suggestedActions when Realtime games UPDATE arrives with new suggested_actions', async () => {
+      let realtimeGamesCallback: ((payload: any) => void) | null = null
+
+      mockSupabaseClient.channel.mockImplementation((channelName: string) => {
+        const mock: any = {
+          subscribe: jest.fn().mockReturnValue({ unsubscribe: jest.fn() }),
+        }
+        mock.on = jest.fn().mockImplementation((_type: any, _filter: any, cb: any) => {
+          if (channelName === `games:game-1`) {
+            realtimeGamesCallback = cb
+          }
+          return mock
+        })
+        return mock
+      })
+
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+
+      await waitFor(() => {
+        expect(screen.getByTestId('suggested-actions')).toBeInTheDocument()
+      })
+
+      // Initially empty (game.suggested_actions is null)
+      expect(screen.getByTestId('suggested-actions')).toHaveTextContent('[]')
+
+      // Simulate Realtime UPDATE with new suggested_actions
+      act(() => {
+        realtimeGamesCallback?.({
+          new: {
+            ...mockGame,
+            suggested_actions: ['Draw your sword', 'Look around'],
+          },
+        })
+      })
+
+      await waitFor(() => {
+        const el = screen.getByTestId('suggested-actions')
+        expect(JSON.parse(el.textContent!)).toEqual(['Draw your sword', 'Look around'])
+      })
+    })
+
+    it('clears suggestedActions when Realtime UPDATE has null suggested_actions', async () => {
+      let realtimeGamesCallback: ((payload: any) => void) | null = null
+
+      mockSupabaseClient.channel.mockImplementation((channelName: string) => {
+        const mock: any = {
+          subscribe: jest.fn().mockReturnValue({ unsubscribe: jest.fn() }),
+        }
+        mock.on = jest.fn().mockImplementation((_type: any, _filter: any, cb: any) => {
+          if (channelName === `games:game-1`) {
+            realtimeGamesCallback = cb
+          }
+          return mock
+        })
+        return mock
+      })
+
+      const gameWithSuggestions = { ...mockGame, suggested_actions: ['Attack', 'Flee'] }
+      render(<GameSessionView gameId="game-1" game={gameWithSuggestions} userId="user-1" />)
+
+      await waitFor(() => {
+        const el = screen.getByTestId('suggested-actions')
+        expect(JSON.parse(el.textContent!)).toEqual(['Attack', 'Flee'])
+      })
+
+      act(() => {
+        realtimeGamesCallback?.({
+          new: { ...mockGame, suggested_actions: null },
+        })
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('suggested-actions')).toHaveTextContent('[]')
+      })
+    })
+  })
+
   describe('retry timeout banner', () => {
     beforeEach(() => {
       jest.useFakeTimers()
@@ -398,13 +501,18 @@ describe('GameSessionView', () => {
     it('retry banner disappears when isWaitingForDm goes false via Realtime', async () => {
       let realtimeCallback: ((payload: any) => void) | null = null
 
-      mockSupabaseClient.channel.mockReturnValue({
-        on: jest.fn().mockImplementation((_event: any, _filter: any, cb: any) => {
-          realtimeCallback = cb
-          return {
-            subscribe: jest.fn().mockReturnValue({ unsubscribe: jest.fn() }),
+      mockSupabaseClient.channel.mockImplementation(() => {
+        const mock: any = {
+          subscribe: jest.fn().mockReturnValue({ unsubscribe: jest.fn() }),
+        }
+        mock.on = jest.fn().mockImplementation((_type: any, filter: any, cb: any) => {
+          // Capture only the game_messages INSERT callback
+          if (filter?.event === 'INSERT') {
+            realtimeCallback = cb
           }
-        }),
+          return mock
+        })
+        return mock
       })
 
       render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)

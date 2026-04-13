@@ -27,6 +27,7 @@ export function GameSessionView({
   const [isLoading, setIsLoading] = useState(true)
   const [isWaitingForDm, setIsWaitingForDm] = useState(false)
   const [gameStatus, setGameStatus] = useState(game.status)
+  const [suggestedActions, setSuggestedActions] = useState<string[]>(game.suggested_actions ?? [])
   const [playerMap, setPlayerMap] = useState<Map<string, string>>(new Map())
   const [hasCharacter, setHasCharacter] = useState(false)
   const [showPauseModal, setShowPauseModal] = useState(false)
@@ -111,7 +112,7 @@ export function GameSessionView({
 
     initializeSession()
 
-    // Subscribe to game_messages INSERT events
+    // Subscribe to game_messages INSERT, UPDATE, and DELETE events
     const messagesSubscription = supabase
       .channel(`game_messages:${gameId}`)
       .on(
@@ -134,6 +135,34 @@ export function GameSessionView({
           }
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'game_messages',
+          filter: `game_id=eq.${gameId}`,
+        },
+        (payload) => {
+          const updated = payload.new as GameMessage
+          setMessages((prev) =>
+            prev.map((m) => (m.id === updated.id ? updated : m))
+          )
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'game_messages',
+          filter: `game_id=eq.${gameId}`,
+        },
+        (payload) => {
+          const deletedId = (payload.old as { id: string }).id
+          setMessages((prev) => prev.filter((m) => m.id !== deletedId))
+        }
+      )
       .subscribe()
 
     // Subscribe to games UPDATE events for status changes
@@ -150,6 +179,7 @@ export function GameSessionView({
         (payload) => {
           const updatedGame = payload.new as Game
           setGameStatus(updatedGame.status)
+          setSuggestedActions(updatedGame.suggested_actions ?? [])
         }
       )
       .subscribe()
@@ -244,6 +274,62 @@ export function GameSessionView({
     await handleSubmit(lastPlayerAction)
   }
 
+  const handleDeleteMessage = async (messageId: string) => {
+    // Optimistic update: remove message (and any trailing DM message) from UI
+    setMessages((prev) => {
+      const idx = prev.findIndex((m) => m.id === messageId)
+      if (idx === -1) return prev
+      const next = [...prev]
+      // Also remove the following DM message if present
+      if (idx + 1 < next.length && next[idx + 1].role === 'dm') {
+        next.splice(idx, 2)
+      } else {
+        next.splice(idx, 1)
+      }
+      return next
+    })
+    setIsWaitingForDm(false)
+
+    try {
+      const response = await fetch(`/api/games/${gameId}/messages/${messageId}`, {
+        method: 'DELETE',
+      })
+      if (!response.ok) {
+        // Revert not trivially possible without snapshot — re-fetch would be complex.
+        // The Realtime DELETE event will sync state if the delete succeeded server-side.
+        const err = await response.json()
+        console.error('Delete message failed:', err.error)
+      }
+    } catch {
+      console.error('Delete message request failed')
+    }
+  }
+
+  const handleEditMessage = async (messageId: string, newContent: string) => {
+    // Optimistic update: update content in UI
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, content: newContent } : m))
+    )
+    setIsWaitingForDm(true)
+
+    try {
+      const response = await fetch(`/api/games/${gameId}/messages/${messageId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: newContent }),
+      })
+      if (!response.ok) {
+        const err = await response.json()
+        console.error('Edit message failed:', err.error)
+        setIsWaitingForDm(false)
+      }
+      // DM response will arrive via Realtime, clearing isWaitingForDm
+    } catch {
+      console.error('Edit message request failed')
+      setIsWaitingForDm(false)
+    }
+  }
+
   const handlePause = async () => {
     setIsActionLoading(true)
     try {
@@ -312,6 +398,9 @@ export function GameSessionView({
         isLoadingMore={isLoadingMore}
         onLoadMore={handleLoadMore}
         onRetry={handleRetryLastAction}
+        userId={userId}
+        onDeleteMessage={handleDeleteMessage}
+        onEditMessage={handleEditMessage}
       />
       {isWaitingForDm && gameStatus === 'active' && <TypingIndicator />}
       {showRetryTimeout && isWaitingForDm && gameStatus === 'active' && (
@@ -337,6 +426,7 @@ export function GameSessionView({
         isWaitingForDm={isWaitingForDm}
         hasCharacter={hasCharacter}
         onSubmit={handleSubmit}
+        suggestedActions={suggestedActions}
       />
 
       <ConfirmModal

@@ -399,4 +399,100 @@ describe('ChatInput', () => {
       expect(textarea).toBeInTheDocument()
     })
   })
+
+  describe('DM action suggestions wand button (DIN-42)', () => {
+    const suggestions = [
+      "Pick the lock using your thieves' tools.",
+      'Search the walls for a hidden mechanism.',
+      'Press your ear to the door and listen carefully.',
+    ]
+
+    it('does not render wand button when suggestedActions is undefined', () => {
+      render(
+        <ChatInput
+          gameStatus="active"
+          isWaitingForDm={false}
+          hasCharacter={true}
+        />
+      )
+      expect(screen.queryByTestId('cycle-suggestion')).not.toBeInTheDocument()
+    })
+
+    it('renders wand button disabled when suggestedActions is empty array', () => {
+      render(
+        <ChatInput
+          gameStatus="active"
+          isWaitingForDm={false}
+          hasCharacter={true}
+          suggestedActions={[]}
+        />
+      )
+      expect(screen.getByTestId('cycle-suggestion')).toBeDisabled()
+    })
+
+    it('renders wand button enabled when suggestedActions has items and game is active', () => {
+      render(
+        <ChatInput
+          gameStatus="active"
+          isWaitingForDm={false}
+          hasCharacter={true}
+          suggestedActions={suggestions}
+        />
+      )
+      expect(screen.getByTestId('cycle-suggestion')).not.toBeDisabled()
+    })
+
+    it('clicking wand sets textarea to first suggestion', () => {
+      render(
+        <ChatInput
+          gameStatus="active"
+          isWaitingForDm={false}
+          hasCharacter={true}
+          suggestedActions={suggestions}
+        />
+      )
+      const textarea = screen.getByPlaceholderText(/What does your character do/) as HTMLTextAreaElement
+      fireEvent.click(screen.getByTestId('cycle-suggestion'))
+      expect(textarea.value).toBe(suggestions[0])
+    })
+
+    it('clicking wand twice sets textarea to second suggestion (cycling)', () => {
+      render(
+        <ChatInput
+          gameStatus="active"
+          isWaitingForDm={false}
+          hasCharacter={true}
+          suggestedActions={suggestions}
+        />
+      )
+      const textarea = screen.getByPlaceholderText(/What does your character do/) as HTMLTextAreaElement
+      fireEvent.click(screen.getByTestId('cycle-suggestion'))
+      fireEvent.click(screen.getByTestId('cycle-suggestion'))
+      expect(textarea.value).toBe(suggestions[1])
+    })
+
+    it('wand is disabled when isWaitingForDm is true', () => {
+      render(
+        <ChatInput
+          gameStatus="active"
+          isWaitingForDm={true}
+          hasCharacter={true}
+          suggestedActions={suggestions}
+        />
+      )
+      expect(screen.getByTestId('cycle-suggestion')).toBeDisabled()
+    })
+
+    it('wand is disabled when gameStatus is not active', () => {
+      render(
+        <ChatInput
+          gameStatus="paused"
+          isWaitingForDm={false}
+          hasCharacter={true}
+          suggestedActions={suggestions}
+        />
+      )
+      expect(screen.getByTestId('cycle-suggestion')).toBeDisabled()
+    })
+  })
 })

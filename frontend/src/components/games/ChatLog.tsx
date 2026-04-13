@@ -12,6 +12,9 @@ interface ChatLogProps {
   isLoadingMore: boolean
   onLoadMore: () => void
   onRetry?: () => void
+  userId?: string
+  onDeleteMessage?: (messageId: string) => void
+  onEditMessage?: (messageId: string, newContent: string) => void
 }
 
 export function ChatLog({
@@ -22,6 +25,9 @@ export function ChatLog({
   isLoadingMore,
   onLoadMore,
   onRetry,
+  userId,
+  onDeleteMessage,
+  onEditMessage,
 }: ChatLogProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const topSentinelRef = useRef<HTMLDivElement>(null)
@@ -206,7 +212,7 @@ export function ChatLog({
           </div>
         )}
 
-        {messages.map((msg) => (
+        {messages.map((msg, idx) => (
           <ChatMessage
             key={msg.id}
             role={msg.role}
@@ -217,6 +223,11 @@ export function ChatLog({
             }
             content={msg.content}
             onRetry={msg.role === 'system' ? onRetry : undefined}
+            isLastMessage={idx === messages.length - 1}
+            profileId={msg.profile_id ?? undefined}
+            userId={userId}
+            onDelete={onDeleteMessage ? () => onDeleteMessage(msg.id) : undefined}
+            onEdit={onEditMessage ? (newContent) => onEditMessage(msg.id, newContent) : undefined}
           />
         ))}
       </div>
