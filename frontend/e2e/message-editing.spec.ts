@@ -73,7 +73,16 @@ function mockGameData(page: Parameters<Parameters<typeof test>[1]>[0]['page']) {
         })
       }
     }),
-    // Initial messages: one DM message + one player message (player is last)
+    // Messages returned in DESCENDING order (newest first) to match the real
+    // Supabase query (.order('created_at', { ascending: false })).
+    //
+    // Scenario: player acted at T1 (:01), then DM responded at T2 (:02).
+    // dm-msg is the most recent message, so latestData[0] = dm-msg →
+    // isWaitingForDm = false → canEditOrDelete = true. ✅
+    //
+    // After the frontend's .reverse(), display order becomes
+    // [player-msg (T1), dm-msg (T2)] — correct chronological order.
+    // ChatLog's lastPlayerMsgId resolves to PLAYER_MSG_ID → isLastMessage=true. ✅
     page.route('**/supabase.co/rest/v1/game_messages**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
@@ -86,7 +95,7 @@ function mockGameData(page: Parameters<Parameters<typeof test>[1]>[0]['page']) {
               profile_id: null,
               role: 'dm',
               content: 'The dungeon stretches before you, cold and foreboding.',
-              created_at: '2026-01-01T00:00:01Z',
+              created_at: '2026-01-01T00:00:02Z', // newer — DM responded after player
             },
             {
               id: PLAYER_MSG_ID,
@@ -94,7 +103,7 @@ function mockGameData(page: Parameters<Parameters<typeof test>[1]>[0]['page']) {
               profile_id: USER_ID,
               role: 'player',
               content: 'I search the room for traps.',
-              created_at: '2026-01-01T00:00:02Z',
+              created_at: '2026-01-01T00:00:01Z', // older — player acted first
             },
           ]),
         })
@@ -169,7 +178,7 @@ test.describe('DIN-61 — Edit and delete last player message', () => {
     // Click edit
     await page.getByTestId('edit-message-btn').click()
 
-    // Inline edit textarea should appear with existing content
+    // Inline edit textarea should appear pre-filled with existing content
     const editTextarea = page.getByTestId('edit-textarea')
     await expect(editTextarea).toBeVisible()
     await expect(editTextarea).toHaveValue('I search the room for traps.')
@@ -224,10 +233,8 @@ test.describe('DIN-61 — Edit and delete last player message', () => {
     // Edit textarea should be gone
     await expect(editTextarea).not.toBeVisible()
 
-    // Original content should still show
-    await expect(
-      page.getByText('I search the room for traps.')
-    ).toBeVisible()
+    // Original content should still be visible
+    await expect(page.getByText('I search the room for traps.')).toBeVisible()
   })
 
   test('delete flow: clicking delete calls DELETE endpoint', async ({
