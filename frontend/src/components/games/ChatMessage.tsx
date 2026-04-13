@@ -6,7 +6,6 @@ interface ChatMessageProps {
   role: 'player' | 'dm' | 'system'
   characterName?: string
   content: string
-  messageId?: string
   profileId?: string | null
   userId?: string
   isLastMessage?: boolean
