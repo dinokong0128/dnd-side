@@ -371,6 +371,97 @@ describe('ChatInput', () => {
     })
   })
 
+  describe('✨ suggested actions cycling (DIN-42)', () => {
+    it('renders ✨ button disabled when suggestedActions is undefined', () => {
+      render(
+        <ChatInput gameStatus="active" isWaitingForDm={false} hasCharacter={true} />
+      )
+      expect(screen.getByTestId('cycle-suggestion-btn')).toBeDisabled()
+    })
+
+    it('renders ✨ button disabled when suggestedActions is empty array', () => {
+      render(
+        <ChatInput
+          gameStatus="active"
+          isWaitingForDm={false}
+          hasCharacter={true}
+          suggestedActions={[]}
+        />
+      )
+      expect(screen.getByTestId('cycle-suggestion-btn')).toBeDisabled()
+    })
+
+    it('renders ✨ button enabled when suggestedActions has items and game is active', () => {
+      render(
+        <ChatInput
+          gameStatus="active"
+          isWaitingForDm={false}
+          hasCharacter={true}
+          suggestedActions={['Attack the goblin', 'Search the room']}
+        />
+      )
+      expect(screen.getByTestId('cycle-suggestion-btn')).not.toBeDisabled()
+    })
+
+    it('clicking ✨ sets textarea value to first suggestion', () => {
+      render(
+        <ChatInput
+          gameStatus="active"
+          isWaitingForDm={false}
+          hasCharacter={true}
+          suggestedActions={['Attack the goblin', 'Search the room']}
+        />
+      )
+
+      fireEvent.click(screen.getByTestId('cycle-suggestion-btn'))
+
+      const textarea = screen.getByPlaceholderText(/What does your character do/)
+      expect((textarea as HTMLTextAreaElement).value).toBe('Attack the goblin')
+    })
+
+    it('clicking ✨ twice cycles to second suggestion', () => {
+      render(
+        <ChatInput
+          gameStatus="active"
+          isWaitingForDm={false}
+          hasCharacter={true}
+          suggestedActions={['Attack the goblin', 'Search the room']}
+        />
+      )
+
+      const btn = screen.getByTestId('cycle-suggestion-btn')
+      fireEvent.click(btn)
+      fireEvent.click(btn)
+
+      const textarea = screen.getByPlaceholderText(/What does your character do/)
+      expect((textarea as HTMLTextAreaElement).value).toBe('Search the room')
+    })
+
+    it('✨ button disabled when game is not active', () => {
+      render(
+        <ChatInput
+          gameStatus="lobby"
+          isWaitingForDm={false}
+          hasCharacter={true}
+          suggestedActions={['Attack the goblin']}
+        />
+      )
+      expect(screen.getByTestId('cycle-suggestion-btn')).toBeDisabled()
+    })
+
+    it('✨ button disabled when isWaitingForDm is true', () => {
+      render(
+        <ChatInput
+          gameStatus="active"
+          isWaitingForDm={true}
+          hasCharacter={true}
+          suggestedActions={['Attack the goblin']}
+        />
+      )
+      expect(screen.getByTestId('cycle-suggestion-btn')).toBeDisabled()
+    })
+  })
+
   describe('textarea auto-grow behavior', () => {
     it('auto-grows textarea as user types', () => {
       render(

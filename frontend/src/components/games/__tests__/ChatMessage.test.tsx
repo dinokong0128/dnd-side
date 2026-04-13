@@ -71,3 +71,170 @@ describe('ChatMessage', () => {
     expect(onRetry).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('✏ edit/delete controls (DIN-61)', () => {
+  it('shows edit and delete buttons when hovering the last owned player message', () => {
+    render(
+      <ChatMessage
+        role="player"
+        content="I attack!"
+        profileId="user-1"
+        userId="user-1"
+        isLastMessage={true}
+      />
+    )
+
+    fireEvent.mouseEnter(screen.getByText('I attack!').closest('div')!)
+
+    expect(screen.getByTestId('edit-message-btn')).toBeInTheDocument()
+    expect(screen.getByTestId('delete-message-btn')).toBeInTheDocument()
+  })
+
+  it('does not show controls on DM messages', () => {
+    render(
+      <ChatMessage
+        role="dm"
+        content="The dragon roars."
+        profileId={null}
+        userId="user-1"
+        isLastMessage={true}
+      />
+    )
+
+    expect(screen.queryByTestId('edit-message-btn')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('delete-message-btn')).not.toBeInTheDocument()
+  })
+
+  it('does not show controls when isLastMessage is false', () => {
+    render(
+      <ChatMessage
+        role="player"
+        content="I attack!"
+        profileId="user-1"
+        userId="user-1"
+        isLastMessage={false}
+      />
+    )
+
+    fireEvent.mouseEnter(screen.getByText('I attack!').closest('div')!)
+
+    expect(screen.queryByTestId('edit-message-btn')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('delete-message-btn')).not.toBeInTheDocument()
+  })
+
+  it('does not show controls when userId does not match profileId', () => {
+    render(
+      <ChatMessage
+        role="player"
+        content="I attack!"
+        profileId="other-user"
+        userId="user-1"
+        isLastMessage={true}
+      />
+    )
+
+    fireEvent.mouseEnter(screen.getByText('I attack!').closest('div')!)
+
+    expect(screen.queryByTestId('edit-message-btn')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('delete-message-btn')).not.toBeInTheDocument()
+  })
+
+  it('clicking edit button switches to edit mode', () => {
+    render(
+      <ChatMessage
+        role="player"
+        content="I attack!"
+        profileId="user-1"
+        userId="user-1"
+        isLastMessage={true}
+      />
+    )
+
+    fireEvent.mouseEnter(screen.getByText('I attack!').closest('div')!)
+    fireEvent.click(screen.getByTestId('edit-message-btn'))
+
+    expect(screen.getByTestId('edit-textarea')).toBeInTheDocument()
+    expect((screen.getByTestId('edit-textarea') as HTMLTextAreaElement).value).toBe('I attack!')
+    expect(screen.getByTestId('save-edit-btn')).toBeInTheDocument()
+    expect(screen.getByTestId('cancel-edit-btn')).toBeInTheDocument()
+  })
+
+  it('cancel reverts to view mode with original content', () => {
+    render(
+      <ChatMessage
+        role="player"
+        content="I attack!"
+        profileId="user-1"
+        userId="user-1"
+        isLastMessage={true}
+      />
+    )
+
+    fireEvent.mouseEnter(screen.getByText('I attack!').closest('div')!)
+    fireEvent.click(screen.getByTestId('edit-message-btn'))
+    fireEvent.change(screen.getByTestId('edit-textarea'), { target: { value: 'Different text' } })
+    fireEvent.click(screen.getByTestId('cancel-edit-btn'))
+
+    expect(screen.queryByTestId('edit-textarea')).not.toBeInTheDocument()
+    expect(screen.getByText('I attack!')).toBeInTheDocument()
+  })
+
+  it('save calls onEdit with trimmed content', () => {
+    const onEdit = jest.fn()
+    render(
+      <ChatMessage
+        role="player"
+        content="I attack!"
+        profileId="user-1"
+        userId="user-1"
+        isLastMessage={true}
+        onEdit={onEdit}
+      />
+    )
+
+    fireEvent.mouseEnter(screen.getByText('I attack!').closest('div')!)
+    fireEvent.click(screen.getByTestId('edit-message-btn'))
+    fireEvent.change(screen.getByTestId('edit-textarea'), { target: { value: '  I search for traps.  ' } })
+    fireEvent.click(screen.getByTestId('save-edit-btn'))
+
+    expect(onEdit).toHaveBeenCalledWith('I search for traps.')
+    expect(screen.queryByTestId('edit-textarea')).not.toBeInTheDocument()
+  })
+
+  it('save button is disabled when edit text is empty or whitespace', () => {
+    render(
+      <ChatMessage
+        role="player"
+        content="I attack!"
+        profileId="user-1"
+        userId="user-1"
+        isLastMessage={true}
+      />
+    )
+
+    fireEvent.mouseEnter(screen.getByText('I attack!').closest('div')!)
+    fireEvent.click(screen.getByTestId('edit-message-btn'))
+    fireEvent.change(screen.getByTestId('edit-textarea'), { target: { value: '   ' } })
+
+    expect(screen.getByTestId('save-edit-btn')).toBeDisabled()
+  })
+
+  it('calls onDelete when delete button is clicked', () => {
+    const onDelete = jest.fn()
+    render(
+      <ChatMessage
+        role="player"
+        content="I attack!"
+        profileId="user-1"
+        userId="user-1"
+        isLastMessage={true}
+        onDelete={onDelete}
+      />
+    )
+
+    fireEvent.mouseEnter(screen.getByText('I attack!').closest('div')!)
+    fireEvent.click(screen.getByTestId('delete-message-btn'))
+
+    expect(onDelete).toHaveBeenCalledTimes(1)
+  })
+})

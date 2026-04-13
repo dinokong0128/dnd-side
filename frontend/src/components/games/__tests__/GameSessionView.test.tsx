@@ -14,22 +14,27 @@ jest.mock('../GameHeader', () => ({
 }))
 
 jest.mock('../ChatLog', () => ({
-  ChatLog: ({ onLoadMore, hasMoreMessages, isLoadingMore }: any) => (
+  ChatLog: ({ onLoadMore, hasMoreMessages, isLoadingMore, messages, userId, onDeleteMessage, onEditMessage }: any) => (
     <div data-testid="chat-log">
       <button data-testid="load-more" onClick={onLoadMore}>Load more</button>
       <div data-testid="has-more">{hasMoreMessages ? 'true' : 'false'}</div>
       <div data-testid="is-loading-more">{isLoadingMore ? 'true' : 'false'}</div>
+      <div data-testid="messages-count">{messages ? messages.length : 0}</div>
+      <div data-testid="chat-log-user-id">{userId || ''}</div>
+      <button data-testid="trigger-delete" onClick={() => onDeleteMessage?.('msg-1')}>Delete</button>
+      <button data-testid="trigger-edit" onClick={() => onEditMessage?.('msg-1', 'new content')}>Edit</button>
     </div>
   ),
 }))
 
 jest.mock('../ChatInput', () => ({
-  ChatInput: ({ hasCharacter, gameStatus, isWaitingForDm, onSubmit }: any) => (
+  ChatInput: ({ hasCharacter, gameStatus, isWaitingForDm, onSubmit, suggestedActions }: any) => (
     <div data-testid="chat-input">
       <div data-testid="has-character">{hasCharacter ? 'true' : 'false'}</div>
       <div data-testid="game-status">{gameStatus}</div>
       <div data-testid="is-waiting">{isWaitingForDm ? 'true' : 'false'}</div>
       <div data-testid="has-on-submit">{onSubmit ? 'true' : 'false'}</div>
+      <div data-testid="suggested-actions-count">{suggestedActions ? suggestedActions.length : 0}</div>
     </div>
   ),
 }))
@@ -141,12 +146,12 @@ describe('GameSessionView', () => {
           }),
         }
       }),
-      channel: jest.fn().mockReturnValue({
-        on: jest.fn().mockReturnValue({
-          subscribe: jest.fn().mockReturnValue({
-            unsubscribe: jest.fn(),
-          }),
-        }),
+      channel: jest.fn().mockImplementation(() => {
+        const channelObj = {
+          on: jest.fn().mockReturnThis(),
+          subscribe: jest.fn().mockReturnValue({ unsubscribe: jest.fn() }),
+        }
+        return channelObj
       }),
     }
 
@@ -166,6 +171,7 @@ describe('GameSessionView', () => {
     created_at: '2026-01-01T00:00:00Z',
     created_by: 'user-1',
     updated_at: '2026-01-01T00:00:00Z',
+    suggested_actions: null,
   }
 
   it('renders game header with correct game name', async () => {
@@ -173,6 +179,14 @@ describe('GameSessionView', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Test Campaign')).toBeInTheDocument()
+    })
+  })
+
+  it('passes userId to ChatLog (DIN-61)', async () => {
+    render(<GameSessionView gameId="game-1" game={mockGame} userId="user-42" />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('chat-log-user-id')).toHaveTextContent('user-42')
     })
   })
 
@@ -193,13 +207,11 @@ describe('GameSessionView', () => {
 
   it('safely unsubscribes from Realtime on unmount', async () => {
     const mockUnsubscribe = jest.fn()
-    mockSupabaseClient.channel.mockReturnValue({
-      on: jest.fn().mockReturnValue({
-        subscribe: jest.fn().mockReturnValue({
-          unsubscribe: mockUnsubscribe,
-        }),
-      }),
-    })
+    const channelObj = {
+      on: jest.fn().mockReturnThis(),
+      subscribe: jest.fn().mockReturnValue({ unsubscribe: mockUnsubscribe }),
+    }
+    mockSupabaseClient.channel.mockReturnValue(channelObj)
 
     const { unmount } = render(
       <GameSessionView gameId="game-1" game={mockGame} userId="user-1" />
@@ -398,14 +410,14 @@ describe('GameSessionView', () => {
     it('retry banner disappears when isWaitingForDm goes false via Realtime', async () => {
       let realtimeCallback: ((payload: any) => void) | null = null
 
-      mockSupabaseClient.channel.mockReturnValue({
+      const channelObj: any = {
         on: jest.fn().mockImplementation((_event: any, _filter: any, cb: any) => {
           realtimeCallback = cb
-          return {
-            subscribe: jest.fn().mockReturnValue({ unsubscribe: jest.fn() }),
-          }
+          return channelObj
         }),
-      })
+        subscribe: jest.fn().mockReturnValue({ unsubscribe: jest.fn() }),
+      }
+      mockSupabaseClient.channel.mockReturnValue(channelObj)
 
       render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
 
@@ -440,6 +452,41 @@ describe('GameSessionView', () => {
         expect(
           screen.queryByText(/The Dungeon Master hasn't responded in a while/i)
         ).not.toBeInTheDocument()
+      })
+    })
+
+    it('games Realtime UPDATE with suggested_actions passes updated list to ChatInput (DIN-42)', async () => {
+      const realtimeCallbacks: Array<(payload: any) => void> = []
+
+      const channelObj: any = {
+        on: jest.fn().mockImplementation((_event: any, _filter: any, cb: any) => {
+          realtimeCallbacks.push(cb)
+          return channelObj
+        }),
+        subscribe: jest.fn().mockReturnValue({ unsubscribe: jest.fn() }),
+      }
+      mockSupabaseClient.channel.mockReturnValue(channelObj)
+
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+
+      await waitFor(() => {
+        expect(screen.getByTestId('chat-input')).toBeInTheDocument()
+      })
+
+      // Simulate games Realtime UPDATE with new suggested_actions
+      act(() => {
+        for (const cb of realtimeCallbacks) {
+          cb({
+            new: {
+              ...mockGame,
+              suggested_actions: ['Attack the goblin', 'Search the room'],
+            },
+          })
+        }
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('suggested-actions-count')).toHaveTextContent('2')
       })
     })
 
@@ -489,6 +536,52 @@ describe('GameSessionView', () => {
           expect.objectContaining({
             method: 'POST',
             body: JSON.stringify({ action_text: 'I attack the dragon!' }),
+          })
+        )
+      })
+    })
+  })
+
+  describe('edit/delete message handlers (DIN-61)', () => {
+    it('handleDeleteMessage calls DELETE proxy', async () => {
+      ;(global.fetch as jest.Mock).mockResolvedValue({ ok: true, status: 204 })
+
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+
+      await waitFor(() => {
+        expect(screen.getByTestId('chat-log')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByTestId('trigger-delete'))
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          '/api/games/game-1/messages/msg-1',
+          expect.objectContaining({ method: 'DELETE' })
+        )
+      })
+    })
+
+    it('handleEditMessage calls PATCH proxy and sets isWaitingForDm=true', async () => {
+      ;(global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: async () => ({ id: 'msg-1', content: 'new content', role: 'player' }),
+      })
+
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+
+      await waitFor(() => {
+        expect(screen.getByTestId('chat-log')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByTestId('trigger-edit'))
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          '/api/games/game-1/messages/msg-1',
+          expect.objectContaining({
+            method: 'PATCH',
+            body: JSON.stringify({ content: 'new content' }),
           })
         )
       })

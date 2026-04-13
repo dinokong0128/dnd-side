@@ -64,7 +64,7 @@ describe('fetchGamesByUserId', () => {
 
     expect(mockFrom).toHaveBeenCalledWith('games')
     expect(mockSelect).toHaveBeenCalledWith(
-      'id, name, dm_persona, status, created_by, created_at, updated_at'
+      'id, name, dm_persona, status, created_by, created_at, updated_at, suggested_actions'
     )
     expect(mockEq).toHaveBeenCalledWith('created_by', 'user-xyz')
     expect(mockOrder).toHaveBeenCalledWith('updated_at', { ascending: false })
@@ -143,7 +143,7 @@ describe('createGame', () => {
     })
 
     expect(mockSelect).toHaveBeenCalledWith(
-      'id, name, dm_persona, status, created_by, created_at, updated_at'
+      'id, name, dm_persona, status, created_by, created_at, updated_at, suggested_actions'
     )
   })
 
@@ -226,7 +226,7 @@ describe('fetchGameById', () => {
     await fetchGameById('game-1')
 
     expect(mockSelect).toHaveBeenCalledWith(
-      'id, name, dm_persona, status, created_by, created_at, updated_at'
+      'id, name, dm_persona, status, created_by, created_at, updated_at, suggested_actions'
     )
   })
 })
