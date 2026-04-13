@@ -81,6 +81,24 @@ def _delete_following_dm_message(game_id: str, msg: dict) -> None:
         ).execute()
 
 
+def _assert_no_pending_dm_task(game_id: str, after_msg: dict) -> None:
+    """Raise 409 if no DM reply exists after after_msg (original task still in-flight)."""
+    following = (
+        supabase_client.table("game_messages")
+        .select("id, role")
+        .eq("game_id", game_id)
+        .gt("created_at", after_msg["created_at"])
+        .order("created_at", desc=False)
+        .limit(1)
+        .execute()
+    )
+    if not following.data or following.data[0]["role"] != MESSAGE_ROLE_DM:
+        raise HTTPException(
+            status_code=409,
+            detail="A DM response is already processing for this game",
+        )
+
+
 @router.delete("/{gameId}/messages/{messageId}", status_code=204)
 async def delete_message(
     gameId: str,
@@ -110,6 +128,8 @@ async def update_message(
 
     if msg["profile_id"] != current_user:
         raise HTTPException(status_code=403, detail="Can only edit your own messages")
+
+    _assert_no_pending_dm_task(gameId, msg)
 
     _delete_following_dm_message(gameId, msg)
 

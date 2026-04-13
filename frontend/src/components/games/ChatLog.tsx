@@ -13,6 +13,7 @@ interface ChatLogProps {
   onLoadMore: () => void
   onRetry?: () => void
   userId?: string
+  isWaitingForDm?: boolean
   onDeleteMessage?: (messageId: string) => void
   onEditMessage?: (messageId: string, content: string) => void
 }
@@ -26,6 +27,7 @@ export function ChatLog({
   onLoadMore,
   onRetry,
   userId,
+  isWaitingForDm,
   onDeleteMessage,
   onEditMessage,
 }: ChatLogProps) {
@@ -228,6 +230,7 @@ export function ChatLog({
               profileId={msg.profile_id}
               userId={userId}
               isLastMessage={msg.id === lastPlayerMsgId}
+              isWaitingForDm={isWaitingForDm}
               onRetry={msg.role === 'system' ? onRetry : undefined}
               onDelete={
                 msg.role === 'player' && onDeleteMessage

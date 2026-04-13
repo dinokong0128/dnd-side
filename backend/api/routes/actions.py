@@ -65,10 +65,26 @@ async def create_action(
 
         validate_action(action, player.data, game.data)
 
-        # Step 3: Generate message_id
+        # Step 3: Abort if a DM task is already in-flight for this game.
+        # The last message having role='player' means the DM hasn't responded yet.
+        latest_msg = (
+            supabase_client.table("game_messages")
+            .select("role")
+            .eq("game_id", gameId)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if latest_msg.data and latest_msg.data[0]["role"] == MESSAGE_ROLE_PLAYER:
+            raise HTTPException(
+                status_code=409,
+                detail="A DM response is already processing for this game",
+            )
+
+        # Step 4: Generate message_id
         message_id = str(uuid.uuid4())
 
-        # Step 4: Insert action to game_messages
+        # Step 5: Insert action to game_messages
         message_row = {
             "game_id": gameId,
             "profile_id": current_user,
@@ -78,7 +94,7 @@ async def create_action(
 
         supabase_client.table("game_messages").insert(message_row).execute()
 
-        # Step 5: Embed action text + RAG search (falls back to empty context on failure)
+        # Step 6: Embed action text + RAG search (falls back to empty context on failure)
         try:
             embedding = openai_client.embeddings.create(
                 model="text-embedding-3-small",
@@ -93,7 +109,7 @@ async def create_action(
             )
             rag_context = []
 
-        # Step 6: Queue Dramatiq task with max_retries
+        # Step 7: Queue Dramatiq task with max_retries
         # Task will handle Claude call, event extraction, response broadcast
         dm_response_task.send(
             game_id=gameId,
