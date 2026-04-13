@@ -226,7 +226,6 @@ export function ChatLog({
                   : undefined
               }
               content={msg.content}
-              messageId={msg.id}
               profileId={msg.profile_id}
               userId={userId}
               isLastMessage={msg.id === lastPlayerMsgId}
