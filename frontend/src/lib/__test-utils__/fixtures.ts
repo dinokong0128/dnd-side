@@ -53,6 +53,7 @@ export function makeGame(overrides: Partial<Game> = {}): Game {
     created_by: 'user-1',
     created_at: '2026-03-22T00:00:00Z',
     updated_at: '2026-03-22T00:00:00Z',
+    suggested_actions: null,
     ...overrides,
   }
 }
