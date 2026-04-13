@@ -14,14 +14,17 @@ import re
 
 from config import supabase_client, anthropic_client, openai_client
 import redis_broker  # noqa: F401 — ensure broker is set before defining actors
+from dramatiq.middleware import CurrentMessage
 from services.dm_service import extract_events_from_response, search_rag
 from services.embedding_service import embed_text
 from constants import MESSAGE_ROLE_DM, MESSAGE_ROLE_SYSTEM, EVENT_SOURCE_CLAUDE
 
 logger = logging.getLogger(__name__)
 
+DM_TASK_MAX_RETRIES = 3
 
-@dramatiq.actor(max_retries=3, min_backoff=1000)
+
+@dramatiq.actor(max_retries=DM_TASK_MAX_RETRIES, min_backoff=1000)
 def dm_response_task(
     game_id: str,
     message_id: str,
@@ -229,21 +232,14 @@ The acting player's action:
     except Exception as e:
         logger.error(f"[dm_response_task] Error: {str(e)}", exc_info=True)
 
-        # Only insert error message if the most recent message isn't already a system error.
-        # This prevents spamming the user with one error per retry attempt.
+        # Only insert a system error message on the terminal retry so users never see a
+        # false failure that later disappears when a subsequent retry succeeds.
+        # CurrentMessage.get_current_message() is None when called outside Dramatiq
+        # (e.g. directly in tests), which we treat as a non-terminal attempt.
         try:
-            last = (
-                supabase_client.table("game_messages")
-                .select("role")
-                .eq("game_id", game_id)
-                .order("created_at", desc=True)
-                .limit(1)
-                .execute()
-            )
-            already_errored = bool(
-                last.data and last.data[0]["role"] == MESSAGE_ROLE_SYSTEM
-            )
-            if not already_errored:
+            msg = CurrentMessage.get_current_message()
+            retries_so_far = msg.options.get("retries", 0) if msg else 0
+            if retries_so_far >= DM_TASK_MAX_RETRIES:
                 supabase_client.table("game_messages").insert(
                     {
                         "game_id": game_id,

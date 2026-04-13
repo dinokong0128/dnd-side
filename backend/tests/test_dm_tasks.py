@@ -13,6 +13,8 @@ with patch("config.supabase_client", MagicMock()), patch(
 ), patch(
     "redis_broker.redis_client", MagicMock()
 ), patch(
+    "dramatiq.middleware.CurrentMessage", MagicMock()
+), patch(
     "services.embedding_service.embed_text"
 ) as mock_embed_text:
     from tasks.dm_tasks import (
@@ -368,20 +370,13 @@ class TestDmResponseTask:
             # Verify game_events insert was called
             assert game_events_mock.insert.called
 
-    def test_error_inserts_system_message_and_reraises(self):
-        """Should insert system error message and re-raise when last message is not system."""
+    def test_error_inserts_system_message_on_terminal_retry(self):
+        """Should insert system error message only on the terminal retry (retries == max_retries)."""
         mock_game_result = MagicMock()
         mock_game_result.data = None  # Trigger error
 
-        # Last message is a player message — error message should be inserted
-        mock_last_msg_result = MagicMock()
-        mock_last_msg_result.data = [{"role": "player"}]
-
         mock_insert_result = MagicMock()
         game_messages_mock = MagicMock()
-        game_messages_mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = (
-            mock_last_msg_result
-        )
         game_messages_mock.insert.return_value.execute.return_value = mock_insert_result
 
         def table_side_effect(name):
@@ -394,31 +389,31 @@ class TestDmResponseTask:
                 return game_messages_mock
             return mock
 
-        with patch("tasks.dm_tasks.supabase_client") as mock_sb:
+        # Simulate terminal retry: retries == DM_TASK_MAX_RETRIES (3)
+        mock_message = MagicMock()
+        mock_message.options = {"retries": 3}
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.CurrentMessage"
+        ) as mock_current_message:
             mock_sb.table.side_effect = table_side_effect
+            mock_current_message.get_current_message.return_value = mock_message
 
             with pytest.raises(Exception):
                 dm_response_task.fn("game-1", "msg-1", "I attack!", [])
 
-            # Assert error message was inserted
+            # Assert system error was inserted on the terminal retry
             assert game_messages_mock.insert.called
             insert_call = game_messages_mock.insert.call_args[0][0]
             assert insert_call["role"] == "system"
 
-    def test_error_does_not_insert_system_message_if_already_errored(self):
-        """Should not insert a second system error message when last message is already system."""
+    def test_error_does_not_insert_system_message_on_early_retry(self):
+        """Should not insert system error message on non-terminal retries to avoid false positives."""
         mock_game_result = MagicMock()
         mock_game_result.data = None  # Trigger error
 
-        # Last message is already a system error — should NOT insert another one
-        mock_last_msg_result = MagicMock()
-        mock_last_msg_result.data = [{"role": "system"}]
-
         mock_insert_result = MagicMock()
         game_messages_mock = MagicMock()
-        game_messages_mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = (
-            mock_last_msg_result
-        )
         game_messages_mock.insert.return_value.execute.return_value = mock_insert_result
 
         def table_side_effect(name):
@@ -431,13 +426,20 @@ class TestDmResponseTask:
                 return game_messages_mock
             return mock
 
-        with patch("tasks.dm_tasks.supabase_client") as mock_sb:
+        # Simulate early retry: retries < DM_TASK_MAX_RETRIES
+        mock_message = MagicMock()
+        mock_message.options = {"retries": 1}
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.CurrentMessage"
+        ) as mock_current_message:
             mock_sb.table.side_effect = table_side_effect
+            mock_current_message.get_current_message.return_value = mock_message
 
             with pytest.raises(Exception):
                 dm_response_task.fn("game-1", "msg-1", "I attack!", [])
 
-            # Assert error message was NOT inserted again
+            # Assert system error was NOT inserted — a later retry may still succeed
             assert not game_messages_mock.insert.called
 
 

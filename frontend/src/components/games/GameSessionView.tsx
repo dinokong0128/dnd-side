@@ -148,9 +148,10 @@ export function GameSessionView({
     if (last) setLastPlayerAction(last.content)
   }, [messages, userId])
 
-  // Start/clear 45s timeout when waiting state changes
+  // Start/clear 45s timeout when waiting state changes — only during active sessions.
+  // Paused/lobby states should never surface a retry CTA since /actions would 500.
   useEffect(() => {
-    if (isWaitingForDm) {
+    if (isWaitingForDm && gameStatus === 'active') {
       retryTimerRef.current = setTimeout(() => setShowRetryTimeout(true), 45_000)
     } else {
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
@@ -160,7 +161,7 @@ export function GameSessionView({
     return () => {
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
     }
-  }, [isWaitingForDm])
+  }, [isWaitingForDm, gameStatus])
 
   const handleSubmit = async (actionText: string) => {
     setShowRetryTimeout(false)
@@ -260,7 +261,7 @@ export function GameSessionView({
         onRetry={handleRetryLastAction}
       />
       {isWaitingForDm && gameStatus === 'active' && <TypingIndicator />}
-      {showRetryTimeout && isWaitingForDm && (
+      {showRetryTimeout && isWaitingForDm && gameStatus === 'active' && (
         <div style={{ flexShrink: 0, borderTop: '1px solid var(--dnd-brown)', background: 'var(--dnd-charcoal)', padding: '8px 24px' }}>
           <div style={{ maxWidth: '48rem', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', borderRadius: '6px', border: '1px solid rgba(192,57,43,0.3)', background: 'rgba(139,34,50,0.12)', padding: '8px 14px' }}>
             <span style={{ fontFamily: "'Lora', serif", fontSize: '0.85rem', fontStyle: 'italic', color: '#e8a0a0' }}>

@@ -5,6 +5,7 @@ Dramatiq broker setup with Redis
 
 import dramatiq
 from dramatiq.brokers.redis import RedisBroker
+from dramatiq.middleware import CurrentMessage
 from redis import Redis
 import os
 
@@ -14,6 +15,7 @@ redis_client = Redis.from_url(REDIS_URL, decode_responses=True)
 
 # Dramatiq broker with Redis
 redis_broker = RedisBroker(url=REDIS_URL)
+redis_broker.add_middleware(CurrentMessage())
 redis_broker.emit_after("process_boot", lambda _: print("Dramatiq broker ready"))
 
 # Set as default broker
