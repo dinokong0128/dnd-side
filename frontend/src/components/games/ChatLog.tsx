@@ -212,24 +212,30 @@ export function ChatLog({
           </div>
         )}
 
-        {messages.map((msg, idx) => (
-          <ChatMessage
-            key={msg.id}
-            role={msg.role}
-            characterName={
-              msg.role === 'player'
-                ? playerMap.get(msg.profile_id || '') || 'Unknown Character'
-                : undefined
-            }
-            content={msg.content}
-            onRetry={msg.role === 'system' ? onRetry : undefined}
-            isLastMessage={idx === messages.length - 1}
-            profileId={msg.profile_id ?? undefined}
-            userId={userId}
-            onDelete={onDeleteMessage ? () => onDeleteMessage(msg.id) : undefined}
-            onEdit={onEditMessage ? (newContent) => onEditMessage(msg.id, newContent) : undefined}
-          />
-        ))}
+        {(() => {
+          const lastPlayerIdx = messages.reduce(
+            (acc, msg, idx) => (msg.role === 'player' ? idx : acc),
+            -1
+          )
+          return messages.map((msg, idx) => (
+            <ChatMessage
+              key={msg.id}
+              role={msg.role}
+              characterName={
+                msg.role === 'player'
+                  ? playerMap.get(msg.profile_id || '') || 'Unknown Character'
+                  : undefined
+              }
+              content={msg.content}
+              onRetry={msg.role === 'system' ? onRetry : undefined}
+              isLastMessage={idx === lastPlayerIdx}
+              profileId={msg.profile_id ?? undefined}
+              userId={userId}
+              onDelete={onDeleteMessage ? () => onDeleteMessage(msg.id) : undefined}
+              onEdit={onEditMessage ? (newContent) => onEditMessage(msg.id, newContent) : undefined}
+            />
+          ))
+        })()}
       </div>
 
       <div ref={bottomSentinelRef} />

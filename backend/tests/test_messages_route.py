@@ -51,12 +51,12 @@ def make_supabase_mock(
             maybe_single_chain.execute.return_value = MagicMock(data=msg_data)
             t.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value = maybe_single_chain
 
-            # last message query (select id, order desc, limit 1)
+            # last player message query (select id, eq game_id, eq role=player, order desc, limit 1)
             last_chain = MagicMock()
             last_chain.execute.return_value = MagicMock(
                 data=[{"id": last_id}] if last_id else []
             )
-            t.select.return_value.eq.return_value.order.return_value.limit.return_value = last_chain
+            t.select.return_value.eq.return_value.eq.return_value.order.return_value.limit.return_value = last_chain
 
             # following message query (select id role, gt, order asc, limit 1)
             following_chain = MagicMock()
