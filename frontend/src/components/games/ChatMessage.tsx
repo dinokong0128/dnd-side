@@ -4,12 +4,14 @@ interface ChatMessageProps {
   role: 'player' | 'dm' | 'system'
   characterName?: string
   content: string
+  onRetry?: () => void
 }
 
 export function ChatMessage({
   role,
   characterName,
   content,
+  onRetry,
 }: ChatMessageProps) {
   if (role === 'dm') {
     return (
@@ -71,12 +73,34 @@ export function ChatMessage({
       <div
         className="max-w-2xl rounded-lg border px-5 py-4 text-center text-sm"
         style={{
-          background: 'rgba(212, 168, 67, 0.08)',
-          borderColor: 'rgba(212, 168, 67, 0.2)',
-          color: 'var(--dnd-amber)',
+          background: 'rgba(139,34,50,0.15)',
+          borderColor: 'rgba(192,57,43,0.3)',
         }}
       >
-        <p className="font-serif italic">{content}</p>
+        <div
+          style={{
+            color: '#e8a0a0',
+            fontFamily: "'Cinzel', serif",
+            fontSize: '0.65rem',
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+            marginBottom: '6px',
+          }}
+        >
+          System
+        </div>
+        <p className="font-serif italic" style={{ color: '#e8a0a0' }}>
+          {content}
+        </p>
+        {onRetry && (
+          <button
+            onClick={onRetry}
+            className="dnd-btn-secondary"
+            style={{ marginTop: '10px', padding: '5px 14px', fontSize: '0.65rem' }}
+          >
+            ↩ Retry last action
+          </button>
+        )}
       </div>
     </div>
   )

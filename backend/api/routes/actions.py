@@ -5,6 +5,7 @@ Validates action, embeds, queues Dramatiq task
 """
 
 from fastapi import APIRouter, Depends, HTTPException
+import logging
 import uuid
 
 from config import supabase_client, openai_client
@@ -13,6 +14,8 @@ from models.action import ActionInput, ActionResponse
 from services.dm_service import validate_action, search_rag
 from tasks.dm_tasks import dm_response_task
 from constants import MESSAGE_ROLE_PLAYER
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -75,18 +78,22 @@ async def create_action(
 
         supabase_client.table("game_messages").insert(message_row).execute()
 
-        # Step 5: Embed action text
-        embedding = openai_client.embeddings.create(
-            model="text-embedding-3-small",
-            input=action.action_text,
-            dimensions=1536,
-        )
-        embedding_vector = embedding.data[0].embedding
+        # Step 5: Embed action text + RAG search (falls back to empty context on failure)
+        try:
+            embedding = openai_client.embeddings.create(
+                model="text-embedding-3-small",
+                input=action.action_text,
+                dimensions=1536,
+            )
+            embedding_vector = embedding.data[0].embedding
+            rag_context = search_rag(gameId, embedding_vector, top_k=5)
+        except Exception as e:
+            logger.warning(
+                f"[create_action] OpenAI embedding failed (fallback to no RAG): {e}"
+            )
+            rag_context = []
 
-        # Step 6: RAG search for relevant events
-        rag_context = search_rag(gameId, embedding_vector, top_k=5)
-
-        # Step 7: Queue Dramatiq task with max_retries
+        # Step 6: Queue Dramatiq task with max_retries
         # Task will handle Claude call, event extraction, response broadcast
         dm_response_task.send(
             game_id=gameId,

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { GameMessage } from '@/lib/types/message'
 import { Game } from '@/lib/supabase/games'
@@ -31,6 +31,9 @@ export function GameSessionView({
   const [showPauseModal, setShowPauseModal] = useState(false)
   const [showEndModal, setShowEndModal] = useState(false)
   const [isActionLoading, setIsActionLoading] = useState(false)
+  const [showRetryTimeout, setShowRetryTimeout] = useState(false)
+  const [lastPlayerAction, setLastPlayerAction] = useState<string | null>(null)
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isHost = game.created_by === userId
 
@@ -137,7 +140,31 @@ export function GameSessionView({
     }
   }, [gameId, userId])
 
+  // Track the last player action for retry
+  useEffect(() => {
+    const last = [...messages].reverse().find(
+      (m) => m.role === 'player' && m.profile_id === userId
+    )
+    if (last) setLastPlayerAction(last.content)
+  }, [messages, userId])
+
+  // Start/clear 45s timeout when waiting state changes — only during active sessions.
+  // Paused/lobby states should never surface a retry CTA since /actions would 500.
+  useEffect(() => {
+    if (isWaitingForDm && gameStatus === 'active') {
+      retryTimerRef.current = setTimeout(() => setShowRetryTimeout(true), 45_000)
+    } else {
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
+      retryTimerRef.current = null
+      setShowRetryTimeout(false)
+    }
+    return () => {
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
+    }
+  }, [isWaitingForDm, gameStatus])
+
   const handleSubmit = async (actionText: string) => {
+    setShowRetryTimeout(false)
     try {
       setIsWaitingForDm(true)
 
@@ -159,6 +186,12 @@ export function GameSessionView({
     } catch {
       setIsWaitingForDm(false)
     }
+  }
+
+  const handleRetryLastAction = async () => {
+    if (!lastPlayerAction) return
+    setShowRetryTimeout(false)
+    await handleSubmit(lastPlayerAction)
   }
 
   const handlePause = async () => {
@@ -221,8 +254,25 @@ export function GameSessionView({
         onPause={() => setShowPauseModal(true)}
         onEnd={() => setShowEndModal(true)}
       />
-      <ChatLog messages={messages} playerMap={playerMap} isLoading={isLoading} />
+      <ChatLog
+        messages={messages}
+        playerMap={playerMap}
+        isLoading={isLoading}
+        onRetry={handleRetryLastAction}
+      />
       {isWaitingForDm && gameStatus === 'active' && <TypingIndicator />}
+      {showRetryTimeout && isWaitingForDm && gameStatus === 'active' && (
+        <div style={{ flexShrink: 0, borderTop: '1px solid var(--dnd-brown)', background: 'var(--dnd-charcoal)', padding: '8px 24px' }}>
+          <div style={{ maxWidth: '48rem', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', borderRadius: '6px', border: '1px solid rgba(192,57,43,0.3)', background: 'rgba(139,34,50,0.12)', padding: '8px 14px' }}>
+            <span style={{ fontFamily: "'Lora', serif", fontSize: '0.85rem', fontStyle: 'italic', color: '#e8a0a0' }}>
+              The Dungeon Master hasn&apos;t responded in a while.
+            </span>
+            <button onClick={handleRetryLastAction} className="dnd-btn-secondary" style={{ whiteSpace: 'nowrap', padding: '4px 12px', fontSize: '0.65rem' }}>
+              ↩ Retry
+            </button>
+          </div>
+        </div>
+      )}
       <SessionStatusBanner
         gameStatus={gameStatus}
         isHost={isHost}

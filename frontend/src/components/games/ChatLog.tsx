@@ -8,9 +8,10 @@ interface ChatLogProps {
   messages: GameMessage[]
   playerMap: Map<string, string>
   isLoading: boolean
+  onRetry?: () => void
 }
 
-export function ChatLog({ messages, playerMap, isLoading }: ChatLogProps) {
+export function ChatLog({ messages, playerMap, isLoading, onRetry }: ChatLogProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const bottomSentinelRef = useRef<HTMLDivElement>(null)
   // isAtBottom doesn't need to be state since it doesn't drive rendering directly.
@@ -112,6 +113,7 @@ export function ChatLog({ messages, playerMap, isLoading }: ChatLogProps) {
                 : undefined
             }
             content={msg.content}
+            onRetry={msg.role === 'system' ? onRetry : undefined}
           />
         ))}
       </div>
