@@ -106,6 +106,15 @@ export function GameSessionView({
           setIsWaitingForDm(latestMsg.role === 'player')
         }
 
+        // Authenticate Realtime WebSocket with the user's JWT so RLS-protected
+        // postgres_changes events are delivered. Without this, @supabase/ssr's
+        // browser client connects Realtime as anonymous and INSERT/UPDATE/DELETE
+        // events are silently blocked by the game_messages SELECT policy.
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.access_token) {
+          supabase.realtime.setAuth(session.access_token)
+        }
+
         setIsLoading(false)
       } catch {
         setIsLoading(false)
