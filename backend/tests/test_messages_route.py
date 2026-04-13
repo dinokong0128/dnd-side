@@ -278,6 +278,19 @@ class TestPatchMessage:
         assert res.status_code == 409
         assert "still responding" in res.json()["detail"].lower()
 
+    def test_403_when_different_user(self, client):
+        """PATCH returns 403 when message belongs to a different user."""
+        other_msg = {**PLAYER_MSG, "profile_id": "other-user-uuid"}
+        gm = _build_gm_mock(target_msg=other_msg)
+
+        with patch("api.routes.messages.supabase_client", _make_supabase(gm)):
+            res = client.patch(
+                f"/games/{GAME_ID}/messages/{MSG_ID}",
+                json={"content": "New content"},
+            )
+
+        assert res.status_code == 403
+
     def test_401_unauthed(self, unauthed_client):
         """PATCH returns 401 when not authenticated."""
         gm = _build_gm_mock()
