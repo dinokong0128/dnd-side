@@ -14,7 +14,13 @@ jest.mock('../GameHeader', () => ({
 }))
 
 jest.mock('../ChatLog', () => ({
-  ChatLog: () => <div data-testid="chat-log">Chat Log</div>,
+  ChatLog: ({ onLoadMore, hasMoreMessages, isLoadingMore }: any) => (
+    <div data-testid="chat-log">
+      <button data-testid="load-more" onClick={onLoadMore}>Load more</button>
+      <div data-testid="has-more">{hasMoreMessages ? 'true' : 'false'}</div>
+      <div data-testid="is-loading-more">{isLoadingMore ? 'true' : 'false'}</div>
+    </div>
+  ),
 }))
 
 jest.mock('../ChatInput', () => ({
@@ -41,20 +47,81 @@ jest.mock('../SessionStatusBanner', () => ({
 }))
 
 describe('GameSessionView', () => {
-  const testContext: { playersData: any[] } = { playersData: [] }
+  const testContext: {
+    playersData: any[]
+    initialMessages: any[]
+    latestRole: 'player' | 'dm' | 'system' | null
+    loadMoreMessages: any[]
+    capturedLimitCalls: number[]
+    capturedOrderArgs: Array<{ column: string; ascending: boolean }>
+    capturedLtValues: string[]
+  } = {
+    playersData: [],
+    initialMessages: [],
+    latestRole: null,
+    loadMoreMessages: [],
+    capturedLimitCalls: [],
+    capturedOrderArgs: [],
+    capturedLtValues: [],
+  }
   let mockSupabaseClient: any
 
   beforeEach(() => {
     testContext.playersData = []
+    testContext.initialMessages = []
+    testContext.latestRole = null
+    testContext.loadMoreMessages = []
+    testContext.capturedLimitCalls = []
+    testContext.capturedOrderArgs = []
+    testContext.capturedLtValues = []
+
     mockSupabaseClient = {
       from: jest.fn().mockImplementation((table: string) => {
         if (table === 'game_messages') {
           return {
-            select: jest.fn().mockReturnValue({
-              eq: jest.fn().mockReturnValue({
-                order: jest.fn().mockResolvedValue({ data: [], error: null }),
+            select: jest.fn().mockImplementation((selectArg: string) => ({
+              eq: jest.fn().mockImplementation(() => {
+                let ltValue: string | null = null
+                let orderAscending = true
+                return {
+                  lt: jest.fn().mockImplementation((_column: string, value: string) => {
+                    ltValue = value
+                    testContext.capturedLtValues.push(value)
+                    return {
+                      order: jest.fn().mockImplementation((column: string, options: { ascending: boolean }) => {
+                        orderAscending = options.ascending
+                        testContext.capturedOrderArgs.push({ column, ascending: options.ascending })
+                        return {
+                          limit: jest.fn().mockImplementation((limitCount: number) => {
+                            testContext.capturedLimitCalls.push(limitCount)
+                            if (!orderAscending || ltValue) {
+                              return Promise.resolve({ data: testContext.loadMoreMessages, error: null })
+                            }
+                            return Promise.resolve({ data: [], error: null })
+                          }),
+                        }
+                      }),
+                    }
+                  }),
+                  order: jest.fn().mockImplementation((column: string, options: { ascending: boolean }) => {
+                    orderAscending = options.ascending
+                    testContext.capturedOrderArgs.push({ column, ascending: options.ascending })
+                    return {
+                      limit: jest.fn().mockImplementation((limitCount: number) => {
+                        testContext.capturedLimitCalls.push(limitCount)
+                        if (selectArg === 'role') {
+                          return Promise.resolve({
+                            data: testContext.latestRole ? [{ role: testContext.latestRole }] : [],
+                            error: null,
+                          })
+                        }
+                        return Promise.resolve({ data: testContext.initialMessages, error: null })
+                      }),
+                    }
+                  }),
+                }
               }),
-            }),
+            })),
           }
         }
         if (table === 'players') {
@@ -68,7 +135,6 @@ describe('GameSessionView', () => {
             }),
           }
         }
-        // Default mock for any other table
         return {
           select: jest.fn().mockReturnValue({
             eq: jest.fn().mockResolvedValue({ data: [], error: null }),
@@ -156,6 +222,61 @@ describe('GameSessionView', () => {
     })
   })
 
+  it('fetches initial messages with descending order and page-size limit', async () => {
+    render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('chat-input')).toBeInTheDocument()
+    })
+
+    expect(
+      testContext.capturedOrderArgs.some(
+        (arg) => arg.column === 'created_at' && arg.ascending === false
+      )
+    ).toBe(true)
+    expect(testContext.capturedLimitCalls).toContain(10)
+  })
+
+  it('derives isWaitingForDm from latest-message query, not paginated batch', async () => {
+    testContext.initialMessages = [
+      {
+        id: 'msg-1',
+        game_id: 'game-1',
+        role: 'player',
+        profile_id: 'user-1',
+        content: 'older player action',
+        created_at: '2026-04-01T00:00:00Z',
+      },
+    ]
+    testContext.latestRole = 'dm'
+
+    render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('is-waiting')).toHaveTextContent('false')
+    })
+  })
+
+  it('sets hasMoreMessages false when initial fetch has fewer than page size', async () => {
+    testContext.initialMessages = [
+      {
+        id: 'msg-1',
+        game_id: 'game-1',
+        role: 'dm',
+        profile_id: null,
+        content: 'hello',
+        created_at: '2026-04-01T00:00:00Z',
+      },
+    ]
+    testContext.latestRole = 'dm'
+
+    render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('has-more')).toHaveTextContent('false')
+    })
+  })
+
   it('sets hasCharacter to true when current user has a character in playerMap', async () => {
     testContext.playersData = [
       {
@@ -220,11 +341,7 @@ describe('GameSessionView', () => {
       expect(screen.getByTestId('chat-input')).toBeInTheDocument()
     })
 
-    // Simulate ChatInput calling onSubmit
-    const mockOnSubmit = (global.fetch as jest.Mock).mock.calls[0]?.[0]
-
-    // In real scenario, ChatInput would call the onSubmit handler from GameSessionView
-    // We can verify fetch was called with expected parameters
+    // In this test harness ChatInput is mocked, so submitting is covered in integration tests.
   })
 
   it('sets isWaitingForDm to false when API call fails', async () => {
@@ -332,51 +449,24 @@ describe('GameSessionView', () => {
         json: async () => ({ message_id: 'msg-1', status: 'queued' }),
       })
 
-      // Return a player message for the current user
-      mockSupabaseClient.from.mockImplementation((table: string) => {
-        if (table === 'game_messages') {
-          return {
-            select: jest.fn().mockReturnValue({
-              eq: jest.fn().mockReturnValue({
-                order: jest.fn().mockResolvedValue({
-                  data: [
-                    {
-                      id: 'msg-p1',
-                      game_id: 'game-1',
-                      role: 'player',
-                      profile_id: 'user-1',
-                      content: 'I attack the dragon!',
-                      created_at: '2026-04-01T00:00:00Z',
-                    },
-                  ],
-                  error: null,
-                }),
-              }),
-            }),
-          }
-        }
-        if (table === 'players') {
-          return {
-            select: jest.fn().mockReturnValue({
-              eq: jest.fn().mockResolvedValue({
-                data: [
-                  {
-                    id: 'player-1',
-                    profile_id: 'user-1',
-                    character_name: 'Thorin',
-                  },
-                ],
-                error: null,
-              }),
-            }),
-          }
-        }
-        return {
-          select: jest.fn().mockReturnValue({
-            eq: jest.fn().mockResolvedValue({ data: [], error: null }),
-          }),
-        }
-      })
+      testContext.initialMessages = [
+        {
+          id: 'msg-p1',
+          game_id: 'game-1',
+          role: 'player',
+          profile_id: 'user-1',
+          content: 'I attack the dragon!',
+          created_at: '2026-04-01T00:00:00Z',
+        },
+      ]
+      testContext.latestRole = 'player'
+      testContext.playersData = [
+        {
+          id: 'player-1',
+          profile_id: 'user-1',
+          character_name: 'Thorin',
+        },
+      ]
 
       render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
 

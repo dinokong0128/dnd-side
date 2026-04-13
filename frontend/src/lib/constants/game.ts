@@ -44,3 +44,5 @@ export const STAT_CONSTRAINTS = {
   min: 1,
   max: 20,
 } as const
+
+export const CHAT_PAGE_SIZE = 10

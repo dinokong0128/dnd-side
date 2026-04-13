@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { GameMessage } from '@/lib/types/message'
 import { ChatMessage } from './ChatMessage'
 
@@ -8,16 +8,69 @@ interface ChatLogProps {
   messages: GameMessage[]
   playerMap: Map<string, string>
   isLoading: boolean
+  hasMoreMessages: boolean
+  isLoadingMore: boolean
+  onLoadMore: () => void
   onRetry?: () => void
 }
 
-export function ChatLog({ messages, playerMap, isLoading, onRetry }: ChatLogProps) {
+export function ChatLog({
+  messages,
+  playerMap,
+  isLoading,
+  hasMoreMessages,
+  isLoadingMore,
+  onLoadMore,
+  onRetry,
+}: ChatLogProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const topSentinelRef = useRef<HTMLDivElement>(null)
   const bottomSentinelRef = useRef<HTMLDivElement>(null)
+  const prevScrollHeightRef = useRef(0)
   // isAtBottom doesn't need to be state since it doesn't drive rendering directly.
   // Using a ref avoids calling setState inside an effect when new messages arrive.
   const isAtBottomRef = useRef(true)
   const [hasNewMessages, setHasNewMessages] = useState(false)
+
+  useLayoutEffect(() => {
+    if (!scrollContainerRef.current) return
+
+    const container = scrollContainerRef.current
+    const newScrollHeight = container.scrollHeight
+    const prevScrollHeight = prevScrollHeightRef.current
+
+    if (prevScrollHeight > 0 && newScrollHeight > prevScrollHeight) {
+      container.scrollTop += newScrollHeight - prevScrollHeight
+    }
+
+    prevScrollHeightRef.current = 0
+  }, [messages])
+
+  useEffect(() => {
+    const sentinel = topSentinelRef.current
+    const root = scrollContainerRef.current
+    if (!sentinel || !root) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0]
+        if (entry.isIntersecting && hasMoreMessages && !isLoadingMore) {
+          if (scrollContainerRef.current) {
+            prevScrollHeightRef.current = scrollContainerRef.current.scrollHeight
+          }
+          onLoadMore()
+        }
+      },
+      {
+        root,
+        rootMargin: '100px',
+        threshold: 0,
+      }
+    )
+
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [hasMoreMessages, isLoadingMore, onLoadMore])
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -103,6 +156,56 @@ export function ChatLog({ messages, playerMap, isLoading, onRetry }: ChatLogProp
       style={{ background: 'var(--dnd-black)' }}
     >
       <div className="max-w-3xl space-y-4">
+        <div ref={topSentinelRef} />
+
+        {isLoadingMore && (
+          <div className="flex items-center justify-center gap-2 py-2">
+            <div
+              className="h-4 w-4 rounded-full"
+              style={{
+                border: '2px solid rgba(201,168,76,0.2)',
+                borderTopColor: 'var(--dnd-gold)',
+                animation: 'spin 0.8s linear infinite',
+              }}
+            />
+            <span
+              className="text-xs italic"
+              style={{
+                fontFamily: "'Lora', serif",
+                color: 'var(--dnd-parchment-dim)',
+              }}
+            >
+              Fetching older messages…
+            </span>
+          </div>
+        )}
+
+        {!hasMoreMessages && !isLoadingMore && messages.length > 0 && (
+          <div className="flex flex-col items-center gap-2 pb-1 pt-3">
+            <hr className="dnd-divider my-0 w-full" />
+            <div
+              className="flex items-center gap-2.5"
+              style={{
+                color: 'var(--dnd-parchment-dim)',
+                fontFamily: "'Lora', serif",
+                fontSize: '12px',
+                fontStyle: 'italic',
+              }}
+            >
+              <span
+                className="inline-block h-1.5 w-1.5 rotate-45"
+                style={{ background: 'var(--dnd-parchment-dim)' }}
+              />
+              <span>The adventure begins here</span>
+              <span
+                className="inline-block h-1.5 w-1.5 rotate-45"
+                style={{ background: 'var(--dnd-parchment-dim)' }}
+              />
+            </div>
+            <hr className="dnd-divider my-0 w-full" />
+          </div>
+        )}
+
         {messages.map((msg) => (
           <ChatMessage
             key={msg.id}
@@ -134,6 +237,14 @@ export function ChatLog({ messages, playerMap, isLoading, onRetry }: ChatLogProp
           ↓ New message
         </button>
       )}
+
+      <style jsx>{`
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+      `}</style>
     </div>
   )
 }
