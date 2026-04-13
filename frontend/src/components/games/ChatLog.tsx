@@ -182,39 +182,27 @@ export function ChatLog({
 
         {!hasMoreMessages && !isLoadingMore && messages.length > 0 && (
           <div className="flex flex-col items-center gap-2 pb-1 pt-3">
+            <hr className="dnd-divider my-0 w-full" />
             <div
-              className="h-px w-full"
+              className="flex items-center gap-2.5"
               style={{
-                background:
-                  'linear-gradient(90deg, transparent, var(--dnd-brown), transparent)',
-              }}
-            />
-            <div
-              className="flex items-center gap-2.5 uppercase"
-              style={{
-                color: 'var(--dnd-gold-dim)',
-                fontFamily: "'Cinzel', serif",
-                fontSize: '10px',
-                letterSpacing: '0.15em',
+                color: 'var(--dnd-parchment-dim)',
+                fontFamily: "'Lora', serif",
+                fontSize: '12px',
+                fontStyle: 'italic',
               }}
             >
               <span
                 className="inline-block h-1.5 w-1.5 rotate-45"
-                style={{ background: 'var(--dnd-gold-dim)' }}
+                style={{ background: 'var(--dnd-parchment-dim)' }}
               />
-              <span>⚔ The adventure begins here</span>
+              <span>The adventure begins here</span>
               <span
                 className="inline-block h-1.5 w-1.5 rotate-45"
-                style={{ background: 'var(--dnd-gold-dim)' }}
+                style={{ background: 'var(--dnd-parchment-dim)' }}
               />
             </div>
-            <div
-              className="h-px w-full"
-              style={{
-                background:
-                  'linear-gradient(90deg, transparent, var(--dnd-brown), transparent)',
-              }}
-            />
+            <hr className="dnd-divider my-0 w-full" />
           </div>
         )}
 
