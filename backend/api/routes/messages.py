@@ -51,6 +51,7 @@ def _get_last_player_message(game_id: str, message_id: str) -> dict:
         supabase_client.table("game_messages")
         .select("id")
         .eq("game_id", game_id)
+        .eq("role", MESSAGE_ROLE_PLAYER)
         .order("created_at", desc=True)
         .limit(1)
         .execute()
@@ -58,7 +59,7 @@ def _get_last_player_message(game_id: str, message_id: str) -> dict:
     if not last.data or last.data[0]["id"] != message_id:
         raise HTTPException(
             status_code=409,
-            detail="Can only edit or delete the last message in the game",
+            detail="Can only edit or delete the last player message in the game",
         )
     return msg.data
 

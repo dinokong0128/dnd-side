@@ -48,8 +48,8 @@ def _build_gm_mock(
         data=target_msg
     )
 
-    # order+limit — last message in game
-    gm.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(
+    # eq+order+limit — last player message in game (filtered by role=player)
+    gm.select.return_value.eq.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(
         data=[{"id": last_msg_id}] if last_msg_id else []
     )
 
@@ -102,15 +102,25 @@ class TestDeleteMessage:
         # delete() must be called for both the DM message and the player message
         assert gm.delete.call_count >= 2
 
+    def test_204_when_target_is_last_player_msg_followed_by_dm(self, client):
+        """DELETE succeeds when target is the last PLAYER message, even if a DM message follows."""
+        # last_msg_id matches MSG_ID (i.e. it is the last player message)
+        gm = _build_gm_mock(last_msg_id=MSG_ID, following_msg=DM_MSG)
+
+        with patch("api.routes.messages.supabase_client", _make_supabase(gm)):
+            res = client.delete(f"/games/{GAME_ID}/messages/{MSG_ID}")
+
+        assert res.status_code == 204
+
     def test_409_when_not_last_message(self, client):
-        """DELETE returns 409 when the message is not the last in the game."""
+        """DELETE returns 409 when the message is not the last player message in the game."""
         gm = _build_gm_mock(last_msg_id="some-other-msg-id")
 
         with patch("api.routes.messages.supabase_client", _make_supabase(gm)):
             res = client.delete(f"/games/{GAME_ID}/messages/{MSG_ID}")
 
         assert res.status_code == 409
-        assert "last message" in res.json()["detail"].lower()
+        assert "last player message" in res.json()["detail"].lower()
 
     def test_403_when_different_user(self, client):
         """DELETE returns 403 when message belongs to a different user."""
