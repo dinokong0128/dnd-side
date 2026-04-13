@@ -383,6 +383,7 @@ export function GameSessionView({
         onLoadMore={handleLoadMore}
         onRetry={handleRetryLastAction}
         userId={userId}
+        isWaitingForDm={isWaitingForDm}
         onDeleteMessage={handleDeleteMessage}
         onEditMessage={handleEditMessage}
       />

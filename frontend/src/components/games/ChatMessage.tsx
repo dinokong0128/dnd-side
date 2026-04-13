@@ -10,6 +10,7 @@ interface ChatMessageProps {
   profileId?: string | null
   userId?: string
   isLastMessage?: boolean
+  isWaitingForDm?: boolean
   onRetry?: () => void
   onDelete?: () => void
   onEdit?: (newContent: string) => void
@@ -22,6 +23,7 @@ export function ChatMessage({
   profileId,
   userId,
   isLastMessage,
+  isWaitingForDm,
   onRetry,
   onDelete,
   onEdit,
@@ -31,7 +33,11 @@ export function ChatMessage({
   const [editText, setEditText] = useState(content)
 
   const canEditOrDelete =
-    role === 'player' && isLastMessage === true && !!userId && profileId === userId
+    role === 'player' &&
+    isLastMessage === true &&
+    !!userId &&
+    profileId === userId &&
+    !isWaitingForDm
 
   const handleSave = () => {
     const trimmed = editText.trim()

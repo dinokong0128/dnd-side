@@ -38,9 +38,15 @@ def _build_gm_mock(
     target_msg=PLAYER_MSG,
     last_msg_id=MSG_ID,
     following_msg=None,
+    pending_msg=DM_MSG,
     updated_msg=None,
 ):
-    """Build a reusable game_messages mock with common chain stubs."""
+    """Build a reusable game_messages mock with common chain stubs.
+
+    pending_msg: any message found after the player msg → task is NOT in-flight (default: DM_MSG).
+                 Pass None to simulate a task still in-flight (→ 409).
+    following_msg: the DM-role message to cascade-delete, if any.
+    """
     gm = MagicMock()
 
     # maybe_single — fetch by id+game_id
@@ -48,12 +54,17 @@ def _build_gm_mock(
         data=target_msg
     )
 
-    # eq+order+limit — last player message in game (filtered by role=player)
+    # eq+eq+order+limit — last player message in game (filtered by role=player)
     gm.select.return_value.eq.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(
         data=[{"id": last_msg_id}] if last_msg_id else []
     )
 
-    # gt+order+limit — following DM message
+    # gt+limit — pending DM task check (any message after player msg, no ORDER needed)
+    gm.select.return_value.eq.return_value.gt.return_value.limit.return_value.execute.return_value = MagicMock(
+        data=[{"id": pending_msg["id"]}] if pending_msg else []
+    )
+
+    # gt+order+limit — following DM message (cascade-delete)
     gm.select.return_value.eq.return_value.gt.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(
         data=[following_msg] if following_msg else []
     )
@@ -151,6 +162,16 @@ class TestDeleteMessage:
 
         assert res.status_code == 403
 
+    def test_409_when_dm_task_in_flight(self, client):
+        """DELETE returns 409 when no message follows the player msg (DM task still running)."""
+        gm = _build_gm_mock(pending_msg=None)
+
+        with patch("api.routes.messages.supabase_client", _make_supabase(gm)):
+            res = client.delete(f"/games/{GAME_ID}/messages/{MSG_ID}")
+
+        assert res.status_code == 409
+        assert "still responding" in res.json()["detail"].lower()
+
     def test_401_unauthed(self, unauthed_client):
         """DELETE returns 401 when not authenticated."""
         gm = _build_gm_mock()
@@ -243,6 +264,19 @@ class TestPatchMessage:
             )
 
         assert res.status_code == 422
+
+    def test_409_when_dm_task_in_flight(self, client):
+        """PATCH returns 409 when no message follows the player msg (DM task still running)."""
+        gm = _build_gm_mock(pending_msg=None)
+
+        with patch("api.routes.messages.supabase_client", _make_supabase(gm)):
+            res = client.patch(
+                f"/games/{GAME_ID}/messages/{MSG_ID}",
+                json={"content": "I search for traps."},
+            )
+
+        assert res.status_code == 409
+        assert "still responding" in res.json()["detail"].lower()
 
     def test_401_unauthed(self, unauthed_client):
         """PATCH returns 401 when not authenticated."""

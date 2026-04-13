@@ -64,6 +64,29 @@ def _get_last_player_message(game_id: str, message_id: str) -> dict:
     return msg.data
 
 
+def _assert_no_pending_dm_task(game_id: str, player_msg: dict) -> None:
+    """
+    Raise 409 if the DM task for this player message appears to be in-flight.
+
+    We infer pending status from the absence of any subsequent message:
+    once the worker finishes (success or error) it always inserts a row,
+    so an empty result means the task hasn't completed yet.
+    """
+    following = (
+        supabase_client.table("game_messages")
+        .select("id")
+        .eq("game_id", game_id)
+        .gt("created_at", player_msg["created_at"])
+        .limit(1)
+        .execute()
+    )
+    if not following.data:
+        raise HTTPException(
+            status_code=409,
+            detail="The Dungeon Master is still responding — please wait",
+        )
+
+
 def _delete_following_dm_message(game_id: str, msg: dict) -> None:
     """Delete the DM message immediately following msg, if present."""
     following = (
@@ -93,6 +116,7 @@ async def delete_message(
     if msg["profile_id"] != current_user:
         raise HTTPException(status_code=403, detail="Can only delete your own messages")
 
+    _assert_no_pending_dm_task(gameId, msg)
     _delete_following_dm_message(gameId, msg)
 
     supabase_client.table("game_messages").delete().eq("id", messageId).execute()
@@ -111,6 +135,7 @@ async def update_message(
     if msg["profile_id"] != current_user:
         raise HTTPException(status_code=403, detail="Can only edit your own messages")
 
+    _assert_no_pending_dm_task(gameId, msg)
     _delete_following_dm_message(gameId, msg)
 
     updated = (
