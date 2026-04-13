@@ -14,7 +14,6 @@ import re
 
 from config import supabase_client, anthropic_client, openai_client
 import redis_broker  # noqa: F401 — ensure broker is set before defining actors
-from redis_broker import redis_client
 from services.dm_service import extract_events_from_response, search_rag
 from services.embedding_service import embed_text
 from constants import MESSAGE_ROLE_DM, MESSAGE_ROLE_SYSTEM, EVENT_SOURCE_CLAUDE
@@ -230,29 +229,31 @@ The acting player's action:
     except Exception as e:
         logger.error(f"[dm_response_task] Error: {str(e)}", exc_info=True)
 
-        # Only insert error message on final failure (after all retries exhausted)
-        # Track failures in Redis to detect when retries are exhausted
+        # Only insert error message if the most recent message isn't already a system error.
+        # This prevents spamming the user with one error per retry attempt.
         try:
-            failure_key = f"dm_response_fail:{game_id}:{message_id}"
-            attempt_num = redis_client.incr(failure_key)
-            redis_client.expire(failure_key, 3600)  # Expire after 1 hour
-
-            # max_retries=3 means up to 4 total attempts (initial + 3 retries)
-            # Only insert error message when retries are exhausted (attempt 4+)
-            if attempt_num > 3:
-                try:
-                    supabase_client.table("game_messages").insert(
-                        {
-                            "game_id": game_id,
-                            "role": MESSAGE_ROLE_SYSTEM,
-                            "profile_id": None,
-                            "content": "The Dungeon Master encountered an error. Please try your action again.",
-                        }
-                    ).execute()
-                except Exception:
-                    logger.error("[dm_response_task] Failed to insert error message")
-        except Exception as redis_error:
-            logger.error(f"[dm_response_task] Failed to track failures: {redis_error}")
+            last = (
+                supabase_client.table("game_messages")
+                .select("role")
+                .eq("game_id", game_id)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            already_errored = bool(
+                last.data and last.data[0]["role"] == MESSAGE_ROLE_SYSTEM
+            )
+            if not already_errored:
+                supabase_client.table("game_messages").insert(
+                    {
+                        "game_id": game_id,
+                        "role": MESSAGE_ROLE_SYSTEM,
+                        "profile_id": None,
+                        "content": "The Dungeon Master encountered an error. Please try your action again.",
+                    }
+                ).execute()
+        except Exception:
+            logger.error("[dm_response_task] Failed to insert error message")
 
         raise  # Let Dramatiq retry
 

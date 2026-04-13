@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { ChatLog } from '../ChatLog'
 import type { GameMessage } from '@/lib/types/message'
 
@@ -98,5 +98,19 @@ describe('ChatLog', () => {
 
     expect(screen.getByText('Unknown Character')).toBeInTheDocument()
     expect(screen.getByText(/Hello/)).toBeInTheDocument()
+  })
+
+  it('passes onRetry to system messages and calls it when retry button is clicked', () => {
+    const messages: GameMessage[] = [
+      makeMessage({ role: 'system', content: 'DM error occurred.' }),
+    ]
+    const onRetry = jest.fn()
+
+    render(
+      <ChatLog messages={messages} playerMap={new Map()} isLoading={false} onRetry={onRetry} />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /retry last action/i }))
+    expect(onRetry).toHaveBeenCalledTimes(1)
   })
 })

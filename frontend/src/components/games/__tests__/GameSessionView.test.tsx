@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { GameSessionView } from '../GameSessionView'
 import * as supabaseModule from '@/lib/supabase/client'
 
@@ -30,6 +30,14 @@ jest.mock('../ChatInput', () => ({
 
 jest.mock('../TypingIndicator', () => ({
   TypingIndicator: () => <div data-testid="typing-indicator">Typing...</div>,
+}))
+
+jest.mock('../ConfirmModal', () => ({
+  ConfirmModal: () => null,
+}))
+
+jest.mock('../SessionStatusBanner', () => ({
+  SessionStatusBanner: () => null,
 }))
 
 describe('GameSessionView', () => {
@@ -238,6 +246,162 @@ describe('GameSessionView', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('chat-input')).toBeInTheDocument()
+    })
+  })
+
+  describe('retry timeout banner', () => {
+    beforeEach(() => {
+      jest.useFakeTimers()
+    })
+
+    afterEach(() => {
+      jest.useRealTimers()
+    })
+
+    it('shows retry banner after 45s of isWaitingForDm=true', async () => {
+      // No messages → isWaitingForDm=true after init
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+
+      // Wait for async init to complete
+      await waitFor(() => {
+        expect(screen.getByTestId('is-waiting')).toHaveTextContent('true')
+      })
+
+      // Advance timer by 45s
+      act(() => {
+        jest.advanceTimersByTime(45_000)
+      })
+
+      expect(
+        screen.getByText(/The Dungeon Master hasn't responded in a while/i)
+      ).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument()
+    })
+
+    it('retry banner disappears when isWaitingForDm goes false via Realtime', async () => {
+      let realtimeCallback: ((payload: any) => void) | null = null
+
+      mockSupabaseClient.channel.mockReturnValue({
+        on: jest.fn().mockImplementation((_event: any, _filter: any, cb: any) => {
+          realtimeCallback = cb
+          return {
+            subscribe: jest.fn().mockReturnValue({ unsubscribe: jest.fn() }),
+          }
+        }),
+      })
+
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+
+      await waitFor(() => {
+        expect(screen.getByTestId('is-waiting')).toHaveTextContent('true')
+      })
+
+      // Advance timer to show banner
+      act(() => {
+        jest.advanceTimersByTime(45_000)
+      })
+
+      expect(
+        screen.getByText(/The Dungeon Master hasn't responded in a while/i)
+      ).toBeInTheDocument()
+
+      // Simulate DM response arriving via Realtime
+      act(() => {
+        realtimeCallback?.({
+          new: {
+            id: 'msg-dm',
+            game_id: 'game-1',
+            role: 'dm',
+            profile_id: null,
+            content: 'The dragon roars.',
+            created_at: new Date().toISOString(),
+          },
+        })
+      })
+
+      await waitFor(() => {
+        expect(
+          screen.queryByText(/The Dungeon Master hasn't responded in a while/i)
+        ).not.toBeInTheDocument()
+      })
+    })
+
+    it('clicking retry banner re-submits the last player action', async () => {
+      ;(global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: async () => ({ message_id: 'msg-1', status: 'queued' }),
+      })
+
+      // Return a player message for the current user
+      mockSupabaseClient.from.mockImplementation((table: string) => {
+        if (table === 'game_messages') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                order: jest.fn().mockResolvedValue({
+                  data: [
+                    {
+                      id: 'msg-p1',
+                      game_id: 'game-1',
+                      role: 'player',
+                      profile_id: 'user-1',
+                      content: 'I attack the dragon!',
+                      created_at: '2026-04-01T00:00:00Z',
+                    },
+                  ],
+                  error: null,
+                }),
+              }),
+            }),
+          }
+        }
+        if (table === 'players') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockResolvedValue({
+                data: [
+                  {
+                    id: 'player-1',
+                    profile_id: 'user-1',
+                    character_name: 'Thorin',
+                  },
+                ],
+                error: null,
+              }),
+            }),
+          }
+        }
+        return {
+          select: jest.fn().mockReturnValue({
+            eq: jest.fn().mockResolvedValue({ data: [], error: null }),
+          }),
+        }
+      })
+
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+
+      // Wait for init — last message is player so isWaitingForDm=true
+      await waitFor(() => {
+        expect(screen.getByTestId('is-waiting')).toHaveTextContent('true')
+      })
+
+      // Advance timer to show banner
+      act(() => {
+        jest.advanceTimersByTime(45_000)
+      })
+
+      const retryButton = screen.getByRole('button', { name: /retry/i })
+      fireEvent.click(retryButton)
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          '/api/games/game-1/actions',
+          expect.objectContaining({
+            method: 'POST',
+            body: JSON.stringify({ action_text: 'I attack the dragon!' }),
+          })
+        )
+      })
     })
   })
 })

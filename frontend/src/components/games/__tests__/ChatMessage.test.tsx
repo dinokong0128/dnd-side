@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { ChatMessage } from '../ChatMessage'
 
 describe('ChatMessage', () => {
@@ -47,5 +47,27 @@ describe('ChatMessage', () => {
     render(<ChatMessage role="player" characterName="" content="Hello" />)
 
     expect(screen.getByText('Unknown Character')).toBeInTheDocument()
+  })
+
+  it('renders retry button on system message when onRetry is provided', () => {
+    const onRetry = jest.fn()
+    render(<ChatMessage role="system" content="An error occurred." onRetry={onRetry} />)
+
+    expect(screen.getByRole('button', { name: /retry last action/i })).toBeInTheDocument()
+  })
+
+  it('does not render retry button on system message when onRetry is not provided', () => {
+    render(<ChatMessage role="system" content="An error occurred." />)
+
+    expect(screen.queryByRole('button', { name: /retry last action/i })).not.toBeInTheDocument()
+  })
+
+  it('calls onRetry when retry button is clicked', () => {
+    const onRetry = jest.fn()
+    render(<ChatMessage role="system" content="An error occurred." onRetry={onRetry} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /retry last action/i }))
+
+    expect(onRetry).toHaveBeenCalledTimes(1)
   })
 })

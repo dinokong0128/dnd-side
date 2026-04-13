@@ -274,13 +274,10 @@ class TestDmResponseTask:
             "tasks.dm_tasks.anthropic_client"
         ) as mock_anthropic, patch(
             "tasks.dm_tasks.openai_client"
-        ) as mock_openai, patch(
-            "tasks.dm_tasks.redis_client"
-        ) as mock_redis:
+        ) as mock_openai:
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.return_value = mock_anthropic_response
             mock_openai.embeddings.create.return_value = mock_embedding_result
-            mock_redis.incr.return_value = 1
 
             dm_response_task.fn("game-1", "msg-1", "I attack!", [])
 
@@ -361,13 +358,10 @@ class TestDmResponseTask:
             "tasks.dm_tasks.anthropic_client"
         ) as mock_anthropic, patch(
             "tasks.dm_tasks.openai_client"
-        ) as mock_openai, patch(
-            "tasks.dm_tasks.redis_client"
-        ) as mock_redis:
+        ) as mock_openai:
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.return_value = mock_anthropic_response
             mock_openai.embeddings.create.return_value = mock_embedding_result
-            mock_redis.incr.return_value = 1
 
             dm_response_task.fn("game-1", "msg-1", "I attack!", [])
 
@@ -375,11 +369,20 @@ class TestDmResponseTask:
             assert game_events_mock.insert.called
 
     def test_error_inserts_system_message_and_reraises(self):
-        """Should insert error message and re-raise on failure."""
+        """Should insert system error message and re-raise when last message is not system."""
         mock_game_result = MagicMock()
         mock_game_result.data = None  # Trigger error
 
+        # Last message is a player message — error message should be inserted
+        mock_last_msg_result = MagicMock()
+        mock_last_msg_result.data = [{"role": "player"}]
+
         mock_insert_result = MagicMock()
+        game_messages_mock = MagicMock()
+        game_messages_mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = (
+            mock_last_msg_result
+        )
+        game_messages_mock.insert.return_value.execute.return_value = mock_insert_result
 
         def table_side_effect(name):
             mock = MagicMock()
@@ -388,17 +391,54 @@ class TestDmResponseTask:
                     mock_game_result
                 )
             elif name == "game_messages":
-                mock.insert.return_value.execute.return_value = mock_insert_result
+                return game_messages_mock
             return mock
 
-        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
-            "tasks.dm_tasks.redis_client"
-        ) as mock_redis:
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb:
             mock_sb.table.side_effect = table_side_effect
-            mock_redis.incr.return_value = 4  # Simulate retries exhausted
 
             with pytest.raises(Exception):
                 dm_response_task.fn("game-1", "msg-1", "I attack!", [])
+
+            # Assert error message was inserted
+            assert game_messages_mock.insert.called
+            insert_call = game_messages_mock.insert.call_args[0][0]
+            assert insert_call["role"] == "system"
+
+    def test_error_does_not_insert_system_message_if_already_errored(self):
+        """Should not insert a second system error message when last message is already system."""
+        mock_game_result = MagicMock()
+        mock_game_result.data = None  # Trigger error
+
+        # Last message is already a system error — should NOT insert another one
+        mock_last_msg_result = MagicMock()
+        mock_last_msg_result.data = [{"role": "system"}]
+
+        mock_insert_result = MagicMock()
+        game_messages_mock = MagicMock()
+        game_messages_mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = (
+            mock_last_msg_result
+        )
+        game_messages_mock.insert.return_value.execute.return_value = mock_insert_result
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "games":
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = (
+                    mock_game_result
+                )
+            elif name == "game_messages":
+                return game_messages_mock
+            return mock
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb:
+            mock_sb.table.side_effect = table_side_effect
+
+            with pytest.raises(Exception):
+                dm_response_task.fn("game-1", "msg-1", "I attack!", [])
+
+            # Assert error message was NOT inserted again
+            assert not game_messages_mock.insert.called
 
 
 class TestGeneratePauseMessage:
