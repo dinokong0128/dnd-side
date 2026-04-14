@@ -143,7 +143,11 @@ def dm_response_task(
             cha_score = stats.get("cha", 10)
 
             level = p.get("level", 1)
-            if level >= 9:
+            if level >= 17:
+                prof_bonus = 6
+            elif level >= 13:
+                prof_bonus = 5
+            elif level >= 9:
                 prof_bonus = 4
             elif level >= 5:
                 prof_bonus = 3

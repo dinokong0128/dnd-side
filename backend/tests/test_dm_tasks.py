@@ -1304,3 +1304,70 @@ class TestStateChanges:
         assert hasattr(dm_tasks_module, "extract_state_changes") or \
                "extract_state_changes" in dir(dm_tasks_module), \
                "extract_state_changes must be imported in dm_tasks"
+
+    @pytest.mark.parametrize("level,expected_bonus", [
+        (1, "+2"), (4, "+2"),
+        (5, "+3"), (8, "+3"),
+        (9, "+4"), (12, "+4"),
+        (13, "+5"), (16, "+5"),
+        (17, "+6"), (20, "+6"),
+    ])
+    def test_proficiency_bonus_full_progression(self, level, expected_bonus):
+        """Proficiency bonus in the party line must follow the full D&D 5e table (levels 1-20)."""
+        game_data = {"id": "game-1", "name": "Quest", "dm_persona": "DM"}
+        players_data = [
+            {
+                "id": "player-uuid-1",
+                "character_name": "Hero",
+                "race": "Human",
+                "level": level,
+                "character_class": "Fighter",
+                "hp_current": 10,
+                "hp_max": 10,
+                "profile_id": "user-1",
+                "stats": {"str": 10, "dex": 10, "con": 10, "int": 10, "wis": 10, "cha": 10},
+            }
+        ]
+
+        captured_prompt = {}
+
+        game_messages_mock = MagicMock()
+        game_messages_mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
+        game_messages_mock.insert.return_value.execute.return_value = MagicMock()
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "games":
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = MagicMock(data=game_data)
+                mock.update.return_value.match.return_value.execute.return_value = MagicMock()
+                return mock
+            elif name == "players":
+                mock.select.return_value.match.return_value.execute.return_value = MagicMock(data=players_data)
+            elif name == "game_messages":
+                return game_messages_mock
+            elif name == "player_inventory":
+                mock.select.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+            elif name == "game_events":
+                mock.insert.return_value.execute.return_value = MagicMock()
+            return mock
+
+        def capture_create(**kwargs):
+            captured_prompt["system"] = kwargs.get("system", "")
+            resp = MagicMock()
+            resp.content = [MagicMock(text="You strike.")]
+            return resp
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.anthropic_client"
+        ) as mock_anthropic, patch("tasks.dm_tasks.openai_client") as mock_openai:
+            mock_sb.table.side_effect = table_side_effect
+            mock_anthropic.messages.create.side_effect = capture_create
+            mock_openai.embeddings.create.return_value = MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
+
+            dm_response_task.fn("game-1", "msg-1", "I attack!", [])
+
+        system_prompt = captured_prompt.get("system", "")
+        assert f"Proficiency bonus: {expected_bonus}" in system_prompt, (
+            f"Expected 'Proficiency bonus: {expected_bonus}' for level {level} character, "
+            f"but it was not found in system prompt"
+        )

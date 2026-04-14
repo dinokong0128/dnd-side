@@ -298,6 +298,16 @@ More text."""
         result = extract_state_changes(text)
         assert result["hp_changes"][0]["delta"] == -10
 
+    def test_non_dict_json_returns_empty_dict(self):
+        """Should return {} when Claude emits valid JSON that is not an object (e.g. array).
+        Without this guard, apply_state_changes would receive a list and raise AttributeError
+        on the first .get() call, crashing the entire DM task.
+        """
+        for payload in ["[]", "[1, 2, 3]", '"just a string"', "42", "true", "null"]:
+            text = f"<state_changes>{payload}</state_changes>"
+            result = extract_state_changes(text)
+            assert result == {}, f"Expected {{}} for payload {payload!r}, got {result!r}"
+
 
 class TestApplyStateChanges:
     """Tests for apply_state_changes()."""

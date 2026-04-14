@@ -67,10 +67,16 @@ def extract_state_changes(dm_response: str) -> dict:
     if not match:
         return {}
     try:
-        return json.loads(match.group(1).strip())
+        parsed = json.loads(match.group(1).strip())
     except (json.JSONDecodeError, ValueError):
         logger.warning("extract_state_changes: failed to parse JSON block")
         return {}
+    if not isinstance(parsed, dict):
+        logger.warning(
+            "extract_state_changes: expected JSON object, got %s", type(parsed).__name__
+        )
+        return {}
+    return parsed
 
 
 def apply_state_changes(state_changes: dict) -> None:
