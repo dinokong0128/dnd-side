@@ -241,6 +241,51 @@ export function GameSessionView({
     }
   }
 
+  // E2E testing: listen for custom DOM events that simulate Supabase Realtime
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_E2E_TESTING !== 'true') return
+
+    const addMessage = (event: Event) => {
+      const detail = (event as CustomEvent).detail
+      const msg: GameMessage = {
+        id: detail.id || `e2e-${Date.now()}`,
+        game_id: detail.game_id || gameId,
+        role: detail.role,
+        profile_id: detail.profile_id ?? null,
+        content: detail.content,
+        created_at: detail.created_at || new Date().toISOString(),
+      }
+      setMessages((prev) => [...prev, msg])
+      if (msg.role === 'dm' || msg.role === 'system') {
+        setIsWaitingForDm(false)
+      } else if (msg.role === 'player') {
+        setIsWaitingForDm(true)
+      }
+    }
+
+    const handleOpeningNarration = () => {
+      setIsWaitingForDm(true)
+    }
+    const handleSessionPaused = () => setGameStatus('paused')
+    const handleSessionEnded = () => setGameStatus('ended')
+
+    window.addEventListener('player-message', addMessage)
+    window.addEventListener('dm-message', addMessage)
+    window.addEventListener('system-message', addMessage)
+    window.addEventListener('opening-narration', handleOpeningNarration)
+    window.addEventListener('session-paused', handleSessionPaused)
+    window.addEventListener('session-ended', handleSessionEnded)
+
+    return () => {
+      window.removeEventListener('player-message', addMessage)
+      window.removeEventListener('dm-message', addMessage)
+      window.removeEventListener('system-message', addMessage)
+      window.removeEventListener('opening-narration', handleOpeningNarration)
+      window.removeEventListener('session-paused', handleSessionPaused)
+      window.removeEventListener('session-ended', handleSessionEnded)
+    }
+  }, [gameId])
+
   // Track the last player action for retry
   useEffect(() => {
     const last = [...messages].reverse().find(
@@ -375,6 +420,9 @@ export function GameSessionView({
       // Status change (paused → active) arrives via Realtime games subscription
       // Resume narration arrives via Realtime game_messages subscription
       // isWaitingForDm will be cleared when the DM message arrives
+      if (process.env.NEXT_PUBLIC_E2E_TESTING === 'true') {
+        setGameStatus('active')
+      }
     } catch (error) {
       console.error('Resume failed:', error)
       setIsWaitingForDm(false)

@@ -9,6 +9,12 @@ export default async function SignUpPage({
 }) {
   const { code } = await searchParams
 
+  // E2E testing: skip server-side invite validation; client component handles it
+  if (process.env.E2E_TESTING === 'true') {
+    const { E2ESignUpPage } = await import('@/components/auth/E2ESignUpPage')
+    return <E2ESignUpPage code={typeof code === 'string' ? code : null} />
+  }
+
   if (!code || typeof code !== 'string') {
     return <InviteRequiredMessage reason="missing" />
   }

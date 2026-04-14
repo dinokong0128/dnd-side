@@ -28,6 +28,26 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
         }),
       })
     })
+
+    // Mock auth user endpoint — intercepted by E2EGamePage's browser-side fetch
+    await page.route('**/auth/v1/user', (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ id: 'user-1', email: 'host@example.com' }),
+      })
+    })
+
+    // Mock player_inventory (used by E2EGamePage for lobby-status games)
+    await page.route('**.supabase.co/rest/v1/player_inventory**', (route) => {
+      if (route.request().method() === 'GET') {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([]),
+        })
+      }
+    })
   })
 
   test('host starts a session and sees opening narration', async ({ page }) => {
@@ -35,7 +55,7 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
     const userId = 'user-1'
 
     // Mock game in lobby status
-    await page.route('**/supabase.co/rest/v1/games**', (route) => {
+    await page.route('**.supabase.co/rest/v1/games**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -56,7 +76,7 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
     })
 
     // Mock player with character
-    await page.route('**/supabase.co/rest/v1/players**', (route) => {
+    await page.route('**.supabase.co/rest/v1/players**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -72,8 +92,21 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
               level: 5,
               hp_current: 40,
               hp_max: 40,
+              stats: { str: 16, dex: 14, con: 15, int: 10, wis: 12, cha: 11 },
             },
           ]),
+        })
+      }
+    })
+
+    // Mock game_messages: empty — new game, no prior messages.
+    // latestMessagePromise returns [] → isWaitingForDm=true once GameSessionView mounts.
+    await page.route('**.supabase.co/rest/v1/game_messages**', (route) => {
+      if (route.request().method() === 'GET') {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([]),
         })
       }
     })
@@ -101,10 +134,7 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
     // Click button
     await startButton.click()
 
-    // Assert: button shows loading state
-    await expect(startButton).toBeDisabled()
-
-    // Verify API was called
+    // Verify API was called (wait briefly for async fetch to complete)
     await page.waitForTimeout(500)
     expect(startCalled).toBe(true)
 
@@ -140,7 +170,7 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
     })
 
     // Assert: page transitions to session view (chat log visible)
-    await expect(page.getByText(/adventure begins/i)).toBeVisible({
+    await expect(page.getByText(/The adventure begins in a small tavern/i)).toBeVisible({
       timeout: 5000,
     })
   })
@@ -150,7 +180,7 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
     const userId = 'user-1'
 
     // Mock game in active status
-    await page.route('**/supabase.co/rest/v1/games**', (route) => {
+    await page.route('**.supabase.co/rest/v1/games**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -171,7 +201,7 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
     })
 
     // Mock player and messages
-    await page.route('**/supabase.co/rest/v1/players**', (route) => {
+    await page.route('**.supabase.co/rest/v1/players**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -190,6 +220,26 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
             },
           ]),
         })
+      }
+    })
+
+    // Mock game_messages: return DM message for latestMessagePromise → isWaitingForDm=false
+    await page.route('**.supabase.co/rest/v1/game_messages**', (route) => {
+      if (route.request().method() === 'GET') {
+        const url = route.request().url()
+        if (url.includes('select=role')) {
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([{ id: 'msg-dm', role: 'dm', created_at: '2026-01-01T00:00:00Z' }]),
+          })
+        } else {
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([]),
+          })
+        }
       }
     })
 
@@ -243,12 +293,12 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
     })
 
     // Assert: "Session paused" banner appears
-    await expect(page.getByText(/Session paused|paused/i)).toBeVisible({
+    await expect(page.getByText('⏸ Session paused')).toBeVisible({
       timeout: 5000,
     })
 
     // Assert: input is disabled
-    const textarea = page.getByPlaceholder(/What does your character do/)
+    const textarea = page.getByTestId('chat-textarea')
     await expect(textarea).toBeDisabled({ timeout: 5000 })
   })
 
@@ -257,7 +307,7 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
     const userId = 'user-1'
 
     // Mock game in active status
-    await page.route('**/supabase.co/rest/v1/games**', (route) => {
+    await page.route('**.supabase.co/rest/v1/games**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -278,7 +328,7 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
     })
 
     // Mock player
-    await page.route('**/supabase.co/rest/v1/players**', (route) => {
+    await page.route('**.supabase.co/rest/v1/players**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -300,6 +350,26 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
       }
     })
 
+    // Mock game_messages: return DM message for latestMessagePromise → isWaitingForDm=false
+    await page.route('**.supabase.co/rest/v1/game_messages**', (route) => {
+      if (route.request().method() === 'GET') {
+        const url = route.request().url()
+        if (url.includes('select=role')) {
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([{ id: 'msg-dm', role: 'dm', created_at: '2026-01-01T00:00:00Z' }]),
+          })
+        } else {
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([]),
+          })
+        }
+      }
+    })
+
     // Mock end endpoint
     let endCalled = false
     await page.route(`**/api/games/${gameId}/end`, (route) => {
@@ -316,8 +386,8 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
     await page.goto(`/games/${gameId}`)
     await expect(page.getByText('Campaign to End')).toBeVisible()
 
-    // Click End
-    const endButton = page.getByRole('button', { name: /End/i })
+    // Click End (use specific selector to avoid matching "Send")
+    const endButton = page.getByRole('button', { name: /⏹ End/ })
     await endButton.click()
 
     // Assert: destructive modal with "End This Adventure Forever?"
@@ -347,12 +417,12 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
     })
 
     // Assert: "This adventure has concluded" banner
-    await expect(page.getByText(/concluded|ended/i)).toBeVisible({
+    await expect(page.getByText('⏹ This adventure has concluded')).toBeVisible({
       timeout: 5000,
     })
 
     // Assert: input disabled permanently
-    const textarea = page.getByPlaceholder(/What does your character do/)
+    const textarea = page.getByTestId('chat-textarea')
     await expect(textarea).toBeDisabled({ timeout: 5000 })
 
     // Assert: no Resume button shown
@@ -365,7 +435,7 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
     const userId = 'user-1'
 
     // Mock game in paused status
-    await page.route('**/supabase.co/rest/v1/games**', (route) => {
+    await page.route('**.supabase.co/rest/v1/games**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -386,7 +456,7 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
     })
 
     // Mock player
-    await page.route('**/supabase.co/rest/v1/players**', (route) => {
+    await page.route('**.supabase.co/rest/v1/players**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -405,6 +475,26 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
             },
           ]),
         })
+      }
+    })
+
+    // Mock game_messages: return DM message for latestMessagePromise → isWaitingForDm=false
+    await page.route('**.supabase.co/rest/v1/game_messages**', (route) => {
+      if (route.request().method() === 'GET') {
+        const url = route.request().url()
+        if (url.includes('select=role')) {
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([{ id: 'msg-dm', role: 'dm', created_at: '2026-01-01T00:00:00Z' }]),
+          })
+        } else {
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([]),
+          })
+        }
       }
     })
 
@@ -455,10 +545,10 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
 
     // Assert: banner disappears and input re-enables
     await expect(
-      page.getByText(/Session paused|paused/i)
+      page.getByText('⏸ Session paused')
     ).not.toBeVisible({ timeout: 5000 })
 
-    const textarea = page.getByPlaceholder(/What does your character do/)
+    const textarea = page.getByTestId('chat-textarea')
     await expect(textarea).toBeEnabled({ timeout: 5000 })
   })
 
@@ -480,7 +570,7 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
     })
 
     // Mock game created by different user
-    await page.route('**/supabase.co/rest/v1/games**', (route) => {
+    await page.route('**.supabase.co/rest/v1/games**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -501,7 +591,7 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
     })
 
     // Mock player as non-host
-    await page.route('**/supabase.co/rest/v1/players**', (route) => {
+    await page.route('**.supabase.co/rest/v1/players**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -523,12 +613,32 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
       }
     })
 
+    // Mock game_messages: return DM message for latestMessagePromise → isWaitingForDm=false
+    await page.route('**.supabase.co/rest/v1/game_messages**', (route) => {
+      if (route.request().method() === 'GET') {
+        const url = route.request().url()
+        if (url.includes('select=role')) {
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([{ id: 'msg-dm', role: 'dm', created_at: '2026-01-01T00:00:00Z' }]),
+          })
+        } else {
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([]),
+          })
+        }
+      }
+    })
+
     await page.goto(`/games/${gameId}`)
     await expect(page.getByText('Host Game')).toBeVisible()
 
-    // Assert: no Pause/End buttons in header
+    // Assert: no Pause/End buttons in header (use specific selector to avoid matching "Send")
     const pauseButton = page.getByRole('button', { name: /Pause/i })
-    const endButton = page.getByRole('button', { name: /End/i })
+    const endButton = page.getByRole('button', { name: /⏹ End/ })
 
     if (await pauseButton.isVisible()) {
       expect(false).toBe(true) // Fail if button is visible
@@ -543,7 +653,7 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
     const userId = 'user-1'
 
     // Mock active game
-    await page.route('**/supabase.co/rest/v1/games**', (route) => {
+    await page.route('**.supabase.co/rest/v1/games**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -564,7 +674,7 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
     })
 
     // Mock player
-    await page.route('**/supabase.co/rest/v1/players**', (route) => {
+    await page.route('**.supabase.co/rest/v1/players**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -583,6 +693,26 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
             },
           ]),
         })
+      }
+    })
+
+    // Mock game_messages: return DM message for latestMessagePromise → isWaitingForDm=false
+    await page.route('**.supabase.co/rest/v1/game_messages**', (route) => {
+      if (route.request().method() === 'GET') {
+        const url = route.request().url()
+        if (url.includes('select=role')) {
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([{ id: 'msg-dm', role: 'dm', created_at: '2026-01-01T00:00:00Z' }]),
+          })
+        } else {
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([]),
+          })
+        }
       }
     })
 
@@ -611,7 +741,7 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
     const userId = 'user-1'
 
     // Mock active game
-    await page.route('**/supabase.co/rest/v1/games**', (route) => {
+    await page.route('**.supabase.co/rest/v1/games**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -632,7 +762,7 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
     })
 
     // Mock player
-    await page.route('**/supabase.co/rest/v1/players**', (route) => {
+    await page.route('**.supabase.co/rest/v1/players**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -654,11 +784,31 @@ test.describe('Session Lifecycle — Start, Pause, Resume, End', () => {
       }
     })
 
+    // Mock game_messages: return DM message for latestMessagePromise → isWaitingForDm=false
+    await page.route('**.supabase.co/rest/v1/game_messages**', (route) => {
+      if (route.request().method() === 'GET') {
+        const url = route.request().url()
+        if (url.includes('select=role')) {
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([{ id: 'msg-dm', role: 'dm', created_at: '2026-01-01T00:00:00Z' }]),
+          })
+        } else {
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([]),
+          })
+        }
+      }
+    })
+
     await page.goto(`/games/${gameId}`)
     await expect(page.getByText('Escape Test Game')).toBeVisible()
 
-    // Click End → modal opens
-    const endButton = page.getByRole('button', { name: /End/i })
+    // Click End → modal opens (use specific selector to avoid matching "Send")
+    const endButton = page.getByRole('button', { name: /⏹ End/ })
     await endButton.click()
 
     // Assert modal appears

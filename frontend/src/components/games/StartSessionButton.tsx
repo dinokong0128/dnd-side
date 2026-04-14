@@ -29,7 +29,11 @@ export function StartSessionButton({ gameId }: StartSessionButtonProps) {
         throw new Error(data.error || 'Failed to start session')
       }
 
-      router.refresh()
+      if (process.env.NEXT_PUBLIC_E2E_TESTING === 'true') {
+        window.dispatchEvent(new CustomEvent('e2e-game-started'))
+      } else {
+        router.refresh()
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
       setError(message)

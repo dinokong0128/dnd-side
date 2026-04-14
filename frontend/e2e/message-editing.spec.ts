@@ -32,7 +32,7 @@ function mockAuth(page: Parameters<Parameters<typeof test>[1]>[0]['page']) {
 
 function mockGameData(page: Parameters<Parameters<typeof test>[1]>[0]['page']) {
   return Promise.all([
-    page.route('**/supabase.co/rest/v1/games**', (route) => {
+    page.route('**.supabase.co/rest/v1/games**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -52,7 +52,7 @@ function mockGameData(page: Parameters<Parameters<typeof test>[1]>[0]['page']) {
         })
       }
     }),
-    page.route('**/supabase.co/rest/v1/players**', (route) => {
+    page.route('**.supabase.co/rest/v1/players**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -83,7 +83,7 @@ function mockGameData(page: Parameters<Parameters<typeof test>[1]>[0]['page']) {
     // After the frontend's .reverse(), display order becomes
     // [player-msg (T1), dm-msg (T2)] — correct chronological order.
     // ChatLog's lastPlayerMsgId resolves to PLAYER_MSG_ID → isLastMessage=true. ✅
-    page.route('**/supabase.co/rest/v1/game_messages**', (route) => {
+    page.route('**.supabase.co/rest/v1/game_messages**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
