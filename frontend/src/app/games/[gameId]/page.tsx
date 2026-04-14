@@ -16,6 +16,12 @@ interface GamePageProps {
 export default async function GamePage({ params }: GamePageProps) {
   const { gameId } = await params
 
+  // E2E testing: bypass server-side fetching — client component handles it
+  if (process.env.E2E_TESTING === 'true') {
+    const { E2EGamePage } = await import('@/components/games/E2EGamePage')
+    return <E2EGamePage gameId={gameId} />
+  }
+
   const supabase = await createClient()
   const {
     data: { user },

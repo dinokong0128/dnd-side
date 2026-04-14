@@ -118,6 +118,7 @@ export function ChatInput({
         <form onSubmit={handleSubmit} className="flex gap-3 items-end">
           <textarea
             ref={textareaRef}
+            data-testid="chat-textarea"
             value={text}
             onChange={handleTextChange}
             onKeyDown={handleKeyDown}
