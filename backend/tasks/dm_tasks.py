@@ -145,7 +145,7 @@ RELEVANT PAST EVENTS (Context from RAG):
 
 RULES:
 1. Respond in character as the DM — never break the fourth wall
-2. Be vivid and engaging but keep responses to 2–3 paragraphs
+2. Be vivid and engaging but keep responses to 2–3 short paragraphs (~100 words total)
 3. Account for character abilities, equipment, and class features when narrating outcomes
 4. If the player's action requires a skill check, narrate the attempt and outcome (you decide the result)
 5. If important story events occur, mark them inline:
@@ -691,3 +691,4 @@ def aggregation_task(game_id: str):
     # Insert summary to a new table: campaign_summaries
 
     logger.info(f"[aggregation_task] Complete for game={game_id}")
+
