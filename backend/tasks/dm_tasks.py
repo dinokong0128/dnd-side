@@ -15,7 +15,7 @@ import re
 from config import supabase_client, anthropic_client, openai_client
 import redis_broker  # noqa: F401 — ensure broker is set before defining actors
 from dramatiq.middleware import CurrentMessage
-from services.dm_service import extract_events_from_response, search_rag
+from services.dm_service import extract_events_from_response, extract_dice_rolls, search_rag
 from services.embedding_service import embed_text
 from constants import MESSAGE_ROLE_DM, MESSAGE_ROLE_SYSTEM, EVENT_SOURCE_CLAUDE
 
@@ -158,6 +158,26 @@ RULES:
    Pick the lock using your thieves' tools.
    Search the walls for a hidden mechanism.
    </suggested_actions>
+9. DICE ROLLS: When you resolve a dice roll (ability check, saving throw, attack, or damage),
+   embed the result BEFORE your narrative text using this exact format:
+   <dice_rolls>
+   [
+     {{
+       "type": "dice_roll",
+       "die": "d20",
+       "count": 1,
+       "result": <integer 1–20>,
+       "modifier": <signed integer, 0 if none>,
+       "total": <result + modifier>,
+       "label": "<human-readable label, e.g. Stealth Check>",
+       "dc": <integer, only for checks/saves>,
+       "success": <true|false, only when dc is present>,
+       "advantage": <true|false, only when relevant>,
+       "all_rolls": [<roll1>, <roll2>]
+     }}
+   ]
+   </dice_rolls>
+   Rules: result must satisfy 1 ≤ result ≤ (count × die_sides). Include one entry per distinct roll.
 
 The acting player's action:
 "{action_text}"
@@ -179,9 +199,12 @@ The acting player's action:
         dm_response = response.content[0].text
         logger.info(f"[dm_response_task] Claude responded: {len(dm_response)} chars")
 
-        # Step 4: Extract events from response
+        # Step 4: Extract events and dice rolls from response
         events = extract_events_from_response(dm_response)
         logger.info(f"[dm_response_task] Extracted {len(events)} events")
+
+        dice_rolls = extract_dice_rolls(dm_response)
+        logger.info(f"[dm_response_task] Extracted {len(dice_rolls)} dice rolls")
 
         # Step 5: Embed events
         event_rows = []
@@ -225,10 +248,26 @@ The acting player's action:
         ).strip()
 
         # Strip event markers from the displayed message
-        clean_response = re.sub(
+        response_no_events = re.sub(
             r'<event\s+type=["\'][^"\']+["\']>(.*?)</event>',
             r"\1",
             dm_response_no_suggestions,
+            flags=re.DOTALL,
+        ).strip()
+
+        # Strip <state_changes> block (future DIN-16)
+        response_no_state = re.sub(
+            r'<state_changes>.*?</state_changes>',
+            '',
+            response_no_events,
+            flags=re.DOTALL,
+        ).strip()
+
+        # Strip <dice_rolls> block — stored separately in dice_rolls column
+        clean_response = re.sub(
+            r'<dice_rolls>.*?</dice_rolls>',
+            '',
+            response_no_state,
             flags=re.DOTALL,
         ).strip()
 
@@ -238,6 +277,7 @@ The acting player's action:
             "profile_id": None,
             "role": MESSAGE_ROLE_DM,
             "content": clean_response,
+            "dice_rolls": dice_rolls if dice_rolls else None,
         }
 
         supabase_client.table("game_messages").insert(response_message).execute()
