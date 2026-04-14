@@ -72,6 +72,7 @@ test.describe('Core Game Loop — Submit Action + Receive DM Response', () => {
               created_at: '2026-01-01T00:00:00Z',
               created_by: userId,
               updated_at: '2026-01-01T00:00:00Z',
+              suggested_actions: null,
             },
           ]),
         })
@@ -217,6 +218,7 @@ test.describe('Core Game Loop — Submit Action + Receive DM Response', () => {
               status: 'active',
               created_by: userId,
               updated_at: '2026-01-01T00:00:00Z',
+              suggested_actions: null,
             },
           ]),
         })
@@ -288,6 +290,7 @@ test.describe('Core Game Loop — Submit Action + Receive DM Response', () => {
               status: 'active',
               created_by: userId,
               updated_at: '2026-01-01T00:00:00Z',
+              suggested_actions: null,
             },
           ]),
         })
@@ -380,6 +383,7 @@ test.describe('Core Game Loop — Submit Action + Receive DM Response', () => {
               status: 'active',
               created_by: 'user-1',
               updated_at: '2026-01-01T00:00:00Z',
+              suggested_actions: null,
             },
           ]),
         })
@@ -430,5 +434,195 @@ test.describe('Core Game Loop — Submit Action + Receive DM Response', () => {
     // Input should be disabled
     await expect(textarea).toBeDisabled()
     await expect(sendButton).toBeDisabled()
+  })
+})
+
+test.describe('DIN-42 — DM action suggestions (✨ cycling)', () => {
+  const gameId = 'test-game-suggestions'
+  const userId = 'user-1'
+
+  const SUGGESTIONS = [
+    'Pick the lock using your thieves\' tools.',
+    'Search the walls nearby for a hidden mechanism.',
+    'Press your ear to the door and listen carefully.',
+  ]
+
+  test.beforeEach(async ({ page }) => {
+    await page.route('**/auth/v1/user', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ id: userId, email: 'test@example.com' }),
+      })
+    )
+
+    await page.route('**/auth/v1/token?grant_type=refresh_token', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          access_token: 'mock-token',
+          token_type: 'bearer',
+          expires_in: 3600,
+          refresh_token: 'mock-refresh',
+          user: { id: userId, email: 'test@example.com' },
+        }),
+      })
+    )
+
+    await page.route('**.supabase.co/rest/v1/players**', (route) => {
+      if (route.request().method() === 'GET') {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: 'player-1',
+              game_id: gameId,
+              profile_id: userId,
+              character_name: 'Kael Dawnstrider',
+              character_class: 'Ranger',
+              race: 'Half-Elf',
+              level: 5,
+              hp_current: 42,
+              hp_max: 46,
+            },
+          ]),
+        })
+      }
+    })
+
+    // Mock game_messages: return DM message → isWaitingForDm=false → cycle button enabled
+    await page.route('**.supabase.co/rest/v1/game_messages**', (route) => {
+      if (route.request().method() === 'GET') {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([{ id: 'msg-dm', role: 'dm', created_at: '2026-01-01T00:00:00Z' }]),
+        })
+      }
+    })
+  })
+
+  test('✨ button is disabled when game has no suggested_actions', async ({
+    page,
+  }) => {
+    await page.route('**.supabase.co/rest/v1/games**', (route) => {
+      if (route.request().method() === 'GET') {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: gameId,
+              name: 'No Suggestions Game',
+              dm_persona: 'A DM',
+              status: 'active',
+              created_by: userId,
+              updated_at: '2026-01-01T00:00:00Z',
+              suggested_actions: null,
+            },
+          ]),
+        })
+      }
+    })
+
+    await page.goto(`/games/${gameId}`)
+    await expect(page.getByText('No Suggestions Game')).toBeVisible({
+      timeout: 5000,
+    })
+
+    const cycleBtn = page.getByTestId('cycle-suggestion-btn')
+    await expect(cycleBtn).toBeDisabled()
+  })
+
+  test('✨ button is enabled and cycles through suggestions when game has suggested_actions', async ({
+    page,
+  }) => {
+    await page.route('**.supabase.co/rest/v1/games**', (route) => {
+      if (route.request().method() === 'GET') {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: gameId,
+              name: 'Suggestions Game',
+              dm_persona: 'A DM',
+              status: 'active',
+              created_by: userId,
+              updated_at: '2026-01-01T00:00:00Z',
+              suggested_actions: SUGGESTIONS,
+            },
+          ]),
+        })
+      }
+    })
+
+    await page.goto(`/games/${gameId}`)
+    await expect(page.getByText('Suggestions Game')).toBeVisible({
+      timeout: 5000,
+    })
+
+    const cycleBtn = page.getByTestId('cycle-suggestion-btn')
+    await expect(cycleBtn).toBeEnabled({ timeout: 3000 })
+
+    const textarea = page.getByPlaceholder(/What does your character do/)
+
+    // First click: populates textarea with first suggestion
+    await cycleBtn.click()
+    await expect(textarea).toHaveValue(SUGGESTIONS[0])
+
+    // Second click: cycles to second suggestion
+    await cycleBtn.click()
+    await expect(textarea).toHaveValue(SUGGESTIONS[1])
+
+    // Third click: cycles to third suggestion
+    await cycleBtn.click()
+    await expect(textarea).toHaveValue(SUGGESTIONS[2])
+
+    // Fourth click: wraps back to first
+    await cycleBtn.click()
+    await expect(textarea).toHaveValue(SUGGESTIONS[0])
+  })
+
+  test('suggestion counter label appears when suggestions are available', async ({
+    page,
+  }) => {
+    await page.route('**.supabase.co/rest/v1/games**', (route) => {
+      if (route.request().method() === 'GET') {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: gameId,
+              name: 'Counter Label Game',
+              dm_persona: 'A DM',
+              status: 'active',
+              created_by: userId,
+              updated_at: '2026-01-01T00:00:00Z',
+              suggested_actions: SUGGESTIONS,
+            },
+          ]),
+        })
+      }
+    })
+
+    await page.goto(`/games/${gameId}`)
+    await expect(page.getByText('Counter Label Game')).toBeVisible({
+      timeout: 5000,
+    })
+
+    // Counter label should show total count before first click
+    await expect(
+      page.getByText(new RegExp(`${SUGGESTIONS.length}.*click.*to cycle`, 'i'))
+    ).toBeVisible({ timeout: 3000 })
+
+    // After clicking, counter updates
+    await page.getByTestId('cycle-suggestion-btn').click()
+    await expect(
+      page.getByText(/Suggestion 1 of/i)
+    ).toBeVisible({ timeout: 3000 })
   })
 })

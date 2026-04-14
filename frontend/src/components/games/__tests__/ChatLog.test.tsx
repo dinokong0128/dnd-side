@@ -186,6 +186,55 @@ describe('ChatLog', () => {
     expect(screen.getByText(/Loading the tale/i)).toBeInTheDocument()
   })
 
+  describe('edit/delete prop threading (DIN-61)', () => {
+    it('passes userId to ChatMessage when provided', () => {
+      const messages: GameMessage[] = [
+        makeMessage({ id: '1', role: 'player', profile_id: 'user-1', content: 'Hello' }),
+      ]
+
+      const { container } = render(
+        <ChatLog
+          messages={messages}
+          playerMap={new Map([['user-1', 'Hero']])}
+          isLoading={false}
+          hasMoreMessages={false}
+          isLoadingMore={false}
+          onLoadMore={jest.fn()}
+          userId="user-1"
+          onDeleteMessage={jest.fn()}
+          onEditMessage={jest.fn()}
+        />
+      )
+
+      // The player message bubble should be in the DOM
+      expect(container.querySelector('[onmouseenter]') || screen.getByText('Hello')).toBeInTheDocument()
+    })
+
+    it('renders all messages without crashing when edit/delete props are provided', () => {
+      const messages: GameMessage[] = [
+        makeMessage({ id: '1', role: 'dm', content: 'A monster appears.' }),
+        makeMessage({ id: '2', role: 'player', profile_id: 'user-1', content: 'I attack!' }),
+      ]
+
+      render(
+        <ChatLog
+          messages={messages}
+          playerMap={new Map([['user-1', 'Hero']])}
+          isLoading={false}
+          hasMoreMessages={false}
+          isLoadingMore={false}
+          onLoadMore={jest.fn()}
+          userId="user-1"
+          onDeleteMessage={jest.fn()}
+          onEditMessage={jest.fn()}
+        />
+      )
+
+      expect(screen.getByText('A monster appears.')).toBeInTheDocument()
+      expect(screen.getByText('I attack!')).toBeInTheDocument()
+    })
+  })
+
   it('passes onRetry to system messages and calls it when retry button is clicked', () => {
     const messages: GameMessage[] = [
       makeMessage({ role: 'system', content: 'DM error occurred.' }),

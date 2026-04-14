@@ -443,6 +443,275 @@ class TestDmResponseTask:
             assert not game_messages_mock.insert.called
 
 
+class TestDmResponseTaskSuggestedActions:
+    """Tests for suggested_actions parsing in dm_response_task (DIN-42)."""
+
+    def _make_table_side_effect(self, game_data, players_data, inventory_data, game_messages_mock):
+        """Helper to build a reusable table_side_effect for suggested_actions tests."""
+        mock_game_result = MagicMock()
+        mock_game_result.data = game_data
+
+        mock_players_result = MagicMock()
+        mock_players_result.data = players_data
+
+        mock_messages_result = MagicMock()
+        mock_messages_result.data = []
+
+        mock_inventory_result = MagicMock()
+        mock_inventory_result.data = inventory_data
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "games":
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = (
+                    mock_game_result
+                )
+                mock.update.return_value.match.return_value.execute.return_value = MagicMock()
+                return mock
+            elif name == "players":
+                mock.select.return_value.match.return_value.execute.return_value = (
+                    mock_players_result
+                )
+            elif name == "game_messages":
+                return game_messages_mock
+            elif name == "player_inventory":
+                mock.select.return_value.eq.return_value.execute.return_value = (
+                    mock_inventory_result
+                )
+            elif name == "game_events":
+                mock.insert.return_value.execute.return_value = MagicMock()
+            return mock
+
+        return table_side_effect
+
+    def test_suggested_actions_parsed_and_written_to_games(self):
+        """Happy path: Claude response includes <suggested_actions> block → games.update called with parsed list."""
+        game_data = {"id": "game-1", "name": "Quest", "dm_persona": "DM"}
+        players_data = [
+            {
+                "id": "player-1",
+                "character_name": "Hero",
+                "race": "Human",
+                "level": 1,
+                "character_class": "Fighter",
+                "hp_current": 10,
+                "hp_max": 10,
+                "profile_id": "user-1",
+            }
+        ]
+
+        mock_embedding_result = MagicMock()
+        mock_embedding_result.data = [MagicMock(embedding=[0.1] * 1536)]
+
+        mock_anthropic_response = MagicMock()
+        mock_anthropic_response.content = [
+            MagicMock(
+                text=(
+                    "The door stands before you.\n"
+                    "<suggested_actions>\n"
+                    "Pick the lock using your thieves' tools.\n"
+                    "Search the walls for a hidden mechanism.\n"
+                    "Force the door open with a Strength check.\n"
+                    "</suggested_actions>"
+                )
+            )
+        ]
+
+        games_mock = MagicMock()
+        games_mock.select.return_value.match.return_value.single.return_value.execute.return_value = MagicMock(data=game_data)
+        captured_update_payload = {}
+
+        def games_update_side_effect(payload):
+            captured_update_payload.update(payload)
+            mock = MagicMock()
+            mock.match.return_value.execute.return_value = MagicMock()
+            return mock
+
+        games_mock.update.side_effect = games_update_side_effect
+
+        game_messages_mock = MagicMock()
+        game_messages_mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
+        game_messages_mock.insert.return_value.execute.return_value = MagicMock()
+
+        def table_side_effect(name):
+            if name == "games":
+                return games_mock
+            mock = MagicMock()
+            if name == "players":
+                mock.select.return_value.match.return_value.execute.return_value = MagicMock(data=players_data)
+            elif name == "game_messages":
+                return game_messages_mock
+            elif name == "player_inventory":
+                mock.select.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+            elif name == "game_events":
+                mock.insert.return_value.execute.return_value = MagicMock()
+            return mock
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.anthropic_client"
+        ) as mock_anthropic, patch(
+            "tasks.dm_tasks.openai_client"
+        ) as mock_openai:
+            mock_sb.table.side_effect = table_side_effect
+            mock_anthropic.messages.create.return_value = mock_anthropic_response
+            mock_openai.embeddings.create.return_value = mock_embedding_result
+
+            dm_response_task.fn("game-1", "msg-1", "I examine the door.", [])
+
+        assert "suggested_actions" in captured_update_payload
+        assert captured_update_payload["suggested_actions"] == [
+            "Pick the lock using your thieves' tools.",
+            "Search the walls for a hidden mechanism.",
+            "Force the door open with a Strength check.",
+        ]
+
+    def test_suggested_actions_stripped_from_game_messages_content(self):
+        """<suggested_actions> block is stripped from content written to game_messages."""
+        game_data = {"id": "game-1", "name": "Quest", "dm_persona": "DM"}
+        players_data = [
+            {
+                "id": "player-1",
+                "character_name": "Hero",
+                "race": "Human",
+                "level": 1,
+                "character_class": "Fighter",
+                "hp_current": 10,
+                "hp_max": 10,
+                "profile_id": "user-1",
+            }
+        ]
+
+        mock_embedding_result = MagicMock()
+        mock_embedding_result.data = [MagicMock(embedding=[0.1] * 1536)]
+
+        narrative = "The guard eyes you suspiciously."
+        mock_anthropic_response = MagicMock()
+        mock_anthropic_response.content = [
+            MagicMock(
+                text=(
+                    f"{narrative}\n"
+                    "<suggested_actions>\n"
+                    "Bluff the guard.\n"
+                    "Run away.\n"
+                    "</suggested_actions>"
+                )
+            )
+        ]
+
+        captured_insert_content = {}
+
+        games_mock = MagicMock()
+        games_mock.select.return_value.match.return_value.single.return_value.execute.return_value = MagicMock(data=game_data)
+        games_mock.update.return_value.match.return_value.execute.return_value = MagicMock()
+
+        game_messages_mock = MagicMock()
+        game_messages_mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
+
+        def insert_side_effect(payload):
+            captured_insert_content.update(payload)
+            mock = MagicMock()
+            mock.execute.return_value = MagicMock()
+            return mock
+
+        game_messages_mock.insert.side_effect = insert_side_effect
+
+        def table_side_effect(name):
+            if name == "games":
+                return games_mock
+            mock = MagicMock()
+            if name == "players":
+                mock.select.return_value.match.return_value.execute.return_value = MagicMock(data=players_data)
+            elif name == "game_messages":
+                return game_messages_mock
+            elif name == "player_inventory":
+                mock.select.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+            elif name == "game_events":
+                mock.insert.return_value.execute.return_value = MagicMock()
+            return mock
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.anthropic_client"
+        ) as mock_anthropic, patch(
+            "tasks.dm_tasks.openai_client"
+        ) as mock_openai:
+            mock_sb.table.side_effect = table_side_effect
+            mock_anthropic.messages.create.return_value = mock_anthropic_response
+            mock_openai.embeddings.create.return_value = mock_embedding_result
+
+            dm_response_task.fn("game-1", "msg-1", "I approach the guard.", [])
+
+        assert "suggested_actions" not in captured_insert_content.get("content", "")
+        assert narrative in captured_insert_content.get("content", "")
+
+    def test_no_suggested_actions_block_writes_empty_list(self):
+        """If Claude response has no <suggested_actions> block, an empty list is written."""
+        game_data = {"id": "game-1", "name": "Quest", "dm_persona": "DM"}
+        players_data = [
+            {
+                "id": "player-1",
+                "character_name": "Hero",
+                "race": "Human",
+                "level": 1,
+                "character_class": "Fighter",
+                "hp_current": 10,
+                "hp_max": 10,
+                "profile_id": "user-1",
+            }
+        ]
+
+        mock_embedding_result = MagicMock()
+        mock_embedding_result.data = [MagicMock(embedding=[0.1] * 1536)]
+
+        mock_anthropic_response = MagicMock()
+        mock_anthropic_response.content = [
+            MagicMock(text="The dragon roars. You feel scared.")
+        ]
+
+        captured_update_payload = {}
+
+        games_mock = MagicMock()
+        games_mock.select.return_value.match.return_value.single.return_value.execute.return_value = MagicMock(data=game_data)
+
+        def games_update_side_effect(payload):
+            captured_update_payload.update(payload)
+            mock = MagicMock()
+            mock.match.return_value.execute.return_value = MagicMock()
+            return mock
+
+        games_mock.update.side_effect = games_update_side_effect
+
+        game_messages_mock = MagicMock()
+        game_messages_mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
+        game_messages_mock.insert.return_value.execute.return_value = MagicMock()
+
+        def table_side_effect(name):
+            if name == "games":
+                return games_mock
+            mock = MagicMock()
+            if name == "players":
+                mock.select.return_value.match.return_value.execute.return_value = MagicMock(data=players_data)
+            elif name == "game_messages":
+                return game_messages_mock
+            elif name == "player_inventory":
+                mock.select.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+            elif name == "game_events":
+                mock.insert.return_value.execute.return_value = MagicMock()
+            return mock
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.anthropic_client"
+        ) as mock_anthropic, patch(
+            "tasks.dm_tasks.openai_client"
+        ) as mock_openai:
+            mock_sb.table.side_effect = table_side_effect
+            mock_anthropic.messages.create.return_value = mock_anthropic_response
+            mock_openai.embeddings.create.return_value = mock_embedding_result
+
+            dm_response_task.fn("game-1", "msg-1", "I attack!", [])
+
+        assert captured_update_payload.get("suggested_actions") == []
+
+
 class TestGeneratePauseMessage:
     """Tests for generate_pause_message task."""
 

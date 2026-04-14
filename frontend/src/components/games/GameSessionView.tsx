@@ -34,6 +34,9 @@ export function GameSessionView({
   const [isActionLoading, setIsActionLoading] = useState(false)
   const [showRetryTimeout, setShowRetryTimeout] = useState(false)
   const [lastPlayerAction, setLastPlayerAction] = useState<string | null>(null)
+  const [suggestedActions, setSuggestedActions] = useState<string[]>(
+    game.suggested_actions ?? []
+  )
   const [hasMoreMessages, setHasMoreMessages] = useState(true)
   const [oldestCreatedAt, setOldestCreatedAt] = useState<string | null>(null)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
@@ -103,6 +106,15 @@ export function GameSessionView({
           setIsWaitingForDm(latestMsg.role === 'player')
         }
 
+        // Authenticate Realtime WebSocket with the user's JWT so RLS-protected
+        // postgres_changes events are delivered. Without this, @supabase/ssr's
+        // browser client connects Realtime as anonymous and INSERT/UPDATE/DELETE
+        // events are silently blocked by the game_messages SELECT policy.
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.access_token) {
+          supabase.realtime.setAuth(session.access_token)
+        }
+
         setIsLoading(false)
       } catch {
         setIsLoading(false)
@@ -111,7 +123,7 @@ export function GameSessionView({
 
     initializeSession()
 
-    // Subscribe to game_messages INSERT events
+    // Subscribe to game_messages INSERT/DELETE/UPDATE events
     const messagesSubscription = supabase
       .channel(`game_messages:${gameId}`)
       .on(
@@ -134,6 +146,36 @@ export function GameSessionView({
           }
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'game_messages',
+          filter: `game_id=eq.${gameId}`,
+        },
+        (payload) => {
+          const deletedId = payload.old ? (payload.old as { id?: string }).id : undefined
+          if (deletedId) {
+            setMessages((prev) => prev.filter((m) => m.id !== deletedId))
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'game_messages',
+          filter: `game_id=eq.${gameId}`,
+        },
+        (payload) => {
+          const updatedMsg = payload.new as GameMessage
+          setMessages((prev) =>
+            prev.map((m) => (m.id === updatedMsg.id ? updatedMsg : m))
+          )
+        }
+      )
       .subscribe()
 
     // Subscribe to games UPDATE events for status changes
@@ -150,6 +192,7 @@ export function GameSessionView({
         (payload) => {
           const updatedGame = payload.new as Game
           setGameStatus(updatedGame.status)
+          setSuggestedActions(updatedGame.suggested_actions ?? [])
         }
       )
       .subscribe()
@@ -289,6 +332,42 @@ export function GameSessionView({
     await handleSubmit(lastPlayerAction)
   }
 
+  const handleDeleteMessage = async (messageId: string) => {
+    try {
+      const response = await fetch(`/api/games/${gameId}/messages/${messageId}`, {
+        method: 'DELETE',
+      })
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error('Delete message failed:', errorData.error)
+      }
+      // Removal arrives via Realtime DELETE subscription
+    } catch {
+      console.error('Delete message request failed')
+    }
+  }
+
+  const handleEditMessage = async (messageId: string, content: string) => {
+    setIsWaitingForDm(true)
+    try {
+      const response = await fetch(`/api/games/${gameId}/messages/${messageId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      })
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error('Edit message failed:', errorData.error)
+        setIsWaitingForDm(false)
+      }
+      // Update arrives via Realtime UPDATE subscription
+      // DM response arrives via Realtime INSERT subscription
+    } catch {
+      setIsWaitingForDm(false)
+      console.error('Edit message request failed')
+    }
+  }
+
   const handlePause = async () => {
     setIsActionLoading(true)
     try {
@@ -360,6 +439,10 @@ export function GameSessionView({
         isLoadingMore={isLoadingMore}
         onLoadMore={handleLoadMore}
         onRetry={handleRetryLastAction}
+        userId={userId}
+        isWaitingForDm={isWaitingForDm}
+        onDeleteMessage={handleDeleteMessage}
+        onEditMessage={handleEditMessage}
       />
       {isWaitingForDm && gameStatus === 'active' && <TypingIndicator />}
       {showRetryTimeout && isWaitingForDm && gameStatus === 'active' && (
@@ -385,6 +468,7 @@ export function GameSessionView({
         isWaitingForDm={isWaitingForDm}
         hasCharacter={hasCharacter}
         onSubmit={handleSubmit}
+        suggestedActions={suggestedActions}
       />
 
       <ConfirmModal

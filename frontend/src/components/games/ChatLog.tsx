@@ -12,6 +12,10 @@ interface ChatLogProps {
   isLoadingMore: boolean
   onLoadMore: () => void
   onRetry?: () => void
+  userId?: string
+  isWaitingForDm?: boolean
+  onDeleteMessage?: (messageId: string) => void
+  onEditMessage?: (messageId: string, content: string) => void
 }
 
 export function ChatLog({
@@ -22,6 +26,10 @@ export function ChatLog({
   isLoadingMore,
   onLoadMore,
   onRetry,
+  userId,
+  isWaitingForDm,
+  onDeleteMessage,
+  onEditMessage,
 }: ChatLogProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const topSentinelRef = useRef<HTMLDivElement>(null)
@@ -206,19 +214,36 @@ export function ChatLog({
           </div>
         )}
 
-        {messages.map((msg) => (
-          <ChatMessage
-            key={msg.id}
-            role={msg.role}
-            characterName={
-              msg.role === 'player'
-                ? playerMap.get(msg.profile_id || '') || 'Unknown Character'
-                : undefined
-            }
-            content={msg.content}
-            onRetry={msg.role === 'system' ? onRetry : undefined}
-          />
-        ))}
+        {(() => {
+          const lastPlayerMsgId = [...messages].reverse().find((m) => m.role === 'player')?.id
+          return messages.map((msg) => (
+            <ChatMessage
+              key={msg.id}
+              role={msg.role}
+              characterName={
+                msg.role === 'player'
+                  ? playerMap.get(msg.profile_id || '') || 'Unknown Character'
+                  : undefined
+              }
+              content={msg.content}
+              profileId={msg.profile_id}
+              userId={userId}
+              isLastMessage={msg.id === lastPlayerMsgId}
+              isWaitingForDm={isWaitingForDm}
+              onRetry={msg.role === 'system' ? onRetry : undefined}
+              onDelete={
+                msg.role === 'player' && onDeleteMessage
+                  ? () => onDeleteMessage(msg.id)
+                  : undefined
+              }
+              onEdit={
+                msg.role === 'player' && onEditMessage
+                  ? (newContent) => onEditMessage(msg.id, newContent)
+                  : undefined
+              }
+            />
+          ))
+        })()}
       </div>
 
       <div ref={bottomSentinelRef} />
