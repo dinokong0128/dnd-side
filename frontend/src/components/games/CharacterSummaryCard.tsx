@@ -2,21 +2,12 @@
 
 import { STAT_NAMES } from '@/lib/constants/game'
 import type { PlayerRow } from '@/lib/types/player'
+import { formatModifier } from '@/lib/utils/dnd'
 
 interface CharacterSummaryCardProps {
   player: PlayerRow
-  gameStatus: 'lobby' | 'active' | 'paused' | 'ended'
-  onEdit: () => void
-}
-
-function getModifier(score: number): number {
-  return Math.floor((score - 10) / 2)
-}
-
-function formatModifier(value: number): string {
-  if (value > 0) return `+${value}`
-  if (value === 0) return '+0'
-  return `${value}`
+  gameStatus: string
+  onEdit?: () => void
 }
 
 export function CharacterSummaryCard({
@@ -67,13 +58,12 @@ export function CharacterSummaryCard({
         <div className="grid grid-cols-3 gap-3">
           {STAT_NAMES.map(({ key, label }) => {
             const score = player.stats[key as keyof typeof player.stats]
-            const modifier = getModifier(score)
             return (
               <div key={key} className="rounded bg-gray-100 p-3 text-center">
                 <p className="text-xs font-medium text-gray-600">{label}</p>
                 <p className="mt-1 text-lg font-bold text-gray-900">{score}</p>
                 <p className="text-xs text-gray-500">
-                  {formatModifier(modifier)}
+                  {formatModifier(score)}
                 </p>
               </div>
             )

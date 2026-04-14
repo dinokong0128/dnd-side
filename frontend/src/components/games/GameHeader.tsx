@@ -8,9 +8,10 @@ interface GameHeaderProps {
   isHost?: boolean
   onPause?: () => void
   onEnd?: () => void
+  onToggleSheet?: () => void
 }
 
-export function GameHeader({ gameName, gameStatus, isHost = false, onPause, onEnd }: GameHeaderProps) {
+export function GameHeader({ gameName, gameStatus, isHost = false, onPause, onEnd, onToggleSheet }: GameHeaderProps) {
   const statusBadgeClass = useMemo(() => {
     switch (gameStatus) {
       case 'lobby':
@@ -43,6 +44,23 @@ export function GameHeader({ gameName, gameStatus, isHost = false, onPause, onEn
           ⚔ {gameName}
         </h1>
         <div className="flex items-center gap-4">
+          {(gameStatus === 'active' || gameStatus === 'paused') && onToggleSheet && (
+            <button
+              data-testid="sheet-button"
+              onClick={onToggleSheet}
+              className="dnd-btn-secondary"
+              style={{
+                fontFamily: "'Cinzel', serif",
+                fontSize: '0.7rem',
+                textTransform: 'uppercase',
+                padding: '0.4rem 0.8rem',
+                letterSpacing: '0.05em',
+              }}
+              title="View character sheet"
+            >
+              ⚔ Sheet
+            </button>
+          )}
           {isHost && gameStatus === 'active' && (
             <>
               <button
