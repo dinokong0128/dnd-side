@@ -5,6 +5,11 @@ import type { NextRequest } from 'next/server'
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   let supabaseResponse = NextResponse.next({ request })
 
+  // E2E testing: skip auth checks so browser-side mocks handle auth
+  if (process.env.E2E_TESTING === 'true') {
+    return supabaseResponse
+  }
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,

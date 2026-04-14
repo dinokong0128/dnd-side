@@ -13,16 +13,15 @@ test.describe('Sign up via invite link', () => {
       })
     })
 
-    // Mock Supabase auth signup
-    await page.route('**/auth/v1/signup', (route) => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          id: 'user-1',
-          email: 'test@example.com',
-        }),
-      })
+    // Mock Next.js API route for signup
+    await page.route('**/api/auth/signup', (route) => {
+      if (route.request().method() === 'POST') {
+        route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          body: JSON.stringify({ success: true }),
+        })
+      }
     })
 
     await page.goto('/auth/signup?code=valid-code')
