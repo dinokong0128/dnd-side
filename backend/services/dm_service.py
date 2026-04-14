@@ -44,24 +44,59 @@ def search_rag(
     return result.data or []
 
 
+_VALID_DICE = frozenset({"d4", "d6", "d8", "d10", "d12", "d20", "d100"})
+_INT_FIELDS = ("count", "result", "modifier", "total")
+
+
+def _validate_roll_entry(entry: Any) -> bool:
+    """Return True if entry is a well-formed dice roll dict."""
+    if not isinstance(entry, dict):
+        return False
+    if entry.get("die") not in _VALID_DICE:
+        return False
+    for field in _INT_FIELDS:
+        if not isinstance(entry.get(field), int):
+            return False
+    if not isinstance(entry.get("label"), str):
+        return False
+    return True
+
+
 def extract_dice_rolls(dm_response: str) -> list[dict]:
     """
-    Parse <dice_rolls>[...]</dice_rolls> block from Claude's DM response.
-    Returns list of dice roll dicts, or [] if block is absent or malformed.
-    Non-fatal: errors are logged as warnings and an empty list is returned.
+    Parse all <dice_rolls>[...]</dice_rolls> blocks from Claude's DM response.
+    Merges entries from multiple blocks, validates each entry, and drops
+    malformed ones. Returns [] if no valid entries are found.
+    Non-fatal: errors are logged as warnings.
     """
-    match = re.search(r"<dice_rolls>(.*?)</dice_rolls>", dm_response, re.DOTALL)
-    if not match:
+    raw_blocks = re.findall(r"<dice_rolls>(.*?)</dice_rolls>", dm_response, re.DOTALL)
+    if not raw_blocks:
         return []
-    try:
-        rolls = json.loads(match.group(1).strip())
-        if not isinstance(rolls, list):
-            logger.warning("[extract_dice_rolls] dice_rolls block is not a JSON array")
-            return []
-        return rolls
-    except (json.JSONDecodeError, ValueError) as exc:
-        logger.warning("[extract_dice_rolls] Failed to parse dice_rolls block: %s", exc)
-        return []
+    if len(raw_blocks) > 1:
+        logger.warning(
+            "[extract_dice_rolls] Found %d dice_rolls blocks; merging all",
+            len(raw_blocks),
+        )
+    merged: list[dict] = []
+    for block in raw_blocks:
+        try:
+            parsed = json.loads(block.strip())
+        except (json.JSONDecodeError, ValueError) as exc:
+            logger.warning("[extract_dice_rolls] Failed to parse block: %s", exc)
+            continue
+        if not isinstance(parsed, list):
+            logger.warning(
+                "[extract_dice_rolls] dice_rolls block is not a JSON array; skipping"
+            )
+            continue
+        for entry in parsed:
+            if _validate_roll_entry(entry):
+                merged.append(entry)
+            else:
+                logger.warning(
+                    "[extract_dice_rolls] Dropping malformed roll entry: %s", entry
+                )
+    return merged
 
 
 def extract_events_from_response(dm_response: str) -> list[dict[str, str]]:

@@ -292,3 +292,43 @@ More narration."""
         assert len(rolls) == 2
         assert rolls[0]["die"] == "d20"
         assert rolls[1]["die"] == "d6"
+
+    def test_merges_multiple_blocks(self):
+        """Should merge rolls from multiple <dice_rolls> blocks."""
+        text = (
+            '<dice_rolls>[{"die":"d20","count":1,"result":10,"modifier":2,"total":12,"label":"Attack"}]</dice_rolls>'
+            " Narration. "
+            '<dice_rolls>[{"die":"d6","count":1,"result":3,"modifier":0,"total":3,"label":"Damage"}]</dice_rolls>'
+        )
+        rolls = extract_dice_rolls(text)
+        assert len(rolls) == 2
+        assert rolls[0]["die"] == "d20"
+        assert rolls[1]["die"] == "d6"
+
+    def test_drops_entry_with_invalid_die_type(self):
+        """Should drop entries whose 'die' field is not in the valid set."""
+        text = (
+            '<dice_rolls>[{"die":"d7","count":1,"result":4,"modifier":0,"total":4,"label":"Bad Die"}]</dice_rolls>'
+        )
+        assert extract_dice_rolls(text) == []
+
+    def test_drops_entry_with_non_integer_numeric_field(self):
+        """Should drop entries where a required numeric field is a string."""
+        text = (
+            '<dice_rolls>[{"die":"d20","count":1,"result":"14","modifier":2,"total":16,"label":"Check"}]</dice_rolls>'
+        )
+        assert extract_dice_rolls(text) == []
+
+    def test_drops_malformed_entries_keeps_valid(self):
+        """Should keep valid entries and drop malformed ones in the same block."""
+        text = """<dice_rolls>
+[
+  {"die": "d20", "count": 1, "result": 18, "modifier": 3, "total": 21, "label": "Attack"},
+  {"die": "d99", "count": 1, "result": 5, "modifier": 0, "total": 5, "label": "Bad"},
+  {"die": "d8", "count": 1, "result": 6, "modifier": 1, "total": 7, "label": "Damage"}
+]
+</dice_rolls>"""
+        rolls = extract_dice_rolls(text)
+        assert len(rolls) == 2
+        assert rolls[0]["die"] == "d20"
+        assert rolls[1]["die"] == "d8"
