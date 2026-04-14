@@ -4,10 +4,14 @@ Embedding and Claude calls happen in the Dramatiq worker (dm_tasks.py).
 This module handles synchronous pre-processing before enqueueing.
 """
 
+import json
+import logging
 import re
 from typing import Any
 from config import supabase_client
 from constants import GAME_STATUS_ACTIVE, PLAYER_STATUS_DEAD
+
+logger = logging.getLogger(__name__)
 
 
 def validate_action(action: Any, player: dict, game: dict) -> None:
@@ -38,6 +42,26 @@ def search_rag(
         {"p_game_id": game_id, "p_embedding": embedding, "p_top_k": top_k},
     ).execute()
     return result.data or []
+
+
+def extract_dice_rolls(dm_response: str) -> list[dict]:
+    """
+    Parse <dice_rolls>[...]</dice_rolls> block from Claude's DM response.
+    Returns list of dice roll dicts, or [] if block is absent or malformed.
+    Non-fatal: errors are logged as warnings and an empty list is returned.
+    """
+    match = re.search(r"<dice_rolls>(.*?)</dice_rolls>", dm_response, re.DOTALL)
+    if not match:
+        return []
+    try:
+        rolls = json.loads(match.group(1).strip())
+        if not isinstance(rolls, list):
+            logger.warning("[extract_dice_rolls] dice_rolls block is not a JSON array")
+            return []
+        return rolls
+    except (json.JSONDecodeError, ValueError) as exc:
+        logger.warning("[extract_dice_rolls] Failed to parse dice_rolls block: %s", exc)
+        return []
 
 
 def extract_events_from_response(dm_response: str) -> list[dict[str, str]]:

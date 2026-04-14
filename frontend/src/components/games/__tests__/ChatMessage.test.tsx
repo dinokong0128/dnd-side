@@ -1,5 +1,6 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import { ChatMessage } from '../ChatMessage'
+import type { DiceRollEvent } from '@/lib/types/message'
 
 describe('ChatMessage', () => {
   it('renders DM message with Dungeon Master label', () => {
@@ -236,5 +237,63 @@ describe('✏ edit/delete controls (DIN-61)', () => {
     fireEvent.click(screen.getByTestId('delete-message-btn'))
 
     expect(onDelete).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('DIN-24: dice_rolls rendering in DM messages', () => {
+  beforeEach(() => {
+    jest.useFakeTimers()
+  })
+  afterEach(() => {
+    jest.useRealTimers()
+    jest.clearAllMocks()
+  })
+
+  const stealth: DiceRollEvent = {
+    type: 'dice_roll',
+    die: 'd20',
+    count: 1,
+    result: 14,
+    modifier: 3,
+    total: 17,
+    label: 'Stealth Check',
+    dc: 15,
+    success: true,
+  }
+
+  it('renders DiceRoller components when dice_rolls present', () => {
+    render(
+      <ChatMessage
+        role="dm"
+        content="You slip into the shadows undetected."
+        diceRolls={[stealth]}
+      />
+    )
+    expect(screen.getByText('Stealth Check')).toBeInTheDocument()
+  })
+
+  it('hides narration text until all dice have settled', () => {
+    render(
+      <ChatMessage
+        role="dm"
+        content="You slip into the shadows undetected."
+        diceRolls={[stealth]}
+      />
+    )
+    // Narration should be hidden initially
+    expect(screen.queryByText('You slip into the shadows undetected.')).not.toBeVisible()
+    // After timers (animation complete) narration appears
+    act(() => { jest.runAllTimers() })
+    expect(screen.getByText('You slip into the shadows undetected.')).toBeVisible()
+  })
+
+  it('renders narration immediately when no dice_rolls', () => {
+    render(
+      <ChatMessage
+        role="dm"
+        content="The dragon stirs."
+      />
+    )
+    expect(screen.getByText('The dragon stirs.')).toBeVisible()
   })
 })

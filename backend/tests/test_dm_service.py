@@ -10,6 +10,7 @@ with patch("config.supabase_client", MagicMock()):
         validate_action,
         search_rag,
         extract_events_from_response,
+        extract_dice_rolls,
     )
 
 
@@ -231,3 +232,63 @@ class TestSearchRag:
 
         results = search_rag("game-uuid-1", [0.1] * 1536, top_k=3)
         assert len(results) == 3
+
+
+class TestExtractDiceRolls:
+    """Tests for extract_dice_rolls()."""
+
+    VALID_BLOCK = """Some DM narration.
+<dice_rolls>
+[
+  {
+    "type": "dice_roll",
+    "die": "d20",
+    "count": 1,
+    "result": 14,
+    "modifier": 3,
+    "total": 17,
+    "label": "Stealth Check",
+    "dc": 15,
+    "success": true
+  }
+]
+</dice_rolls>
+More narration."""
+
+    def test_extracts_valid_block(self):
+        """Should parse dice_rolls array from a valid block."""
+        rolls = extract_dice_rolls(self.VALID_BLOCK)
+        assert len(rolls) == 1
+        assert rolls[0]["die"] == "d20"
+        assert rolls[0]["total"] == 17
+        assert rolls[0]["label"] == "Stealth Check"
+        assert rolls[0]["success"] is True
+
+    def test_returns_empty_list_when_no_block(self):
+        """Should return [] when no <dice_rolls> block is present."""
+        rolls = extract_dice_rolls("Just a normal DM response with no dice.")
+        assert rolls == []
+
+    def test_returns_empty_list_on_malformed_json(self):
+        """Should return [] gracefully when JSON is invalid."""
+        bad = "<dice_rolls>not valid json</dice_rolls>"
+        rolls = extract_dice_rolls(bad)
+        assert rolls == []
+
+    def test_returns_empty_list_on_empty_array(self):
+        """Should return [] for an empty array block."""
+        rolls = extract_dice_rolls("<dice_rolls>[]</dice_rolls>")
+        assert rolls == []
+
+    def test_extracts_multiple_rolls(self):
+        """Should parse multiple dice roll entries."""
+        text = """<dice_rolls>
+[
+  {"type": "dice_roll", "die": "d20", "count": 1, "result": 8, "modifier": 2, "total": 10, "label": "Attack Roll"},
+  {"type": "dice_roll", "die": "d6", "count": 1, "result": 4, "modifier": 3, "total": 7, "label": "Longsword Damage"}
+]
+</dice_rolls>"""
+        rolls = extract_dice_rolls(text)
+        assert len(rolls) == 2
+        assert rolls[0]["die"] == "d20"
+        assert rolls[1]["die"] == "d6"
