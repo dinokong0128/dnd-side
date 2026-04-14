@@ -10,6 +10,7 @@ import { ChatInput } from './ChatInput'
 import { TypingIndicator } from './TypingIndicator'
 import { ConfirmModal } from './ConfirmModal'
 import { SessionStatusBanner } from './SessionStatusBanner'
+import { CharacterSheetPanel } from './CharacterSheetPanel'
 import { CHAT_PAGE_SIZE } from '@/lib/constants/game'
 
 interface GameSessionViewProps {
@@ -29,7 +30,7 @@ export function GameSessionView({
   const [gameStatus, setGameStatus] = useState(game.status)
   const [playerMap, setPlayerMap] = useState<Map<string, string>>(new Map())
   const [hasCharacter, setHasCharacter] = useState(false)
-  const [playerId, setPlayerId] = useState<string | null>(null)
+  const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null)
   const [showPauseModal, setShowPauseModal] = useState(false)
   const [showEndModal, setShowEndModal] = useState(false)
   const [isActionLoading, setIsActionLoading] = useState(false)
@@ -41,6 +42,7 @@ export function GameSessionView({
   const [hasMoreMessages, setHasMoreMessages] = useState(true)
   const [oldestCreatedAt, setOldestCreatedAt] = useState<string | null>(null)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [showCharacterSheet, setShowCharacterSheet] = useState(false)
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isHost = game.created_by === userId
@@ -65,7 +67,7 @@ export function GameSessionView({
           .order('created_at', { ascending: false })
           .limit(1)
 
-        // Fetch all players for this game
+        // Fetch all players for this game (include id for CharacterSheetPanel)
         const playersPromise = supabase
           .from('players')
           .select('id, profile_id, character_name')
@@ -98,11 +100,9 @@ export function GameSessionView({
         })
         setPlayerMap(map)
 
-        // Resolve and store the current user's players.id (UUID) for CharacterSheetPanel (DIN-15)
-        const currentPlayer = players.find((p) => p.profile_id === userId)
-        if (currentPlayer) {
-          setPlayerId(currentPlayer.id)
-        }
+        // Track current user's player ID for the character sheet
+        const myPlayer = players.find((p) => p.profile_id === userId)
+        setCurrentPlayerId(myPlayer ? myPlayer.id : null)
 
         // Check if current user has a character in this game
         setHasCharacter(map.has(userId))
@@ -438,46 +438,61 @@ export function GameSessionView({
         isHost={isHost}
         onPause={() => setShowPauseModal(true)}
         onEnd={() => setShowEndModal(true)}
+        onToggleSheet={currentPlayerId ? () => setShowCharacterSheet((s) => !s) : undefined}
       />
-      <ChatLog
-        messages={messages}
-        playerMap={playerMap}
-        isLoading={isLoading}
-        hasMoreMessages={hasMoreMessages}
-        isLoadingMore={isLoadingMore}
-        onLoadMore={handleLoadMore}
-        onRetry={handleRetryLastAction}
-        userId={userId}
-        isWaitingForDm={isWaitingForDm}
-        onDeleteMessage={handleDeleteMessage}
-        onEditMessage={handleEditMessage}
-      />
-      {isWaitingForDm && gameStatus === 'active' && <TypingIndicator />}
-      {showRetryTimeout && isWaitingForDm && gameStatus === 'active' && (
-        <div style={{ flexShrink: 0, borderTop: '1px solid var(--dnd-brown)', background: 'var(--dnd-charcoal)', padding: '8px 24px' }}>
-          <div style={{ maxWidth: '48rem', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', borderRadius: '6px', border: '1px solid rgba(192,57,43,0.3)', background: 'rgba(139,34,50,0.12)', padding: '8px 14px' }}>
-            <span style={{ fontFamily: "'Lora', serif", fontSize: '0.85rem', fontStyle: 'italic', color: '#e8a0a0' }}>
-              The Dungeon Master hasn&apos;t responded in a while.
-            </span>
-            <button onClick={handleRetryLastAction} className="dnd-btn-secondary" style={{ whiteSpace: 'nowrap', padding: '4px 12px', fontSize: '0.65rem' }}>
-              ↩ Retry
-            </button>
-          </div>
+      {/* Main content row: chat column + optional character sheet panel */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Chat column — shrinks to make room for the sheet panel */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <ChatLog
+            messages={messages}
+            playerMap={playerMap}
+            isLoading={isLoading}
+            hasMoreMessages={hasMoreMessages}
+            isLoadingMore={isLoadingMore}
+            onLoadMore={handleLoadMore}
+            onRetry={handleRetryLastAction}
+            userId={userId}
+            isWaitingForDm={isWaitingForDm}
+            onDeleteMessage={handleDeleteMessage}
+            onEditMessage={handleEditMessage}
+          />
+          {isWaitingForDm && gameStatus === 'active' && <TypingIndicator />}
+          {showRetryTimeout && isWaitingForDm && gameStatus === 'active' && (
+            <div style={{ flexShrink: 0, borderTop: '1px solid var(--dnd-brown)', background: 'var(--dnd-charcoal)', padding: '8px 24px' }}>
+              <div style={{ maxWidth: '48rem', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', borderRadius: '6px', border: '1px solid rgba(192,57,43,0.3)', background: 'rgba(139,34,50,0.12)', padding: '8px 14px' }}>
+                <span style={{ fontFamily: "'Lora', serif", fontSize: '0.85rem', fontStyle: 'italic', color: '#e8a0a0' }}>
+                  The Dungeon Master hasn&apos;t responded in a while.
+                </span>
+                <button onClick={handleRetryLastAction} className="dnd-btn-secondary" style={{ whiteSpace: 'nowrap', padding: '4px 12px', fontSize: '0.65rem' }}>
+                  ↩ Retry
+                </button>
+              </div>
+            </div>
+          )}
+          <SessionStatusBanner
+            gameStatus={gameStatus}
+            isHost={isHost}
+            onResume={handleResume}
+            onEnd={() => setShowEndModal(true)}
+          />
+          <ChatInput
+            gameStatus={gameStatus}
+            isWaitingForDm={isWaitingForDm}
+            hasCharacter={hasCharacter}
+            onSubmit={handleSubmit}
+            suggestedActions={suggestedActions}
+          />
         </div>
-      )}
-      <SessionStatusBanner
-        gameStatus={gameStatus}
-        isHost={isHost}
-        onResume={handleResume}
-        onEnd={() => setShowEndModal(true)}
-      />
-      <ChatInput
-        gameStatus={gameStatus}
-        isWaitingForDm={isWaitingForDm}
-        hasCharacter={hasCharacter}
-        onSubmit={handleSubmit}
-        suggestedActions={suggestedActions}
-      />
+
+        {/* Character sheet panel — sits alongside the chat column */}
+        {showCharacterSheet && currentPlayerId && (
+          <CharacterSheetPanel
+            playerId={currentPlayerId}
+            onClose={() => setShowCharacterSheet(false)}
+          />
+        )}
+      </div>
 
       <ConfirmModal
         isOpen={showPauseModal}
