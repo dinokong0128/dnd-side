@@ -28,6 +28,27 @@ test.describe('Core Game Loop — Submit Action + Receive DM Response', () => {
         }),
       })
     })
+
+    // Mock game_messages: return a DM message for the latestMessagePromise
+    // (select=role, limit=1) so isWaitingForDm=false on initial load.
+    await page.route('**.supabase.co/rest/v1/game_messages**', (route) => {
+      if (route.request().method() === 'GET') {
+        const url = route.request().url()
+        if (url.includes('select=role')) {
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([{ id: 'msg-init', role: 'dm', created_at: '2026-01-01T00:00:00Z' }]),
+          })
+        } else {
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([]),
+          })
+        }
+      }
+    })
   })
 
   test('happy path: submit action, see typing indicator, receive DM response', async ({
@@ -37,7 +58,7 @@ test.describe('Core Game Loop — Submit Action + Receive DM Response', () => {
     const userId = 'user-1'
 
     // Mock Supabase server-side fetch for game data (fetchGameById)
-    await page.route('**/supabase.co/rest/v1/games**', (route) => {
+    await page.route('**.supabase.co/rest/v1/games**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -59,7 +80,7 @@ test.describe('Core Game Loop — Submit Action + Receive DM Response', () => {
     })
 
     // Mock Supabase server-side fetch for players
-    await page.route('**/supabase.co/rest/v1/players**', (route) => {
+    await page.route('**.supabase.co/rest/v1/players**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -107,7 +128,7 @@ test.describe('Core Game Loop — Submit Action + Receive DM Response', () => {
     })
 
     // Check that input is initially enabled (game is active, not waiting for DM)
-    const textarea = page.getByPlaceholder(/What does your character do/)
+    const textarea = page.getByTestId('chat-textarea')
     await expect(textarea).toBeEnabled()
 
     // Type an action
@@ -184,7 +205,7 @@ test.describe('Core Game Loop — Submit Action + Receive DM Response', () => {
     const userId = 'user-1'
 
     // Mock Supabase server-side fetch for game data
-    await page.route('**/supabase.co/rest/v1/games**', (route) => {
+    await page.route('**.supabase.co/rest/v1/games**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -205,7 +226,7 @@ test.describe('Core Game Loop — Submit Action + Receive DM Response', () => {
     })
 
     // Mock Supabase server-side fetch for players
-    await page.route('**/supabase.co/rest/v1/players**', (route) => {
+    await page.route('**.supabase.co/rest/v1/players**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -230,7 +251,7 @@ test.describe('Core Game Loop — Submit Action + Receive DM Response', () => {
     await page.goto(`/games/${gameId}`)
     await expect(page.getByText('Test Campaign')).toBeVisible()
 
-    const textarea = page.getByPlaceholder(/What does your character do/)
+    const textarea = page.getByTestId('chat-textarea')
     const sendButton = page.getByRole('button', { name: /Send/i })
 
     // Send button should be disabled when textarea is empty
@@ -256,7 +277,7 @@ test.describe('Core Game Loop — Submit Action + Receive DM Response', () => {
     const userId = 'user-1'
 
     // Mock Supabase server-side fetch for game data
-    await page.route('**/supabase.co/rest/v1/games**', (route) => {
+    await page.route('**.supabase.co/rest/v1/games**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -277,7 +298,7 @@ test.describe('Core Game Loop — Submit Action + Receive DM Response', () => {
     })
 
     // Mock Supabase server-side fetch for players
-    await page.route('**/supabase.co/rest/v1/players**', (route) => {
+    await page.route('**.supabase.co/rest/v1/players**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -312,7 +333,7 @@ test.describe('Core Game Loop — Submit Action + Receive DM Response', () => {
     await page.goto(`/games/${gameId}`)
     await expect(page.getByText('Error Test Campaign')).toBeVisible()
 
-    const textarea = page.getByPlaceholder(/What does your character do/)
+    const textarea = page.getByTestId('chat-textarea')
     const sendButton = page.getByRole('button', { name: /Send/i })
 
     // Submit action
@@ -349,7 +370,7 @@ test.describe('Core Game Loop — Submit Action + Receive DM Response', () => {
     const userId = 'user-2' // Different user, no character
 
     // Mock Supabase server-side fetch for game data
-    await page.route('**/supabase.co/rest/v1/games**', (route) => {
+    await page.route('**.supabase.co/rest/v1/games**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -370,7 +391,7 @@ test.describe('Core Game Loop — Submit Action + Receive DM Response', () => {
     })
 
     // Mock Supabase server-side fetch for players - no players for user-2
-    await page.route('**/supabase.co/rest/v1/players**', (route) => {
+    await page.route('**.supabase.co/rest/v1/players**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -407,7 +428,7 @@ test.describe('Core Game Loop — Submit Action + Receive DM Response', () => {
     await page.goto(`/games/${gameId}`)
     await expect(page.getByText('Campaign')).toBeVisible()
 
-    const textarea = page.getByPlaceholder(/What does your character do/)
+    const textarea = page.getByTestId('chat-textarea')
     const sendButton = page.getByRole('button', { name: /Send/i })
 
     // Input should be disabled
@@ -449,7 +470,7 @@ test.describe('DIN-42 — DM action suggestions (✨ cycling)', () => {
       })
     )
 
-    await page.route('**/supabase.co/rest/v1/players**', (route) => {
+    await page.route('**.supabase.co/rest/v1/players**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -470,12 +491,23 @@ test.describe('DIN-42 — DM action suggestions (✨ cycling)', () => {
         })
       }
     })
+
+    // Mock game_messages: return DM message → isWaitingForDm=false → cycle button enabled
+    await page.route('**.supabase.co/rest/v1/game_messages**', (route) => {
+      if (route.request().method() === 'GET') {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([{ id: 'msg-dm', role: 'dm', created_at: '2026-01-01T00:00:00Z' }]),
+        })
+      }
+    })
   })
 
   test('✨ button is disabled when game has no suggested_actions', async ({
     page,
   }) => {
-    await page.route('**/supabase.co/rest/v1/games**', (route) => {
+    await page.route('**.supabase.co/rest/v1/games**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -507,7 +539,7 @@ test.describe('DIN-42 — DM action suggestions (✨ cycling)', () => {
   test('✨ button is enabled and cycles through suggestions when game has suggested_actions', async ({
     page,
   }) => {
-    await page.route('**/supabase.co/rest/v1/games**', (route) => {
+    await page.route('**.supabase.co/rest/v1/games**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,
@@ -557,7 +589,7 @@ test.describe('DIN-42 — DM action suggestions (✨ cycling)', () => {
   test('suggestion counter label appears when suggestions are available', async ({
     page,
   }) => {
-    await page.route('**/supabase.co/rest/v1/games**', (route) => {
+    await page.route('**.supabase.co/rest/v1/games**', (route) => {
       if (route.request().method() === 'GET') {
         route.fulfill({
           status: 200,

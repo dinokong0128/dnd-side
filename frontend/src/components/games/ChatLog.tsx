@@ -164,7 +164,7 @@ export function ChatLog({
       style={{ background: 'var(--dnd-black)' }}
     >
       <div className="max-w-3xl space-y-4">
-        <div ref={topSentinelRef} />
+        <div ref={topSentinelRef} data-testid="top-sentinel" />
 
         {isLoadingMore && (
           <div className="flex items-center justify-center gap-2 py-2">
