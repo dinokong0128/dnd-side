@@ -102,7 +102,7 @@ export function GameSessionView({
 
         // Track current user's player ID for the character sheet
         const myPlayer = players.find((p) => p.profile_id === userId)
-        if (myPlayer) setCurrentPlayerId(myPlayer.id)
+        setCurrentPlayerId(myPlayer ? myPlayer.id : null)
 
         // Check if current user has a character in this game
         setHasCharacter(map.has(userId))
