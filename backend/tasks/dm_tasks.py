@@ -5,6 +5,7 @@ Dramatiq tasks for async work:
 - aggregation_task: Background summaries of long campaigns
 """
 
+import math
 import dramatiq
 from typing import List, Dict, Any
 import json
@@ -15,7 +16,12 @@ import re
 from config import supabase_client, anthropic_client, openai_client
 import redis_broker  # noqa: F401 — ensure broker is set before defining actors
 from dramatiq.middleware import CurrentMessage
-from services.dm_service import extract_events_from_response, search_rag
+from services.dm_service import (
+    extract_events_from_response,
+    extract_state_changes,
+    apply_state_changes,
+    search_rag,
+)
 from services.embedding_service import embed_text
 from constants import MESSAGE_ROLE_DM, MESSAGE_ROLE_SYSTEM, EVENT_SOURCE_CLAUDE
 
@@ -101,6 +107,11 @@ def dm_response_task(
             "\n\n".join(message_history) if message_history else "No messages yet."
         )
 
+        def _ability_mod(score: int) -> str:
+            """Format an ability score modifier with sign (e.g. +3 or -1)."""
+            m = math.floor((score - 10) / 2)
+            return f"{m:+d}"
+
         # Step 1c: Fetch player inventory
         party_lines = []
         for p in players.data:
@@ -123,10 +134,32 @@ def dm_response_task(
                 or "no equipment"
             )
 
+            stats = p.get("stats") or {}
+            str_score = stats.get("str", 10)
+            dex_score = stats.get("dex", 10)
+            con_score = stats.get("con", 10)
+            int_score = stats.get("int", 10)
+            wis_score = stats.get("wis", 10)
+            cha_score = stats.get("cha", 10)
+
+            level = p.get("level", 1)
+            if level >= 9:
+                prof_bonus = 4
+            elif level >= 5:
+                prof_bonus = 3
+            else:
+                prof_bonus = 2
+
             party_lines.append(
-                f"- {p['character_name']}, Level {p.get('level', 1)} "
-                f"{p.get('race', 'Human')} {p['character_class']}. "
-                f"HP: {p['hp_current']}/{p['hp_max']}. Equipment: {items}"
+                f"- {p['character_name']} [ID: {p['id']}], Level {level} "
+                f"{p.get('race', 'Human')} {p['character_class']}.\n"
+                f"  HP: {p['hp_current']}/{p['hp_max']}.\n"
+                f"  STR {str_score} ({_ability_mod(str_score)}), DEX {dex_score} ({_ability_mod(dex_score)}), "
+                f"CON {con_score} ({_ability_mod(con_score)}),\n"
+                f"  INT {int_score} ({_ability_mod(int_score)}), WIS {wis_score} ({_ability_mod(wis_score)}), "
+                f"CHA {cha_score} ({_ability_mod(cha_score)})\n"
+                f"  Proficiency bonus: +{prof_bonus}\n"
+                f"  Equipment: {items}"
             )
 
         # Step 2: Build Claude system prompt
@@ -152,7 +185,19 @@ RULES:
    <event type="combat|discovery|dialogue|death|milestone">Brief factual description</event>
 6. End with a clear invitation for the party to act
 7. Do not list game mechanics or stat changes — narrate them naturally
-8. After your narrative response, produce 2–10 short suggested actions the player could
+8. When your narration causes HP changes or inventory changes, emit a <state_changes> block
+   AFTER your narrative text and BEFORE the <suggested_actions> block:
+   <state_changes>
+   {{
+     "hp_changes": [{{"character_id": "<ID from party list>", "delta": -8, "reason": "goblin attack"}}],
+     "inventory_add": [{{"character_id": "<ID>", "item_name": "Gold Coin", "quantity": 50}}],
+     "inventory_remove": [{{"character_id": "<ID>", "item_name": "Torch", "quantity": 1}}]
+   }}
+   </state_changes>
+   All fields are optional — only include fields that changed. Omit the block entirely if no state changes occur.
+   character_id must be the exact UUID from the party list above (e.g. [ID: abc-123]).
+   delta is signed: negative for damage, positive for healing.
+9. After your narrative response, produce 2–10 short suggested actions the player could
    take next (imperative mood, ~10 words each). Wrap them in:
    <suggested_actions>
    Pick the lock using your thieves' tools.
@@ -182,6 +227,14 @@ The acting player's action:
         # Step 4: Extract events from response
         events = extract_events_from_response(dm_response)
         logger.info(f"[dm_response_task] Extracted {len(events)} events")
+
+        # Step 4b: Extract and apply state changes (HP, inventory)
+        state_changes = extract_state_changes(dm_response)
+        if state_changes:
+            apply_state_changes(state_changes)
+            logger.info(
+                f"[dm_response_task] Applied state changes: {list(state_changes.keys())}"
+            )
 
         # Step 5: Embed events
         event_rows = []
@@ -224,11 +277,19 @@ The acting player's action:
             flags=re.DOTALL,
         ).strip()
 
-        # Strip event markers from the displayed message
-        clean_response = re.sub(
+        # Strip event markers from the displayed message (keep inner text via \1)
+        dm_response_no_events = re.sub(
             r'<event\s+type=["\'][^"\']+["\']>(.*?)</event>',
             r"\1",
             dm_response_no_suggestions,
+            flags=re.DOTALL,
+        ).strip()
+
+        # Strip state_changes block entirely (machine-readable, not for display)
+        clean_response = re.sub(
+            r'<state_changes>.*?</state_changes>',
+            '',
+            dm_response_no_events,
             flags=re.DOTALL,
         ).strip()
 

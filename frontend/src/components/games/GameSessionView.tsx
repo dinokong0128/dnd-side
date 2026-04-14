@@ -29,6 +29,7 @@ export function GameSessionView({
   const [gameStatus, setGameStatus] = useState(game.status)
   const [playerMap, setPlayerMap] = useState<Map<string, string>>(new Map())
   const [hasCharacter, setHasCharacter] = useState(false)
+  const [playerId, setPlayerId] = useState<string | null>(null)
   const [showPauseModal, setShowPauseModal] = useState(false)
   const [showEndModal, setShowEndModal] = useState(false)
   const [isActionLoading, setIsActionLoading] = useState(false)
@@ -86,6 +87,7 @@ export function GameSessionView({
         // Build playerMap (profile_id -> character_name)
         const map = new Map<string, string>()
         const players = (playersData ?? []) as Array<{
+          id: string
           profile_id: string | null
           character_name: string | null
         }>
@@ -95,6 +97,12 @@ export function GameSessionView({
           }
         })
         setPlayerMap(map)
+
+        // Resolve and store the current user's players.id (UUID) for CharacterSheetPanel (DIN-15)
+        const currentPlayer = players.find((p) => p.profile_id === userId)
+        if (currentPlayer) {
+          setPlayerId(currentPlayer.id)
+        }
 
         // Check if current user has a character in this game
         setHasCharacter(map.has(userId))

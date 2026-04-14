@@ -1093,3 +1093,214 @@ class TestGenerateResumeNarration:
 
             with pytest.raises(Exception):
                 generate_resume_narration.fn("game-1")
+
+
+class TestStateChanges:
+    """Tests for DIN-16: state_changes extraction and application in dm_response_task."""
+
+    def _make_players_data(self):
+        return [
+            {
+                "id": "player-uuid-1",
+                "character_name": "Hero",
+                "race": "Human",
+                "level": 1,
+                "character_class": "Fighter",
+                "hp_current": 10,
+                "hp_max": 10,
+                "profile_id": "user-1",
+                "stats": {"str": 16, "dex": 12, "con": 14, "int": 10, "wis": 10, "cha": 8},
+            }
+        ]
+
+    def _make_base_table_side_effect(self, game_data, players_data, dm_text, game_messages_mock):
+        """Build a standard table_side_effect function for dm_response_task tests."""
+        mock_game_result = MagicMock()
+        mock_game_result.data = game_data
+
+        mock_players_result = MagicMock()
+        mock_players_result.data = players_data
+
+        mock_messages_result = MagicMock()
+        mock_messages_result.data = []
+
+        mock_inventory_result = MagicMock()
+        mock_inventory_result.data = []
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "games":
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = mock_game_result
+                mock.update.return_value.match.return_value.execute.return_value = MagicMock()
+                return mock
+            elif name == "players":
+                mock.select.return_value.match.return_value.execute.return_value = mock_players_result
+            elif name == "game_messages":
+                return game_messages_mock
+            elif name == "player_inventory":
+                mock.select.return_value.eq.return_value.execute.return_value = mock_inventory_result
+            elif name == "game_events":
+                mock.insert.return_value.execute.return_value = MagicMock()
+            return mock
+
+        return table_side_effect
+
+    def test_party_line_contains_player_id(self):
+        """Party line in system prompt must contain [ID: {uuid}] so Claude can reference it."""
+        game_data = {"id": "game-1", "name": "Quest", "dm_persona": "DM"}
+        players_data = self._make_players_data()
+
+        captured_prompt = {}
+
+        game_messages_mock = MagicMock()
+        game_messages_mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
+        game_messages_mock.insert.return_value.execute.return_value = MagicMock()
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "games":
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = MagicMock(data=game_data)
+                mock.update.return_value.match.return_value.execute.return_value = MagicMock()
+                return mock
+            elif name == "players":
+                mock.select.return_value.match.return_value.execute.return_value = MagicMock(data=players_data)
+            elif name == "game_messages":
+                return game_messages_mock
+            elif name == "player_inventory":
+                mock.select.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+            elif name == "game_events":
+                mock.insert.return_value.execute.return_value = MagicMock()
+            return mock
+
+        def capture_create(**kwargs):
+            captured_prompt["system"] = kwargs.get("system", "")
+            resp = MagicMock()
+            resp.content = [MagicMock(text="The dragon roars.")]
+            return resp
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.anthropic_client"
+        ) as mock_anthropic, patch("tasks.dm_tasks.openai_client") as mock_openai:
+            mock_sb.table.side_effect = table_side_effect
+            mock_anthropic.messages.create.side_effect = capture_create
+            mock_openai.embeddings.create.return_value = MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
+
+            dm_response_task.fn("game-1", "msg-1", "I attack!", [])
+
+        assert "[ID: player-uuid-1]" in captured_prompt.get("system", ""), \
+            "Party line must contain [ID: {uuid}] for Claude state_changes tracking"
+
+    def test_state_changes_block_stripped_from_clean_response(self):
+        """<state_changes> block must be stripped entirely from game_messages content."""
+        game_data = {"id": "game-1", "name": "Quest", "dm_persona": "DM"}
+        players_data = self._make_players_data()
+
+        dm_text = (
+            "The goblin strikes. "
+            "<state_changes>"
+            '{"hp_changes": [{"character_id": "player-uuid-1", "delta": -5, "reason": "hit"}]}'
+            "</state_changes>"
+            " You fight back."
+        )
+
+        captured_content = {}
+
+        game_messages_mock = MagicMock()
+        game_messages_mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
+
+        def insert_side_effect(payload):
+            captured_content.update(payload)
+            m = MagicMock()
+            m.execute.return_value = MagicMock()
+            return m
+
+        game_messages_mock.insert.side_effect = insert_side_effect
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "games":
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = MagicMock(data=game_data)
+                mock.update.return_value.match.return_value.execute.return_value = MagicMock()
+                return mock
+            elif name == "players":
+                mock.select.return_value.match.return_value.execute.return_value = MagicMock(data=players_data)
+                mock.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(data={"hp_current": 10, "hp_max": 10})
+                mock.update.return_value.eq.return_value.execute.return_value = MagicMock()
+                return mock
+            elif name == "game_messages":
+                return game_messages_mock
+            elif name == "player_inventory":
+                mock.select.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+            elif name == "game_events":
+                mock.insert.return_value.execute.return_value = MagicMock()
+            return mock
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.anthropic_client"
+        ) as mock_anthropic, patch("tasks.dm_tasks.openai_client") as mock_openai:
+            mock_sb.table.side_effect = table_side_effect
+            mock_anthropic.messages.create.return_value = MagicMock(content=[MagicMock(text=dm_text)])
+            mock_openai.embeddings.create.return_value = MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
+
+            dm_response_task.fn("game-1", "msg-1", "I attack!", [])
+
+        stored_content = captured_content.get("content", "")
+        assert "<state_changes>" not in stored_content, "state_changes block must be stripped from stored content"
+        assert "The goblin strikes." in stored_content, "Narrative text must be preserved"
+
+    def test_event_inner_text_preserved_regression(self):
+        """Regression: <event> inner text must still be preserved after strip order change."""
+        game_data = {"id": "game-1", "name": "Quest", "dm_persona": "DM"}
+        players_data = self._make_players_data()
+
+        dm_text = 'You slash the goblin. <event type="combat">Goblin defeated</event> Victory!'
+
+        captured_content = {}
+
+        game_messages_mock = MagicMock()
+        game_messages_mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
+
+        def insert_side_effect(payload):
+            captured_content.update(payload)
+            m = MagicMock()
+            m.execute.return_value = MagicMock()
+            return m
+
+        game_messages_mock.insert.side_effect = insert_side_effect
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "games":
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = MagicMock(data=game_data)
+                mock.update.return_value.match.return_value.execute.return_value = MagicMock()
+                return mock
+            elif name == "players":
+                mock.select.return_value.match.return_value.execute.return_value = MagicMock(data=players_data)
+            elif name == "game_messages":
+                return game_messages_mock
+            elif name == "player_inventory":
+                mock.select.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+            elif name == "game_events":
+                mock.insert.return_value.execute.return_value = MagicMock()
+            return mock
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.anthropic_client"
+        ) as mock_anthropic, patch("tasks.dm_tasks.openai_client") as mock_openai:
+            mock_sb.table.side_effect = table_side_effect
+            mock_anthropic.messages.create.return_value = MagicMock(content=[MagicMock(text=dm_text)])
+            mock_openai.embeddings.create.return_value = MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
+
+            dm_response_task.fn("game-1", "msg-1", "I attack!", [])
+
+        stored_content = captured_content.get("content", "")
+        assert "Goblin defeated" in stored_content, "Event inner text must be preserved in clean_response"
+        assert "<event" not in stored_content, "Event XML tags must be stripped"
+
+    def test_extract_state_changes_imported_in_tasks(self):
+        """extract_state_changes must be importable from tasks.dm_tasks module."""
+        import tasks.dm_tasks as dm_tasks_module
+        # Verify the function is accessible (imported) in the module's namespace
+        assert hasattr(dm_tasks_module, "extract_state_changes") or \
+               "extract_state_changes" in dir(dm_tasks_module), \
+               "extract_state_changes must be imported in dm_tasks"
