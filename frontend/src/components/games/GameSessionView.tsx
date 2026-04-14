@@ -246,6 +246,7 @@ export function GameSessionView({
         profile_id: detail.profile_id ?? null,
         content: detail.content,
         created_at: detail.created_at || new Date().toISOString(),
+        dice_rolls: detail.dice_rolls ?? null,
       }
       setMessages((prev) => [...prev, msg])
       if (msg.role === 'dm' || msg.role === 'system') {
