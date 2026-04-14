@@ -107,6 +107,18 @@ export function CharacterSheetPanel({ playerId, onClose }: CharacterSheetPanelPr
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [onClose])
 
+  // E2E testing: listen for player stat updates dispatched by tests
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_E2E_TESTING !== 'true') return
+    const handlePlayerUpdate = (e: Event) => {
+      const updated = (e as CustomEvent<Partial<PlayerRow>>).detail
+      setPlayer((prev) => (prev ? { ...prev, ...updated } : prev))
+    }
+    const eventName = `e2e-player-update-${playerId}`
+    window.addEventListener(eventName, handlePlayerUpdate)
+    return () => window.removeEventListener(eventName, handlePlayerUpdate)
+  }, [playerId])
+
   // Sorted inventory alphabetically
   const sortedInventory = [...inventory].sort((a, b) =>
     a.item_name.localeCompare(b.item_name)
