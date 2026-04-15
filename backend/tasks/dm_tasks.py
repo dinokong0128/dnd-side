@@ -35,6 +35,7 @@ def dm_response_task(
     game_id: str,
     message_id: str,
     action_text: str,
+    rag_context: list | None = None,  # deprecated: kept for in-flight job compat; ignored at runtime
 ):
     """
     Async Dramatiq task: Process DM response
@@ -335,29 +336,35 @@ The acting player's action:
             }
         ).match({"id": game_id}).execute()
 
-        # Step 8: Embed events and insert to game_events — no longer blocks Realtime delivery
-        event_rows = []
-        for event in events:
-            event_embedding = openai_client.embeddings.create(
-                model="text-embedding-3-small",
-                input=event["description"],
-                dimensions=1536,
-            )
+        # Step 8+9: Embed events and insert to game_events — best-effort; failure here must NOT
+        # trigger a task retry because the DM message is already persisted (Step 6). A retry
+        # would re-call Claude and insert a duplicate DM message, corrupting the game timeline.
+        try:
+            event_rows = []
+            for event in events:
+                event_embedding = openai_client.embeddings.create(
+                    model="text-embedding-3-small",
+                    input=event["description"],
+                    dimensions=1536,
+                )
 
-            event_rows.append(
-                {
-                    "game_id": game_id,
-                    "event_type": event["type"],
-                    "summary": event["description"],
-                    "embedding": event_embedding.data[0].embedding,
-                    "source": EVENT_SOURCE_CLAUDE,
-                }
-            )
+                event_rows.append(
+                    {
+                        "game_id": game_id,
+                        "event_type": event["type"],
+                        "summary": event["description"],
+                        "embedding": event_embedding.data[0].embedding,
+                        "source": EVENT_SOURCE_CLAUDE,
+                    }
+                )
 
-        # Step 9: Insert events to game_events
-        if event_rows:
-            supabase_client.table("game_events").insert(event_rows).execute()
-            logger.info(f"[dm_response_task] Inserted {len(event_rows)} events")
+            if event_rows:
+                supabase_client.table("game_events").insert(event_rows).execute()
+                logger.info(f"[dm_response_task] Inserted {len(event_rows)} events")
+        except Exception as embed_err:
+            logger.warning(
+                f"[dm_response_task] Event embedding/insert failed (best-effort, not retried): {embed_err}"
+            )
 
         logger.info(f"[dm_response_task] Success! game_id={game_id}")
 
