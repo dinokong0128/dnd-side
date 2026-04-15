@@ -27,7 +27,14 @@ const MOCK_PLAYER_FULL = {
   level: 4,
   hp_current: 24,
   hp_max: 32,
-  stats: { str: 8, dex: 14, con: 12, int: 18, wis: 12, cha: 10 },
+  stats: {
+    str: 8, dex: 14, con: 12, int: 18, wis: 12, cha: 10,
+    spell_slots: {
+      '1': { max: 4, used: 2 },
+      '2': { max: 3, used: 0 },
+    },
+    cantrips: ['Fire Bolt', 'Prestidigitation'],
+  },
   status: 'active',
   joined_at: '2026-01-01T00:00:00Z',
 }
@@ -351,5 +358,195 @@ test.describe('DIN-15 — In-game Character Sheet Panel', () => {
     await expect(page.getByTestId('hp-bar').last()).toHaveAttribute('data-hp-state', 'low')
     // Unconscious label appears when HP = 0 (5 ≠ 0 so it should NOT appear)
     await expect(page.getByTestId('unconscious-label')).not.toBeVisible()
+  })
+})
+
+// ─── DIN-27: Spell slot tracking and display ─────────────────────────────────
+test.describe('DIN-27 — Spell slot section in Character Sheet Panel', () => {
+  // Fighter player — no spell slots
+  const MOCK_FIGHTER = {
+    id: 'player-fighter',
+    game_id: GAME_ID,
+    profile_id: USER_ID,
+    character_name: 'Roric Hammerfall',
+    character_class: 'Fighter',
+    race: 'Dwarf',
+    level: 3,
+    hp_current: 30,
+    hp_max: 34,
+    stats: {
+      str: 18, dex: 10, con: 16, int: 8, wis: 12, cha: 9,
+      spell_slots: null,
+    },
+    status: 'active',
+    joined_at: '2026-01-01T00:00:00Z',
+  }
+
+  // Helper to open the character sheet
+  async function openSheet(page: Page) {
+    await page.goto(`/games/${GAME_ID}`)
+    await expect(page.getByText('The Lost Dungeon')).toBeVisible({ timeout: 5000 })
+    await page.getByTestId('sheet-button').click()
+    const sheet = page.getByRole('dialog', { name: 'Character Sheet' })
+    await expect(sheet).toBeVisible({ timeout: 3000 })
+    return sheet
+  }
+
+  test('Spell Slots section is visible for spellcasting class (Wizard)', async ({ page }) => {
+    // MOCK_PLAYER_FULL is a Wizard with spell_slots populated
+    await setupGameMocks(page)
+    const sheet = await openSheet(page)
+
+    await expect(sheet.getByText('Spell Slots')).toBeVisible({ timeout: 3000 })
+  })
+
+  test('Spell Slots section is absent for non-spellcasting class (Fighter)', async ({ page }) => {
+    await setupGameMocks(page, { player: MOCK_FIGHTER })
+    await page.goto(`/games/${GAME_ID}`)
+    await expect(page.getByText('The Lost Dungeon')).toBeVisible({ timeout: 5000 })
+
+    // Fighter has no character sheet button (different player_id won't match userId)
+    // so we test via a different approach: check the player's id matches
+    // Actually, to open the sheet we need the player's profile_id === userId.
+    // MOCK_FIGHTER already has profile_id: USER_ID, so button should appear.
+    await page.getByTestId('sheet-button').click()
+    const sheet = page.getByRole('dialog', { name: 'Character Sheet' })
+    await expect(sheet).toBeVisible({ timeout: 3000 })
+
+    // Fighter has no spell slots — section should not appear
+    await expect(sheet.getByText('Spell Slots')).not.toBeVisible()
+  })
+
+  test('pip display: filled pips for used slots, empty pips for available', async ({ page }) => {
+    // Wizard: 1st level 2/4 remaining (2 used, 4 max)
+    await setupGameMocks(page)
+    const sheet = await openSheet(page)
+
+    await expect(sheet.getByTestId('spell-slot-row-1')).toBeVisible({ timeout: 3000 })
+
+    const level1Row = sheet.getByTestId('spell-slot-row-1')
+    const usedPips = level1Row.getByTestId('pip-used')
+    const availablePips = level1Row.getByTestId('pip-available')
+
+    // 2 used, 2 remaining → 2 filled (●) + 2 empty (○) = 4 total
+    await expect(usedPips).toHaveCount(2)
+    await expect(availablePips).toHaveCount(2)
+  })
+
+  test('slot count label shows remaining / max correctly', async ({ page }) => {
+    // 1st level: max=4, used=2 → remaining=2
+    await setupGameMocks(page)
+    const sheet = await openSheet(page)
+
+    await expect(sheet.getByTestId('spell-slot-label-1')).toBeVisible({ timeout: 3000 })
+    await expect(sheet.getByTestId('spell-slot-label-1')).toHaveText('2 / 4')
+
+    // 2nd level: max=3, used=0 → remaining=3
+    await expect(sheet.getByTestId('spell-slot-label-2')).toHaveText('3 / 3')
+  })
+
+  test('cantrips are listed in the spell slots section', async ({ page }) => {
+    // Wizard mock has cantrips: ['Fire Bolt', 'Prestidigitation']
+    await setupGameMocks(page)
+    const sheet = await openSheet(page)
+
+    await expect(sheet.getByText(/Fire Bolt/)).toBeVisible({ timeout: 3000 })
+    await expect(sheet.getByText(/Prestidigitation/)).toBeVisible({ timeout: 3000 })
+  })
+
+  test('cantrips label includes the infinity symbol', async ({ page }) => {
+    await setupGameMocks(page)
+    const sheet = await openSheet(page)
+
+    // The cantrip line reads "Cantrips (∞): Fire Bolt, Prestidigitation"
+    await expect(sheet.getByText(/Cantrips \(∞\)/)).toBeVisible({ timeout: 3000 })
+  })
+
+  test('slot levels with max=0 are hidden', async ({ page }) => {
+    // Add a 3rd-level slot with max=0 to verify it does not appear
+    const wizardWith3rdSlot = {
+      ...MOCK_PLAYER_FULL,
+      stats: {
+        ...MOCK_PLAYER_FULL.stats,
+        spell_slots: {
+          '1': { max: 4, used: 1 },
+          '2': { max: 3, used: 0 },
+          '3': { max: 0, used: 0 }, // max=0 → should not render
+        },
+      },
+    }
+    await setupGameMocks(page, { player: wizardWith3rdSlot })
+    const sheet = await openSheet(page)
+
+    await expect(sheet.getByTestId('spell-slot-row-1')).toBeVisible({ timeout: 3000 })
+    await expect(sheet.getByTestId('spell-slot-row-2')).toBeVisible({ timeout: 3000 })
+    // Row 3 should not exist (max=0 filtered out)
+    await expect(sheet.getByTestId('spell-slot-row-3')).not.toBeVisible()
+  })
+
+  test('spell slots update in real-time when a slot is used (e2e custom event)', async ({ page }) => {
+    await setupGameMocks(page)
+    const sheet = await openSheet(page)
+
+    // Initially: 1st level has 2 used, 2 available
+    await expect(sheet.getByTestId('spell-slot-label-1')).toHaveText('2 / 4', { timeout: 3000 })
+
+    // Simulate Realtime player UPDATE (spell_slot_use applied: 1 more used → 3 used, 1 remaining)
+    await page.evaluate((playerId) => {
+      window.dispatchEvent(
+        new CustomEvent(`e2e-player-update-${playerId}`, {
+          detail: {
+            stats: {
+              str: 8, dex: 14, con: 12, int: 18, wis: 12, cha: 10,
+              spell_slots: {
+                '1': { max: 4, used: 3 },
+                '2': { max: 3, used: 0 },
+              },
+              cantrips: ['Fire Bolt', 'Prestidigitation'],
+            },
+          },
+        })
+      )
+    }, PLAYER_ID)
+
+    // Label should update: 1 remaining out of 4
+    await expect(sheet.getByTestId('spell-slot-label-1')).toHaveText('1 / 4', { timeout: 2000 })
+
+    // Used pips: now 3 filled, 1 empty
+    const level1Row = sheet.getByTestId('spell-slot-row-1')
+    await expect(level1Row.getByTestId('pip-used')).toHaveCount(3)
+    await expect(level1Row.getByTestId('pip-available')).toHaveCount(1)
+  })
+
+  test('spell slots recharge resets all pips to empty (e2e custom event)', async ({ page }) => {
+    await setupGameMocks(page)
+    const sheet = await openSheet(page)
+
+    // Initially 1st level has 2 used
+    await expect(sheet.getByTestId('spell-slot-label-1')).toHaveText('2 / 4', { timeout: 3000 })
+
+    // Long rest: all used reset to 0
+    await page.evaluate((playerId) => {
+      window.dispatchEvent(
+        new CustomEvent(`e2e-player-update-${playerId}`, {
+          detail: {
+            stats: {
+              str: 8, dex: 14, con: 12, int: 18, wis: 12, cha: 10,
+              spell_slots: {
+                '1': { max: 4, used: 0 },
+                '2': { max: 3, used: 0 },
+              },
+              cantrips: ['Fire Bolt', 'Prestidigitation'],
+            },
+          },
+        })
+      )
+    }, PLAYER_ID)
+
+    // After recharge: all slots full (4 available, 0 used)
+    await expect(sheet.getByTestId('spell-slot-label-1')).toHaveText('4 / 4', { timeout: 2000 })
+    const level1Row = sheet.getByTestId('spell-slot-row-1')
+    await expect(level1Row.getByTestId('pip-used')).toHaveCount(0)
+    await expect(level1Row.getByTestId('pip-available')).toHaveCount(4)
   })
 })
