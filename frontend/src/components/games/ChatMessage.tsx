@@ -103,16 +103,97 @@ export function ChatMessage({
               }}
             >
               {diceRolls!.slice(0, activeDieIndex + 1).map((roll, idx) => (
-                <DiceRoller
-                  key={idx}
-                  dieType={roll.die}
-                  result={roll.result}
-                  modifier={roll.modifier}
-                  label={roll.label}
-                  instant={idx < activeDieIndex}
-                  onAnimationComplete={idx === activeDieIndex ? handleDieComplete : () => {}}
-                />
+                <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <DiceRoller
+                    dieType={roll.die}
+                    result={roll.result}
+                    modifier={roll.modifier}
+                    label={roll.label}
+                    instant={idx < activeDieIndex}
+                    onAnimationComplete={idx === activeDieIndex ? handleDieComplete : () => {}}
+                  />
+                  {/* Advantage/disadvantage pip display — shown after animation settles */}
+                  {narrationVisible && roll.advantage !== undefined && roll.all_rolls && (
+                    <div style={{ display: 'flex', gap: '10px', fontSize: '0.85rem', marginTop: '2px' }}>
+                      {roll.all_rolls.map((r, ri) => {
+                        const isKept = r === roll.result
+                        return (
+                          <span
+                            key={ri}
+                            data-testid={isKept ? 'adv-kept' : 'adv-discarded'}
+                            style={{
+                              color: isKept
+                                ? 'var(--dnd-parchment)'
+                                : 'var(--dnd-parchment-dim, rgba(230,210,170,0.45))',
+                              textDecoration: isKept ? 'none' : 'line-through',
+                              fontFamily: "'Cinzel', serif",
+                              fontSize: '0.8rem',
+                            }}
+                          >
+                            {r}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
               ))}
+            </div>
+          )}
+
+          {/* Outcome badge — appears after all dice settle, before narration */}
+          {narrationVisible && diceRolls?.some(
+            (r) => r.die === 'd20' && r.dc !== undefined && r.success !== undefined
+          ) && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+              {diceRolls!
+                .filter((r) => r.die === 'd20' && r.dc !== undefined && r.success !== undefined)
+                .map((roll, idx) => {
+                  const isNat20 = roll.result === 20
+                  const isNat1 = roll.result === 1
+                  const isSuccess = roll.success || isNat20
+
+                  const label = isNat20
+                    ? '💥 Critical Success'
+                    : isNat1
+                      ? '💀 Critical Failure'
+                      : isSuccess
+                        ? `✓ Success — vs DC ${roll.dc}`
+                        : `✗ Failure — vs DC ${roll.dc}`
+
+                  const bg = isSuccess
+                    ? 'rgba(45,106,79,0.2)'
+                    : 'rgba(139,34,50,0.2)'
+
+                  const textColor = isSuccess ? '#6fcf97' : '#e8a0a0'
+
+                  const borderColor = isNat20
+                    ? 'var(--dnd-gold-bright, #f0d060)'
+                    : isNat1
+                      ? 'var(--dnd-crimson-bright, #e05050)'
+                      : 'transparent'
+
+                  return (
+                    <div
+                      key={idx}
+                      data-testid="outcome-badge"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        padding: '3px 10px',
+                        borderRadius: '4px',
+                        background: bg,
+                        border: `1px solid ${borderColor}`,
+                        color: textColor,
+                        fontSize: '0.78rem',
+                        fontFamily: "'Cinzel', serif",
+                        letterSpacing: '0.04em',
+                      }}
+                    >
+                      {label}
+                    </div>
+                  )
+                })}
             </div>
           )}
 
