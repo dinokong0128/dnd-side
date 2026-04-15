@@ -10,6 +10,8 @@ with patch("config.supabase_client", MagicMock()):
         validate_action,
         search_rag,
         extract_events_from_response,
+        extract_state_changes,
+        apply_state_changes,
         extract_dice_rolls,
     )
 
@@ -232,6 +234,218 @@ class TestSearchRag:
 
         results = search_rag("game-uuid-1", [0.1] * 1536, top_k=3)
         assert len(results) == 3
+
+
+class TestExtractStateChanges:
+    """Tests for extract_state_changes()."""
+
+    def test_valid_block_returns_parsed_dict(self):
+        """Should parse a valid <state_changes> block and return a dict."""
+        text = """Some narrative.
+<state_changes>
+{"hp_changes": [{"character_id": "abc-123", "delta": -8, "reason": "goblin attack"}]}
+</state_changes>
+More text."""
+        result = extract_state_changes(text)
+        assert result == {"hp_changes": [{"character_id": "abc-123", "delta": -8, "reason": "goblin attack"}]}
+
+    def test_no_block_returns_empty_dict(self):
+        """Should return {} when no <state_changes> block is present."""
+        text = "The dragon roars. Nothing changes mechanically."
+        result = extract_state_changes(text)
+        assert result == {}
+
+    def test_malformed_json_returns_empty_dict(self):
+        """Should return {} on malformed JSON — no exception raised."""
+        text = "<state_changes>not valid json {</state_changes>"
+        result = extract_state_changes(text)
+        assert result == {}
+
+    def test_only_hp_changes_field(self):
+        """Should return dict with only hp_changes if that's all that's present."""
+        text = '<state_changes>{"hp_changes": [{"character_id": "x", "delta": 5, "reason": "heal"}]}</state_changes>'
+        result = extract_state_changes(text)
+        assert "hp_changes" in result
+        assert "inventory_add" not in result
+        assert "inventory_remove" not in result
+
+    def test_all_fields_present(self):
+        """Should return dict with all three field types."""
+        data = {
+            "hp_changes": [{"character_id": "p1", "delta": -4, "reason": "trap"}],
+            "inventory_add": [{"character_id": "p1", "item_name": "Gold Coin", "quantity": 10}],
+            "inventory_remove": [{"character_id": "p1", "item_name": "Torch", "quantity": 1}],
+        }
+        import json
+        text = f"<state_changes>{json.dumps(data)}</state_changes>"
+        result = extract_state_changes(text)
+        assert result == data
+
+    def test_empty_block_returns_empty_dict(self):
+        """Should return {} for empty state_changes block."""
+        text = "<state_changes>{}</state_changes>"
+        result = extract_state_changes(text)
+        assert result == {}
+
+    def test_multiline_block_parsed(self):
+        """Should parse a multiline JSON block."""
+        text = """<state_changes>
+{
+  "hp_changes": [
+    {"character_id": "uuid-1", "delta": -10, "reason": "fire damage"}
+  ]
+}
+</state_changes>"""
+        result = extract_state_changes(text)
+        assert result["hp_changes"][0]["delta"] == -10
+
+    def test_non_dict_json_returns_empty_dict(self):
+        """Should return {} when Claude emits valid JSON that is not an object (e.g. array).
+        Without this guard, apply_state_changes would receive a list and raise AttributeError
+        on the first .get() call, crashing the entire DM task.
+        """
+        for payload in ["[]", "[1, 2, 3]", '"just a string"', "42", "true", "null"]:
+            text = f"<state_changes>{payload}</state_changes>"
+            result = extract_state_changes(text)
+            assert result == {}, f"Expected {{}} for payload {payload!r}, got {result!r}"
+
+
+class TestApplyStateChanges:
+    """Tests for apply_state_changes()."""
+
+    @patch("services.dm_service.supabase_client")
+    def test_hp_delta_clamped_and_written(self, mock_sb):
+        """HP delta should be applied and clamped to [0, hp_max]."""
+        player_mock = MagicMock()
+        player_mock.data = {"hp_current": 20, "hp_max": 30}
+        mock_sb.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = player_mock
+        mock_sb.table.return_value.update.return_value.eq.return_value.execute.return_value = MagicMock()
+
+        apply_state_changes({"hp_changes": [{"character_id": "player-1", "delta": -8, "reason": "hit"}]})
+
+        mock_sb.table.return_value.update.assert_called_once_with({"hp_current": 12})
+
+    @patch("services.dm_service.supabase_client")
+    def test_hp_clamped_at_zero(self, mock_sb):
+        """HP should not go below 0 regardless of delta."""
+        player_mock = MagicMock()
+        player_mock.data = {"hp_current": 5, "hp_max": 30}
+        mock_sb.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = player_mock
+        mock_sb.table.return_value.update.return_value.eq.return_value.execute.return_value = MagicMock()
+
+        apply_state_changes({"hp_changes": [{"character_id": "p1", "delta": -100, "reason": "massive damage"}]})
+
+        mock_sb.table.return_value.update.assert_called_once_with({"hp_current": 0})
+
+    @patch("services.dm_service.supabase_client")
+    def test_hp_clamped_at_hp_max(self, mock_sb):
+        """HP should not exceed hp_max."""
+        player_mock = MagicMock()
+        player_mock.data = {"hp_current": 28, "hp_max": 30}
+        mock_sb.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = player_mock
+        mock_sb.table.return_value.update.return_value.eq.return_value.execute.return_value = MagicMock()
+
+        apply_state_changes({"hp_changes": [{"character_id": "p1", "delta": 50, "reason": "potion"}]})
+
+        mock_sb.table.return_value.update.assert_called_once_with({"hp_current": 30})
+
+    @patch("services.dm_service.supabase_client")
+    def test_inventory_add_new_item_inserts(self, mock_sb):
+        """Adding an item not in inventory should call insert."""
+        existing_mock = MagicMock()
+        existing_mock.data = []  # No existing item
+
+        inventory_mock = MagicMock()
+        inventory_mock.select.return_value.eq.return_value.eq.return_value.execute.return_value = existing_mock
+        inventory_mock.insert.return_value.execute.return_value = MagicMock()
+
+        def table_side(name):
+            if name == "player_inventory":
+                return inventory_mock
+            return MagicMock()
+
+        mock_sb.table.side_effect = table_side
+
+        apply_state_changes({"inventory_add": [{"character_id": "p1", "item_name": "Iron Key", "quantity": 1}]})
+
+        inventory_mock.insert.assert_called()
+
+    @patch("services.dm_service.supabase_client")
+    def test_inventory_add_existing_item_increments_quantity(self, mock_sb):
+        """Adding an existing item should increment its quantity."""
+        existing_mock = MagicMock()
+        existing_mock.data = [{"id": "inv-1", "quantity": 3}]
+
+        inventory_mock = MagicMock()
+        inventory_mock.select.return_value.eq.return_value.eq.return_value.execute.return_value = existing_mock
+        inventory_mock.update.return_value.eq.return_value.execute.return_value = MagicMock()
+
+        def table_side(name):
+            if name == "player_inventory":
+                return inventory_mock
+            return MagicMock()
+
+        mock_sb.table.side_effect = table_side
+
+        apply_state_changes({"inventory_add": [{"character_id": "p1", "item_name": "Gold Coin", "quantity": 10}]})
+
+        inventory_mock.update.assert_called_with({"quantity": 13})
+
+    @patch("services.dm_service.supabase_client")
+    def test_inventory_remove_to_zero_deletes_row(self, mock_sb):
+        """Removing all quantity of an item should delete the row."""
+        existing_mock = MagicMock()
+        existing_mock.data = [{"id": "inv-1", "quantity": 1}]
+
+        inventory_mock = MagicMock()
+        inventory_mock.select.return_value.eq.return_value.eq.return_value.execute.return_value = existing_mock
+        inventory_mock.delete.return_value.eq.return_value.execute.return_value = MagicMock()
+
+        def table_side(name):
+            if name == "player_inventory":
+                return inventory_mock
+            return MagicMock()
+
+        mock_sb.table.side_effect = table_side
+
+        apply_state_changes({"inventory_remove": [{"character_id": "p1", "item_name": "Torch", "quantity": 1}]})
+
+        inventory_mock.delete.assert_called()
+
+    @patch("services.dm_service.supabase_client")
+    def test_inventory_remove_nonexistent_item_no_error(self, mock_sb):
+        """Removing a non-existent item should not raise."""
+        existing_mock = MagicMock()
+        existing_mock.data = []  # Item doesn't exist
+
+        def table_side(name):
+            mock = MagicMock()
+            mock.select.return_value.eq.return_value.eq.return_value.execute.return_value = existing_mock
+            return mock
+
+        mock_sb.table.side_effect = table_side
+
+        # Should not raise
+        apply_state_changes({"inventory_remove": [{"character_id": "p1", "item_name": "Nonexistent", "quantity": 1}]})
+
+    @patch("services.dm_service.supabase_client")
+    def test_inventory_failure_does_not_raise(self, mock_sb):
+        """DB failure on inventory operations should be swallowed (best-effort)."""
+        def table_side(name):
+            mock = MagicMock()
+            mock.select.return_value.eq.return_value.eq.return_value.execute.side_effect = Exception("DB error")
+            return mock
+
+        mock_sb.table.side_effect = table_side
+
+        # Should not raise — inventory operations are best-effort
+        apply_state_changes({"inventory_add": [{"character_id": "p1", "item_name": "Sword", "quantity": 1}]})
+
+    @patch("services.dm_service.supabase_client")
+    def test_empty_state_changes_is_noop(self, mock_sb):
+        """Empty dict should do nothing — no DB calls."""
+        apply_state_changes({})
+        mock_sb.table.assert_not_called()
 
 
 class TestExtractDiceRolls:

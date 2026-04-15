@@ -432,7 +432,7 @@ export function GameSessionView({
   }
 
   return (
-    <div className="dnd-page-bg flex flex-col h-screen">
+    <div className="dnd-page-bg flex flex-col h-screen" data-player-id={currentPlayerId ?? ''}>
       <GameHeader
         gameName={game.name}
         gameStatus={gameStatus}

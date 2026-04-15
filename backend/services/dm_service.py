@@ -110,3 +110,106 @@ def extract_events_from_response(dm_response: str) -> list[dict[str, str]]:
         {"type": event_type.strip(), "description": description.strip()}
         for event_type, description in matches
     ]
+
+
+def extract_state_changes(dm_response: str) -> dict:
+    """
+    Parse the <state_changes>...</state_changes> JSON block from Claude's DM response.
+    Returns the parsed dict, or {} if the block is absent or malformed (non-fatal).
+    """
+    pattern = r'<state_changes>(.*?)</state_changes>'
+    match = re.search(pattern, dm_response, re.DOTALL)
+    if not match:
+        return {}
+    try:
+        parsed = json.loads(match.group(1).strip())
+    except (json.JSONDecodeError, ValueError):
+        logger.warning("extract_state_changes: failed to parse JSON block")
+        return {}
+    if not isinstance(parsed, dict):
+        logger.warning(
+            "extract_state_changes: expected JSON object, got %s", type(parsed).__name__
+        )
+        return {}
+    return parsed
+
+
+def apply_state_changes(state_changes: dict) -> None:
+    """
+    Apply mechanical state mutations from a <state_changes> block to the DB.
+    All operations are best-effort — failures are logged but do NOT propagate.
+    Uses service role client (bypasses RLS).
+    """
+    # HP changes
+    for change in state_changes.get("hp_changes", []):
+        try:
+            character_id = change["character_id"]
+            delta = int(change["delta"])
+            player = (
+                supabase_client.table("players")
+                .select("hp_current, hp_max")
+                .eq("id", character_id)
+                .single()
+                .execute()
+            )
+            hp_current = player.data["hp_current"]
+            hp_max = player.data["hp_max"]
+            new_hp = max(0, min(hp_max, hp_current + delta))
+            supabase_client.table("players").update({"hp_current": new_hp}).eq(
+                "id", character_id
+            ).execute()
+        except Exception as e:
+            logger.error(f"apply_state_changes: hp_changes failed for {change}: {e}")
+
+    # Inventory additions
+    for item in state_changes.get("inventory_add", []):
+        try:
+            existing = (
+                supabase_client.table("player_inventory")
+                .select("id, quantity")
+                .eq("player_id", item["character_id"])
+                .eq("item_name", item["item_name"])
+                .execute()
+            )
+            if existing.data:
+                new_qty = existing.data[0]["quantity"] + item.get("quantity", 1)
+                supabase_client.table("player_inventory").update(
+                    {"quantity": new_qty}
+                ).eq("id", existing.data[0]["id"]).execute()
+            else:
+                supabase_client.table("player_inventory").insert(
+                    {
+                        "player_id": item["character_id"],
+                        "item_name": item["item_name"],
+                        "quantity": item.get("quantity", 1),
+                    }
+                ).execute()
+        except Exception as e:
+            logger.error(f"apply_state_changes: inventory_add failed for {item}: {e}")
+
+    # Inventory removals
+    for item in state_changes.get("inventory_remove", []):
+        try:
+            existing = (
+                supabase_client.table("player_inventory")
+                .select("id, quantity")
+                .eq("player_id", item["character_id"])
+                .eq("item_name", item["item_name"])
+                .execute()
+            )
+            if not existing.data:
+                continue
+            row = existing.data[0]
+            new_qty = row["quantity"] - item.get("quantity", 1)
+            if new_qty <= 0:
+                supabase_client.table("player_inventory").delete().eq(
+                    "id", row["id"]
+                ).execute()
+            else:
+                supabase_client.table("player_inventory").update(
+                    {"quantity": new_qty}
+                ).eq("id", row["id"]).execute()
+        except Exception as e:
+            logger.error(
+                f"apply_state_changes: inventory_remove failed for {item}: {e}"
+            )
