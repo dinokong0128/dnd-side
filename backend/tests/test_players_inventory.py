@@ -329,3 +329,50 @@ class TestSpellSlotsOnUpsert:
         stats = captured_stats.get("stats", {})
         assert "spell_slots" in stats, "spell_slots key must exist in stats for all classes"
         assert stats["spell_slots"] is None, "Fighter should have spell_slots=None"
+
+    def test_paladin_level_1_has_null_spell_slots(self, client):
+        """Paladin at level 1 has no slots yet; spell_slots should be null (not a zero-filled object)."""
+        games_mock = MagicMock()
+        game_result = MagicMock()
+        game_result.data = SAMPLE_GAME_LOBBY
+        games_mock.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = game_result
+
+        captured_stats = {}
+
+        players_mock = MagicMock()
+        paladin_result = MagicMock()
+        paladin_result.data = {
+            **SAMPLE_UPSERT_RESULT,
+            "character_class": "Paladin",
+        }
+
+        def upsert_side_effect(payload, **kwargs):
+            captured_stats.update(payload)
+            m = MagicMock()
+            m.select.return_value.single.return_value.execute.return_value = paladin_result
+            return m
+
+        players_mock.upsert.side_effect = upsert_side_effect
+
+        inventory_mock = MagicMock()
+        inventory_mock.delete.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+        inventory_mock.insert.return_value.execute.return_value = MagicMock(data=[])
+
+        with patch("api.routes.players.supabase_client") as mock_sb:
+            mock_sb.table.side_effect = _make_table_router(
+                games_mock, players_mock, inventory_mock
+            )
+            response = client.post(
+                "/games/game-uuid-1/players",
+                json={
+                    "character_name": "Valeria",
+                    "character_class": "Paladin",
+                    "stats": {"str": 16, "dex": 10, "con": 14, "int": 10, "wis": 12, "cha": 14},
+                },
+            )
+
+        assert response.status_code == 200
+        stats = captured_stats.get("stats", {})
+        assert "spell_slots" in stats
+        assert stats["spell_slots"] is None, \
+            "Paladin level 1 has no spell slots yet — should store null, not a zero-filled object"

@@ -110,7 +110,8 @@ async def upsert_player(
     stats_dict = body.stats.model_dump(by_alias=True)
 
     raw_slots = get_spell_slots(body.character_class, body.level)
-    if raw_slots is None:
+    if not raw_slots:
+        # None for non-casters; {} for casters with no slots at this level (e.g. Paladin level 1)
         stats_dict["spell_slots"] = None
     else:
         stats_dict["spell_slots"] = {

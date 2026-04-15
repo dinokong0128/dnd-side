@@ -1484,3 +1484,26 @@ class TestDin27SpellSlotsInSystemPrompt:
         prompt = self._run_task_and_capture_prompt(players_data)
         assert "Fire Bolt" in prompt
         assert "Prestidigitation" in prompt
+
+    def test_malformed_spell_slot_keys_skipped_in_prompt(self):
+        """Non-numeric spell_slot keys (e.g. '1st' from bad Claude output) must not crash the prompt builder."""
+        players_data = [
+            {
+                "id": "player-1",
+                "character_name": "Elara",
+                "race": "Elf",
+                "level": 1,
+                "character_class": "Wizard",
+                "hp_current": 8,
+                "hp_max": 10,
+                "profile_id": "user-1",
+                "stats": {
+                    "str": 8, "dex": 14, "con": 12, "int": 18, "wis": 12, "cha": 10,
+                    # Simulates corrupted key written by malformed Claude output
+                    "spell_slots": {"1st": {"max": 2, "used": 1}, "1": {"max": 2, "used": 0}},
+                },
+            }
+        ]
+        # Should not raise ValueError
+        prompt = self._run_task_and_capture_prompt(players_data)
+        assert isinstance(prompt, str)

@@ -172,7 +172,10 @@ def dm_response_task(
             if spell_slots:
                 _ordinals = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 5: "5th"}
                 slot_parts = []
-                for lvl_key in sorted(spell_slots.keys(), key=lambda x: int(x)):
+                for lvl_key in sorted(
+                    (k for k in spell_slots.keys() if isinstance(k, str) and k.isdigit()),
+                    key=int,
+                ):
                     slot = spell_slots[lvl_key]
                     lvl_int = int(lvl_key)
                     if slot.get("max", 0) > 0:
