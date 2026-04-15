@@ -1371,3 +1371,116 @@ class TestStateChanges:
             f"Expected 'Proficiency bonus: {expected_bonus}' for level {level} character, "
             f"but it was not found in system prompt"
         )
+
+
+class TestDin27SpellSlotsInSystemPrompt:
+    """DIN-27: Spell slot state in dm_response_task system prompt."""
+
+    def _run_task_and_capture_prompt(self, players_data):
+        """Helper: run dm_response_task and return the captured system prompt."""
+        game_data = {"id": "game-1", "name": "Quest", "dm_persona": "DM"}
+        captured_prompt = {}
+
+        game_messages_mock = MagicMock()
+        game_messages_mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
+        game_messages_mock.insert.return_value.execute.return_value = MagicMock()
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "games":
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = MagicMock(data=game_data)
+                mock.update.return_value.match.return_value.execute.return_value = MagicMock()
+                return mock
+            elif name == "players":
+                mock.select.return_value.match.return_value.execute.return_value = MagicMock(data=players_data)
+            elif name == "game_messages":
+                return game_messages_mock
+            elif name == "player_inventory":
+                mock.select.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+            elif name == "game_events":
+                mock.insert.return_value.execute.return_value = MagicMock()
+            return mock
+
+        def capture_create(**kwargs):
+            captured_prompt["system"] = kwargs.get("system", "")
+            resp = MagicMock()
+            resp.content = [MagicMock(text="You cast a spell.")]
+            return resp
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.anthropic_client"
+        ) as mock_anthropic, patch("tasks.dm_tasks.openai_client") as mock_openai:
+            mock_sb.table.side_effect = table_side_effect
+            mock_anthropic.messages.create.side_effect = capture_create
+            mock_openai.embeddings.create.return_value = MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
+            dm_response_task.fn("game-1", "msg-1", "I cast Magic Missile!", [])
+
+        return captured_prompt.get("system", "")
+
+    def test_spell_slots_appear_in_prompt_for_wizard(self):
+        """Wizard with spell slots should have slot state in the system prompt."""
+        players_data = [
+            {
+                "id": "player-1",
+                "character_name": "Elara",
+                "race": "Elf",
+                "level": 1,
+                "character_class": "Wizard",
+                "hp_current": 8,
+                "hp_max": 10,
+                "profile_id": "user-1",
+                "stats": {
+                    "str": 8, "dex": 14, "con": 12, "int": 18, "wis": 12, "cha": 10,
+                    "spell_slots": {"1": {"max": 2, "used": 1}},
+                    "cantrips": ["Fire Bolt"],
+                },
+            }
+        ]
+        prompt = self._run_task_and_capture_prompt(players_data)
+        assert "spell slot" in prompt.lower() or "1st:" in prompt, \
+            "Spell slot state must appear in system prompt for Wizard"
+
+    def test_spell_slots_not_in_prompt_for_fighter(self):
+        """Fighter with no spell slots should not have slot section in prompt."""
+        players_data = [
+            {
+                "id": "player-1",
+                "character_name": "Thorin",
+                "race": "Human",
+                "level": 1,
+                "character_class": "Fighter",
+                "hp_current": 12,
+                "hp_max": 12,
+                "profile_id": "user-1",
+                "stats": {
+                    "str": 16, "dex": 12, "con": 14, "int": 10, "wis": 10, "cha": 8,
+                    "spell_slots": None,
+                },
+            }
+        ]
+        prompt = self._run_task_and_capture_prompt(players_data)
+        # Fighter should NOT have spell slot section
+        assert "spell slot" not in prompt.lower() or "None" not in prompt
+
+    def test_cantrips_appear_in_prompt_when_present(self):
+        """Cantrips listed in player stats should appear in the system prompt."""
+        players_data = [
+            {
+                "id": "player-1",
+                "character_name": "Elara",
+                "race": "Elf",
+                "level": 1,
+                "character_class": "Wizard",
+                "hp_current": 8,
+                "hp_max": 10,
+                "profile_id": "user-1",
+                "stats": {
+                    "str": 8, "dex": 14, "con": 12, "int": 18, "wis": 12, "cha": 10,
+                    "spell_slots": {"1": {"max": 2, "used": 0}},
+                    "cantrips": ["Fire Bolt", "Prestidigitation"],
+                },
+            }
+        ]
+        prompt = self._run_task_and_capture_prompt(players_data)
+        assert "Fire Bolt" in prompt
+        assert "Prestidigitation" in prompt

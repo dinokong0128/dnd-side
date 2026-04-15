@@ -155,7 +155,7 @@ def dm_response_task(
             else:
                 prof_bonus = 2
 
-            party_lines.append(
+            party_line = (
                 f"- {p['character_name']} [ID: {p['id']}], Level {level} "
                 f"{p.get('race', 'Human')} {p['character_class']}.\n"
                 f"  HP: {p['hp_current']}/{p['hp_max']}.\n"
@@ -166,6 +166,41 @@ def dm_response_task(
                 f"  Proficiency bonus: +{prof_bonus}\n"
                 f"  Equipment: {items}"
             )
+
+            # Spell slots (DIN-27)
+            spell_slots = stats.get("spell_slots")
+            if spell_slots:
+                _ordinals = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 5: "5th"}
+                slot_parts = []
+                for lvl_key in sorted(spell_slots.keys(), key=lambda x: int(x)):
+                    slot = spell_slots[lvl_key]
+                    lvl_int = int(lvl_key)
+                    if slot.get("max", 0) > 0:
+                        remaining = slot["max"] - slot.get("used", 0)
+                        ordinal = _ordinals.get(lvl_int, f"{lvl_int}th")
+                        slot_parts.append(f"{ordinal}: {remaining}/{slot['max']}")
+                if slot_parts:
+                    party_line += f"\n  Spell slots: {', '.join(slot_parts)}"
+
+                # Spell save DC and spell attack bonus
+                cls_lower = p.get("character_class", "").lower()
+                _caster_ability = {
+                    "wizard": int_score, "sorcerer": cha_score, "bard": cha_score,
+                    "cleric": wis_score, "druid": wis_score, "ranger": wis_score,
+                    "paladin": cha_score, "warlock": cha_score,
+                }
+                if cls_lower in _caster_ability:
+                    sp_ability = _caster_ability[cls_lower]
+                    sp_mod = math.floor((sp_ability - 10) / 2)
+                    spell_dc = 8 + prof_bonus + sp_mod
+                    spell_atk = prof_bonus + sp_mod
+                    party_line += f"\n  Spell save DC: {spell_dc} | Spell attack: {spell_atk:+d}"
+
+            cantrips = stats.get("cantrips")
+            if cantrips:
+                party_line += f"\n  Cantrips (unlimited): {', '.join(cantrips)}"
+
+            party_lines.append(party_line)
 
         # Step 2: Build Claude system prompt
         system_prompt = f"""You are {game.data['dm_persona']}. You are the Dungeon Master for a D&D 5e campaign called "{game.data['name']}".

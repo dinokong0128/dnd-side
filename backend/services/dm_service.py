@@ -187,6 +187,54 @@ def apply_state_changes(state_changes: dict) -> None:
         except Exception as e:
             logger.error(f"apply_state_changes: inventory_add failed for {item}: {e}")
 
+    # Spell slot usage
+    for change in state_changes.get("spell_slot_use", []):
+        try:
+            character_id = change["character_id"]
+            slot_level = str(change["slot_level"])
+            player = (
+                supabase_client.table("players")
+                .select("stats")
+                .eq("id", character_id)
+                .single()
+                .execute()
+            )
+            stats = player.data.get("stats") or {}
+            spell_slots = stats.get("spell_slots") or {}
+            slot = spell_slots.get(slot_level, {"max": 0, "used": 0})
+            new_used = min(slot["used"] + 1, slot["max"])
+            spell_slots[slot_level] = {**slot, "used": new_used}
+            stats["spell_slots"] = spell_slots
+            supabase_client.table("players").update({"stats": stats}).eq(
+                "id", character_id
+            ).execute()
+        except Exception as e:
+            logger.error(f"apply_state_changes: spell_slot_use failed for {change}: {e}")
+
+    # Spell slot recharge (long rest)
+    for change in state_changes.get("spell_slots_recharge", []):
+        try:
+            character_id = change["character_id"]
+            player = (
+                supabase_client.table("players")
+                .select("stats")
+                .eq("id", character_id)
+                .single()
+                .execute()
+            )
+            stats = player.data.get("stats") or {}
+            spell_slots = stats.get("spell_slots") or {}
+            recharged = {
+                level: {**slot_data, "used": 0}
+                for level, slot_data in spell_slots.items()
+            }
+            stats["spell_slots"] = recharged
+            supabase_client.table("players").update({"stats": stats}).eq(
+                "id", character_id
+            ).execute()
+        except Exception as e:
+            logger.error(f"apply_state_changes: spell_slots_recharge failed for {change}: {e}")
+
     # Inventory removals
     for item in state_changes.get("inventory_remove", []):
         try:

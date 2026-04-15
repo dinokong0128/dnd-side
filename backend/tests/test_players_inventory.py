@@ -234,3 +234,98 @@ class TestGetPlayerInventory:
         """Should return 401 when no auth token is provided."""
         response = unauthed_client.get("/games/game-uuid-1/players/inventory")
         assert response.status_code == 401
+
+
+class TestSpellSlotsOnUpsert:
+    """DIN-27: spell_slots populated in players.stats on upsert."""
+
+    def test_wizard_upsert_includes_spell_slots_in_stats(self, client):
+        """Wizard character creation must populate spell_slots in stats."""
+        # Games table mock
+        games_mock = MagicMock()
+        game_result = MagicMock()
+        game_result.data = SAMPLE_GAME_LOBBY
+        games_mock.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = game_result
+
+        # Players table mock — capture the upsert payload
+        captured_stats = {}
+
+        players_mock = MagicMock()
+        wizard_result = MagicMock()
+        wizard_result.data = {
+            **SAMPLE_UPSERT_RESULT,
+            "character_class": "Wizard",
+            "stats": {"str": 8, "dex": 14, "con": 12, "int": 18, "wis": 12, "cha": 10,
+                      "spell_slots": {"1": {"max": 2, "used": 0}, "2": {"max": 0, "used": 0}, "3": {"max": 0, "used": 0}}},
+        }
+
+        def upsert_side_effect(payload, **kwargs):
+            captured_stats.update(payload)
+            m = MagicMock()
+            m.select.return_value.single.return_value.execute.return_value = wizard_result
+            return m
+
+        players_mock.upsert.side_effect = upsert_side_effect
+
+        inventory_mock = MagicMock()
+        inventory_mock.delete.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+        inventory_mock.insert.return_value.execute.return_value = MagicMock(data=[])
+
+        with patch("api.routes.players.supabase_client") as mock_sb:
+            mock_sb.table.side_effect = _make_table_router(
+                games_mock, players_mock, inventory_mock
+            )
+            response = client.post(
+                "/games/game-uuid-1/players",
+                json={
+                    "character_name": "Elara",
+                    "character_class": "Wizard",
+                    "stats": {"str": 8, "dex": 14, "con": 12, "int": 18, "wis": 12, "cha": 10},
+                },
+            )
+
+        assert response.status_code == 200
+        stats = captured_stats.get("stats", {})
+        assert "spell_slots" in stats, "spell_slots must be in stats for Wizard"
+        assert stats["spell_slots"] is not None
+        assert "1" in stats["spell_slots"]
+        assert stats["spell_slots"]["1"]["max"] == 2
+
+    def test_fighter_upsert_has_null_spell_slots(self, client):
+        """Fighter upsert should set spell_slots to None in stats."""
+        games_mock = MagicMock()
+        game_result = MagicMock()
+        game_result.data = SAMPLE_GAME_LOBBY
+        games_mock.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = game_result
+
+        captured_stats = {}
+
+        players_mock = MagicMock()
+        fighter_result = MagicMock()
+        fighter_result.data = SAMPLE_UPSERT_RESULT
+
+        def upsert_side_effect(payload, **kwargs):
+            captured_stats.update(payload)
+            m = MagicMock()
+            m.select.return_value.single.return_value.execute.return_value = fighter_result
+            return m
+
+        players_mock.upsert.side_effect = upsert_side_effect
+
+        inventory_mock = MagicMock()
+        inventory_mock.delete.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+        inventory_mock.insert.return_value.execute.return_value = MagicMock(data=[])
+
+        with patch("api.routes.players.supabase_client") as mock_sb:
+            mock_sb.table.side_effect = _make_table_router(
+                games_mock, players_mock, inventory_mock
+            )
+            response = client.post(
+                "/games/game-uuid-1/players",
+                json=PLAYER_POST_BODY,  # Fighter
+            )
+
+        assert response.status_code == 200
+        stats = captured_stats.get("stats", {})
+        assert "spell_slots" in stats, "spell_slots key must exist in stats for all classes"
+        assert stats["spell_slots"] is None, "Fighter should have spell_slots=None"
