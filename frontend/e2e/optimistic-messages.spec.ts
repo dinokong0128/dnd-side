@@ -225,7 +225,8 @@ test.describe('DIN-64 — Optimistic player messages', () => {
   test('optimistic message is removed and input re-enabled on API error (non-2xx)', async ({
     page,
   }) => {
-    await setupGameMocks(page, { actionsStatus: 500 })
+    // Small delay ensures the optimistic message is painted before the 500 arrives
+    await setupGameMocks(page, { actionsStatus: 500, actionsDelay: 50 })
     await gotoGame(page)
 
     const textarea = page.getByTestId('chat-textarea')
@@ -245,9 +246,11 @@ test.describe('DIN-64 — Optimistic player messages', () => {
   test('optimistic message is removed and input re-enabled on network failure', async ({
     page,
   }) => {
-    // Simulate a hard network failure (connection refused)
-    await page.route(`**/api/games/${GAME_ID}/actions`, (route) => {
+    // Simulate a hard network failure (connection refused) with a tiny delay so the
+    // optimistic message is painted before the abort arrives
+    await page.route(`**/api/games/${GAME_ID}/actions`, async (route) => {
       if (route.request().method() === 'POST') {
+        await new Promise((resolve) => setTimeout(resolve, 50))
         route.abort('connectionrefused')
       }
     })
