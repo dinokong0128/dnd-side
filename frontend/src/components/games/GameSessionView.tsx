@@ -270,11 +270,26 @@ export function GameSessionView({
         created_at: detail.created_at || new Date().toISOString(),
         dice_rolls: detail.dice_rolls ?? null,
       }
-      setMessages((prev) => [...prev, msg])
-      if (msg.role === 'dm' || msg.role === 'system') {
-        setIsWaitingForDm(false)
-      } else if (msg.role === 'player') {
+      if (msg.role === 'player') {
+        // Reconcile: mirror the Realtime INSERT handler — remove any optimistic
+        // message with a matching profile_id + content before adding the real one.
+        setMessages((prev) => {
+          const filtered = prev.filter(
+            (m) =>
+              !(
+                m.id.startsWith('optimistic-') &&
+                m.profile_id === msg.profile_id &&
+                m.content === msg.content
+              )
+          )
+          return [...filtered, msg]
+        })
         setIsWaitingForDm(true)
+      } else {
+        setMessages((prev) => [...prev, msg])
+        if (msg.role === 'dm' || msg.role === 'system') {
+          setIsWaitingForDm(false)
+        }
       }
     }
 
