@@ -2,10 +2,9 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
-from config import supabase_client, openai_client
+from config import supabase_client
 from api.dependencies import get_current_user
 from constants import MESSAGE_ROLE_PLAYER, MESSAGE_ROLE_DM
-from services.dm_service import search_rag
 from tasks.dm_tasks import dm_response_task
 import logging
 
@@ -147,22 +146,10 @@ async def update_message(
         .execute()
     )
 
-    try:
-        embedding = openai_client.embeddings.create(
-            model="text-embedding-3-small",
-            input=payload.content,
-            dimensions=1536,
-        )
-        rag_context = search_rag(gameId, embedding.data[0].embedding, top_k=5)
-    except Exception as e:
-        logger.warning(f"[update_message] Embedding failed, falling back to no RAG: {e}")
-        rag_context = []
-
     dm_response_task.send(
         game_id=gameId,
         message_id=messageId,
         action_text=payload.content,
-        rag_context=rag_context,
     )
 
     return updated.data

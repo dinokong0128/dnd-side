@@ -35,6 +35,7 @@ jest.mock('../ChatInput', () => ({
       <div data-testid="is-waiting">{isWaitingForDm ? 'true' : 'false'}</div>
       <div data-testid="has-on-submit">{onSubmit ? 'true' : 'false'}</div>
       <div data-testid="suggested-actions-count">{suggestedActions ? suggestedActions.length : 0}</div>
+      <button data-testid="submit-action" onClick={() => onSubmit?.('I attack the dragon')}>Submit</button>
     </div>
   ),
 }))
@@ -538,6 +539,89 @@ describe('GameSessionView', () => {
             body: JSON.stringify({ action_text: 'I attack the dragon!' }),
           })
         )
+      })
+    })
+  })
+
+  describe('DIN-64: optimistic player message', () => {
+    it('optimistic message appears immediately before fetch resolves', async () => {
+      // fetch never resolves during this test
+      ;(global.fetch as jest.Mock).mockReturnValue(new Promise(() => {}))
+
+      testContext.playersData = [{ id: 'player-1', profile_id: 'user-1', character_name: 'Thorin' }]
+
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+
+      await waitFor(() => expect(screen.getByTestId('chat-input')).toBeInTheDocument())
+
+      act(() => {
+        fireEvent.click(screen.getByTestId('submit-action'))
+      })
+
+      // Optimistic message should cause messages count to increase immediately
+      await waitFor(() => {
+        expect(screen.getByTestId('messages-count')).toHaveTextContent('1')
+      })
+    })
+
+    it('optimistic message is replaced (not duplicated) when Realtime INSERT fires with matching content', async () => {
+      let realtimeInsertCallback: ((payload: any) => void) | null = null
+
+      const channelObj: any = {
+        on: jest.fn().mockImplementation((_event: any, _filter: any, cb: any) => {
+          realtimeInsertCallback = cb
+          return channelObj
+        }),
+        subscribe: jest.fn().mockReturnValue({ unsubscribe: jest.fn() }),
+      }
+      mockSupabaseClient.channel.mockReturnValue(channelObj)
+
+      ;(global.fetch as jest.Mock).mockReturnValue(new Promise(() => {}))
+      testContext.playersData = [{ id: 'player-1', profile_id: 'user-1', character_name: 'Thorin' }]
+
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+      await waitFor(() => expect(screen.getByTestId('chat-input')).toBeInTheDocument())
+
+      // Push optimistic message
+      act(() => { fireEvent.click(screen.getByTestId('submit-action')) })
+      await waitFor(() => expect(screen.getByTestId('messages-count')).toHaveTextContent('1'))
+
+      // Realtime fires the real message
+      act(() => {
+        realtimeInsertCallback?.({
+          new: {
+            id: 'real-msg-1',
+            game_id: 'game-1',
+            role: 'player',
+            profile_id: 'user-1',
+            content: 'I attack the dragon',
+            created_at: new Date().toISOString(),
+          },
+        })
+      })
+
+      // Still exactly 1 message — optimistic replaced, not duplicated
+      await waitFor(() => {
+        expect(screen.getByTestId('messages-count')).toHaveTextContent('1')
+      })
+    })
+
+    it('optimistic message is removed and isWaiting becomes false on fetch error', async () => {
+      ;(global.fetch as jest.Mock).mockResolvedValue({
+        ok: false,
+        json: async () => ({ error: 'Server error' }),
+      })
+      testContext.playersData = [{ id: 'player-1', profile_id: 'user-1', character_name: 'Thorin' }]
+
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+      await waitFor(() => expect(screen.getByTestId('chat-input')).toBeInTheDocument())
+
+      act(() => { fireEvent.click(screen.getByTestId('submit-action')) })
+
+      // After error, message should be gone and not waiting
+      await waitFor(() => {
+        expect(screen.getByTestId('messages-count')).toHaveTextContent('0')
+        expect(screen.getByTestId('is-waiting')).toHaveTextContent('false')
       })
     })
   })
