@@ -113,9 +113,9 @@ export function ChatMessage({
                     onAnimationComplete={idx === activeDieIndex ? handleDieComplete : () => {}}
                   />
                   {/* Advantage/disadvantage pip display — shown after animation settles */}
-                  {narrationVisible && roll.advantage !== undefined && roll.all_rolls && (
+                  {narrationVisible && roll.advantage !== undefined && Array.isArray(roll.all_rolls) && (
                     <div style={{ display: 'flex', gap: '10px', fontSize: '0.85rem', marginTop: '2px' }}>
-                      {roll.all_rolls.map((r, ri) => {
+                      {roll.all_rolls.filter((r) => typeof r === 'number').map((r, ri) => {
                         const isKept = r === roll.result
                         return (
                           <span
@@ -151,7 +151,7 @@ export function ChatMessage({
                 .map((roll, idx) => {
                   const isNat20 = roll.result === 20
                   const isNat1 = roll.result === 1
-                  const isSuccess = roll.success || isNat20
+                  const isSuccess = !isNat1 && (roll.success || isNat20)
 
                   const label = isNat20
                     ? '💥 Critical Success'
