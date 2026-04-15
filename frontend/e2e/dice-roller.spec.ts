@@ -304,8 +304,11 @@ test.describe('DIN-24 — Dice Roller in DM chat messages', () => {
 
     await page.goto(`/games/${GAME_ID}`)
     await expect(page.getByText('The Shadow Heist')).toBeVisible({ timeout: 5000 })
+    // Wait for initializeSession to complete before dispatching the Realtime event —
+    // otherwise setMessages(fetchedMessages) will overwrite the event-dispatched message
+    await expect(page.getByText('The adventure begins.')).toBeVisible({ timeout: 3000 })
 
-    // Wait for initial load then simulate DM message arriving via Realtime with dice_rolls
+    // Simulate DM message arriving via Realtime with dice_rolls
     await page.evaluate(
       ({ narration, roll }) => {
         const event = new CustomEvent('dm-message', {
@@ -336,6 +339,8 @@ test.describe('DIN-24 — Dice Roller in DM chat messages', () => {
 
     await page.goto(`/games/${GAME_ID}`)
     await expect(page.getByText('The Shadow Heist')).toBeVisible({ timeout: 5000 })
+    // Wait for initializeSession to complete before dispatching the Realtime event
+    await expect(page.getByText('The adventure begins.')).toBeVisible({ timeout: 3000 })
 
     // Simulate a player action arriving
     await page.evaluate(() => {
