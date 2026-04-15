@@ -254,6 +254,7 @@ export function GameSessionView({
         profile_id: detail.profile_id ?? null,
         content: detail.content,
         created_at: detail.created_at || new Date().toISOString(),
+        dice_rolls: detail.dice_rolls ?? null,
       }
       setMessages((prev) => [...prev, msg])
       if (msg.role === 'dm' || msg.role === 'system') {
@@ -431,7 +432,7 @@ export function GameSessionView({
   }
 
   return (
-    <div className="dnd-page-bg flex flex-col h-screen" data-player-id={playerId ?? ''}>
+    <div className="dnd-page-bg flex flex-col h-screen" data-player-id={currentPlayerId ?? ''}>
       <GameHeader
         gameName={game.name}
         gameStatus={gameStatus}

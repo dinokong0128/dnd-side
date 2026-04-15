@@ -241,6 +241,7 @@ export function ChatLog({
                   ? (newContent) => onEditMessage(msg.id, newContent)
                   : undefined
               }
+              diceRolls={msg.role === 'dm' ? (msg.dice_rolls ?? null) : null}
             />
           ))
         })()}

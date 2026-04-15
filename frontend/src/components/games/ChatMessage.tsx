@@ -1,6 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
+import type { DiceRollEvent } from '@/lib/types/message'
+import { DiceRoller } from '@/components/dice/DiceRoller'
 
 interface ChatMessageProps {
   role: 'player' | 'dm' | 'system'
@@ -10,6 +12,7 @@ interface ChatMessageProps {
   userId?: string
   isLastMessage?: boolean
   isWaitingForDm?: boolean
+  diceRolls?: DiceRollEvent[] | null
   onRetry?: () => void
   onDelete?: () => void
   onEdit?: (newContent: string) => void
@@ -23,6 +26,7 @@ export function ChatMessage({
   userId,
   isLastMessage,
   isWaitingForDm,
+  diceRolls,
   onRetry,
   onDelete,
   onEdit,
@@ -30,6 +34,10 @@ export function ChatMessage({
   const [isHovered, setIsHovered] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editText, setEditText] = useState(content)
+  // Track how many dice have finished animating to reveal narration
+  const settledCount = useRef(0)
+  const [narrationVisible, setNarrationVisible] = useState(!diceRolls?.length)
+  const [activeDieIndex, setActiveDieIndex] = useState(0)
 
   const canEditOrDelete =
     role === 'player' &&
@@ -50,6 +58,21 @@ export function ChatMessage({
     setIsEditing(false)
   }
 
+  const hasDice = !!diceRolls?.length
+
+  const handleDieComplete = () => {
+    settledCount.current += 1
+    if (hasDice) {
+      if (settledCount.current < (diceRolls?.length ?? 0)) {
+        // Advance to next die
+        setActiveDieIndex(settledCount.current)
+      } else {
+        // All dice done — reveal narration
+        setNarrationVisible(true)
+      }
+    }
+  }
+
   if (role === 'dm') {
     return (
       <div className="mb-4 flex justify-start">
@@ -66,9 +89,39 @@ export function ChatMessage({
           >
             Dungeon Master
           </div>
+
+          {/* Dice rolls rendered sequentially before narration.
+              Only render dice up to and including activeDieIndex.
+              Completed dice (idx < activeDieIndex) render as instant/settled. */}
+          {hasDice && (
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '8px',
+                marginBottom: '12px',
+              }}
+            >
+              {diceRolls!.slice(0, activeDieIndex + 1).map((roll, idx) => (
+                <DiceRoller
+                  key={idx}
+                  dieType={roll.die}
+                  result={roll.result}
+                  modifier={roll.modifier}
+                  label={roll.label}
+                  instant={idx < activeDieIndex}
+                  onAnimationComplete={idx === activeDieIndex ? handleDieComplete : () => {}}
+                />
+              ))}
+            </div>
+          )}
+
           <p
             className="font-serif italic"
-            style={{ color: 'var(--dnd-parchment)' }}
+            style={{
+              color: 'var(--dnd-parchment)',
+              visibility: narrationVisible ? 'visible' : 'hidden',
+            }}
           >
             {content}
           </p>
