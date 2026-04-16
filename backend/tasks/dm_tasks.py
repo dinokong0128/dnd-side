@@ -11,6 +11,7 @@ import json
 from datetime import datetime
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 from config import supabase_client, anthropic_client, openai_client
 import redis_broker  # noqa: F401 — ensure broker is set before defining actors
@@ -66,31 +67,27 @@ def dm_response_task(
         except Exception as e:
             logger.warning(f"[dm_response_task] RAG search failed (fallback to no RAG): {e}")
             rag_context = []
-        # Step 1: Fetch game state
-        game = (
-            supabase_client.table("games")
-            .select("*")
-            .match({"id": game_id})
-            .single()
-            .execute()
-        )
 
-        players = (
-            supabase_client.table("players")
-            .select("*")
-            .match({"game_id": game_id})
-            .execute()
-        )
+        # Step 1, 1b: Fetch game state, players, and recent messages in parallel (DIN-65)
+        def _fetch_game():
+            return supabase_client.table("games").select("*").match({"id": game_id}).single().execute()
 
-        # Step 1b: Fetch last 20 messages for context
-        recent_messages = (
-            supabase_client.table("game_messages")
-            .select("role, profile_id, content")
-            .eq("game_id", game_id)
-            .order("created_at", desc=True)
-            .limit(20)
-            .execute()
-        )
+        def _fetch_players():
+            return supabase_client.table("players").select("*").match({"game_id": game_id}).execute()
+
+        def _fetch_recent_messages():
+            return supabase_client.table("game_messages").select("role, profile_id, content").eq(
+                "game_id", game_id
+            ).order("created_at", desc=True).limit(20).execute()
+
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            f_game = executor.submit(_fetch_game)
+            f_players = executor.submit(_fetch_players)
+            f_messages = executor.submit(_fetch_recent_messages)
+
+            game = f_game.result()
+            players = f_players.result()
+            recent_messages = f_messages.result()
 
         # Reverse to chronological order and format
         message_history = []
@@ -119,15 +116,20 @@ def dm_response_task(
             m = math.floor((score - 10) / 2)
             return f"{m:+d}"
 
-        # Step 1c: Fetch player inventory
+        # Step 1c: Fetch player inventory in batch (DIN-65)
+        player_ids = [p["id"] for p in players.data]
+        inv_by_player: dict[str, list] = {}
+        if player_ids:
+            all_inv = supabase_client.table("player_inventory").select(
+                "player_id, item_name, quantity"
+            ).in_("player_id", player_ids).execute()
+
+            for item in (all_inv.data or []):
+                inv_by_player.setdefault(item["player_id"], []).append(item)
+
         party_lines = []
         for p in players.data:
-            inv = (
-                supabase_client.table("player_inventory")
-                .select("item_name, quantity")
-                .eq("player_id", p["id"])
-                .execute()
-            )
+            inv = inv_by_player.get(p["id"], [])
 
             items = (
                 ", ".join(
@@ -136,7 +138,7 @@ def dm_response_task(
                         if i["quantity"] > 1
                         else i["item_name"]
                     )
-                    for i in (inv.data or [])
+                    for i in inv
                 )
                 or "no equipment"
             )

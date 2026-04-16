@@ -58,7 +58,18 @@ from anthropic import Anthropic
 
 anthropic_client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
-# OpenAI client
+# OpenAI client with connection reuse (DIN-65)
+import httpx
 from openai import OpenAI
 
-openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
+openai_client = OpenAI(
+    api_key=settings.OPENAI_API_KEY,
+    http_client=httpx.Client(
+        limits=httpx.Limits(
+            max_keepalive_connections=5,
+            max_connections=10,
+            keepalive_expiry=30,
+        ),
+        timeout=httpx.Timeout(30.0),
+    ),
+)

@@ -1610,7 +1610,9 @@ class TestDin25AbilityCheckInstruction:
 
         with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
             "tasks.dm_tasks.anthropic_client"
-        ) as mock_anthropic, patch("tasks.dm_tasks.openai_client") as mock_openai:
+        ) as mock_anthropic, patch("tasks.dm_tasks.openai_client") as mock_openai, patch(
+            "tasks.dm_tasks.embed_text", return_value=[0.1] * 1536
+        ), patch("tasks.dm_tasks.search_rag", return_value=[]):
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.side_effect = capture_create
             mock_openai.embeddings.create.return_value = MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
@@ -1656,7 +1658,9 @@ class TestDin25AbilityCheckInstruction:
 
         with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
             "tasks.dm_tasks.anthropic_client"
-        ) as mock_anthropic, patch("tasks.dm_tasks.openai_client") as mock_openai:
+        ) as mock_anthropic, patch("tasks.dm_tasks.openai_client") as mock_openai, patch(
+            "tasks.dm_tasks.embed_text", return_value=[0.1] * 1536
+        ), patch("tasks.dm_tasks.search_rag", return_value=[]):
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.side_effect = capture_create
             mock_openai.embeddings.create.return_value = MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
@@ -1707,7 +1711,9 @@ class TestDin27SpellSlotsInSystemPrompt:
 
         with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
             "tasks.dm_tasks.anthropic_client"
-        ) as mock_anthropic, patch("tasks.dm_tasks.openai_client") as mock_openai:
+        ) as mock_anthropic, patch("tasks.dm_tasks.openai_client") as mock_openai, patch(
+            "tasks.dm_tasks.embed_text", return_value=[0.1] * 1536
+        ), patch("tasks.dm_tasks.search_rag", return_value=[]):
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.side_effect = capture_create
             mock_openai.embeddings.create.return_value = MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
