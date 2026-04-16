@@ -57,7 +57,7 @@ export function CharacterSummaryCard({
         <p className="mb-3 text-sm font-medium text-gray-700">Ability Scores</p>
         <div className="grid grid-cols-3 gap-3">
           {STAT_NAMES.map(({ key, label }) => {
-            const score = player.stats[key as keyof typeof player.stats]
+            const score = player.stats[key as 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha']
             return (
               <div key={key} className="rounded bg-gray-100 p-3 text-center">
                 <p className="text-xs font-medium text-gray-600">{label}</p>

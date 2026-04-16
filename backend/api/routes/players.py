@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from config import supabase_client
 from api.dependencies import get_current_user
-from utils.dnd import calculate_hp_max, CLASS_STARTING_INVENTORY
+from utils.dnd import calculate_hp_max, CLASS_STARTING_INVENTORY, get_spell_slots
 from constants import GAME_STATUS_LOBBY
 
 logger = logging.getLogger(__name__)
@@ -108,6 +108,16 @@ async def upsert_player(
 
     hp_max = calculate_hp_max(body.character_class, body.stats.con)
     stats_dict = body.stats.model_dump(by_alias=True)
+
+    raw_slots = get_spell_slots(body.character_class, body.level)
+    if not raw_slots:
+        # None for non-casters; {} for casters with no slots at this level (e.g. Paladin level 1)
+        stats_dict["spell_slots"] = None
+    else:
+        stats_dict["spell_slots"] = {
+            str(lvl): {"max": raw_slots.get(lvl, 0), "used": 0}
+            for lvl in range(1, 4)
+        }
     upsert_result = (
         supabase_client.table("players")
         .upsert(

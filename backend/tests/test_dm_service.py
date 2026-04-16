@@ -546,3 +546,83 @@ More narration."""
         assert len(rolls) == 2
         assert rolls[0]["die"] == "d20"
         assert rolls[1]["die"] == "d8"
+
+
+class TestApplyStateChangesSpellSlots:
+    """DIN-27: apply_state_changes handlers for spell_slot_use and spell_slots_recharge."""
+
+    @patch("services.dm_service.supabase_client")
+    def test_spell_slot_use_increments_used(self, mock_sb):
+        """spell_slot_use should increment used by 1 for the specified slot level."""
+        player_stats = {
+            "str": 10, "dex": 10, "con": 10, "int": 18, "wis": 10, "cha": 10,
+            "spell_slots": {"1": {"max": 2, "used": 0}},
+        }
+        player_mock = MagicMock()
+        player_mock.data = {"stats": player_stats}
+        mock_sb.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = player_mock
+        mock_sb.table.return_value.update.return_value.eq.return_value.execute.return_value = MagicMock()
+
+        apply_state_changes({
+            "spell_slot_use": [
+                {"character_id": "player-1", "slot_level": 1, "spell_name": "Magic Missile"}
+            ]
+        })
+
+        update_call = mock_sb.table.return_value.update.call_args[0][0]
+        assert update_call["stats"]["spell_slots"]["1"]["used"] == 1
+
+    @patch("services.dm_service.supabase_client")
+    def test_spell_slot_use_capped_at_max(self, mock_sb):
+        """Used should not exceed max even if cast multiple times."""
+        player_stats = {
+            "str": 10, "dex": 10, "con": 10, "int": 18, "wis": 10, "cha": 10,
+            "spell_slots": {"1": {"max": 2, "used": 2}},
+        }
+        player_mock = MagicMock()
+        player_mock.data = {"stats": player_stats}
+        mock_sb.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = player_mock
+        mock_sb.table.return_value.update.return_value.eq.return_value.execute.return_value = MagicMock()
+
+        apply_state_changes({
+            "spell_slot_use": [
+                {"character_id": "player-1", "slot_level": 1, "spell_name": "Magic Missile"}
+            ]
+        })
+
+        update_call = mock_sb.table.return_value.update.call_args[0][0]
+        assert update_call["stats"]["spell_slots"]["1"]["used"] == 2  # Capped at max
+
+    @patch("services.dm_service.supabase_client")
+    def test_spell_slots_recharge_resets_used_to_zero(self, mock_sb):
+        """spell_slots_recharge should reset all used counts to 0."""
+        player_stats = {
+            "str": 10, "dex": 10, "con": 10, "int": 18, "wis": 10, "cha": 10,
+            "spell_slots": {
+                "1": {"max": 4, "used": 3},
+                "2": {"max": 2, "used": 2},
+            },
+        }
+        player_mock = MagicMock()
+        player_mock.data = {"stats": player_stats}
+        mock_sb.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = player_mock
+        mock_sb.table.return_value.update.return_value.eq.return_value.execute.return_value = MagicMock()
+
+        apply_state_changes({
+            "spell_slots_recharge": [{"character_id": "player-1"}]
+        })
+
+        update_call = mock_sb.table.return_value.update.call_args[0][0]
+        recharged = update_call["stats"]["spell_slots"]
+        assert recharged["1"]["used"] == 0
+        assert recharged["2"]["used"] == 0
+
+    @patch("services.dm_service.supabase_client")
+    def test_spell_slot_use_db_failure_is_best_effort(self, mock_sb):
+        """DB failure during spell_slot_use should not raise — best-effort."""
+        mock_sb.table.return_value.select.return_value.eq.return_value.single.return_value.execute.side_effect = Exception("DB error")
+
+        # Should not raise
+        apply_state_changes({
+            "spell_slot_use": [{"character_id": "player-1", "slot_level": 1, "spell_name": "Fireball"}]
+        })

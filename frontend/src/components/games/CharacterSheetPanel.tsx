@@ -479,7 +479,7 @@ export function CharacterSheetPanel({ playerId, onClose }: CharacterSheetPanelPr
                   }}
                 >
                   {STAT_NAMES.map(({ key, label }) => {
-                    const score = player.stats[key as keyof typeof player.stats]
+                    const score = player.stats[key as 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha']
                     return (
                       <div
                         key={key}
@@ -530,6 +530,93 @@ export function CharacterSheetPanel({ playerId, onClose }: CharacterSheetPanelPr
                   })}
                 </div>
               </div>
+
+              {/* Spell Slots (DIN-27) — shown only for spellcasting classes */}
+              {player.stats.spell_slots && (
+                <div>
+                  <p
+                    style={{
+                      fontFamily: "'Cinzel', serif",
+                      fontSize: '0.55rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.1em',
+                      color: 'var(--dnd-parchment-dim, #8a7a60)',
+                      margin: '0 0 6px 0',
+                    }}
+                  >
+                    Spell Slots
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {Object.entries(player.stats.spell_slots)
+                      .filter(([, slot]) => slot.max > 0)
+                      .sort(([a], [b]) => Number(a) - Number(b))
+                      .map(([level, slot]) => {
+                        const ordinals: Record<string, string> = {
+                          '1': '1st', '2': '2nd', '3': '3rd', '4': '4th', '5': '5th',
+                        }
+                        const remaining = slot.max - slot.used
+                        return (
+                          <div key={level} data-testid={`spell-slot-row-${level}`}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                              <span
+                                style={{
+                                  fontFamily: "'Cinzel', serif",
+                                  fontSize: '0.6rem',
+                                  color: 'var(--dnd-parchment-dim, #8a7a60)',
+                                  minWidth: '28px',
+                                }}
+                              >
+                                {ordinals[level] ?? `${level}th`}
+                              </span>
+                              <span
+                                data-testid={`spell-slot-label-${level}`}
+                                style={{
+                                  fontFamily: "'Cinzel', serif",
+                                  fontSize: '0.6rem',
+                                  color: 'var(--dnd-parchment, #f0e6c8)',
+                                }}
+                              >
+                                {remaining} / {slot.max}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap' }}>
+                              {Array.from({ length: slot.max }).map((_, i) => (
+                                <span
+                                  key={i}
+                                  data-testid={i < slot.used ? 'pip-used' : 'pip-available'}
+                                  style={{
+                                    fontSize: '0.75rem',
+                                    color: i < slot.used
+                                      ? 'rgba(201,168,76,0.35)'
+                                      : 'var(--dnd-gold, #c9a84c)',
+                                  }}
+                                >
+                                  {i < slot.used ? '●' : '○'}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })}
+                  </div>
+
+                  {/* Cantrips */}
+                  {player.stats.cantrips && player.stats.cantrips.length > 0 && (
+                    <p
+                      style={{
+                        fontFamily: "'Lora', serif",
+                        fontStyle: 'italic',
+                        fontSize: '0.75rem',
+                        color: 'var(--dnd-parchment-dim, #8a7a60)',
+                        marginTop: '6px',
+                        margin: '6px 0 0 0',
+                      }}
+                    >
+                      Cantrips (∞): {player.stats.cantrips.join(', ')}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Inventory */}
               <div>

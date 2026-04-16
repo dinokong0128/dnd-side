@@ -99,6 +99,44 @@ CLASS_STARTING_INVENTORY: dict[str, list[dict]] = {
 }
 
 
+SPELL_SLOTS_BY_CLASS_LEVEL: dict[str, dict[int, dict[int, int]] | None] = {
+    "wizard":   {1: {1: 2}, 2: {1: 3}, 3: {1: 4, 2: 2}, 4: {1: 4, 2: 3}, 5: {1: 4, 2: 3, 3: 2}},
+    "cleric":   {1: {1: 2}, 2: {1: 3}, 3: {1: 4, 2: 2}, 4: {1: 4, 2: 3}, 5: {1: 4, 2: 3, 3: 2}},
+    "druid":    {1: {1: 2}, 2: {1: 3}, 3: {1: 4, 2: 2}, 4: {1: 4, 2: 3}, 5: {1: 4, 2: 3, 3: 2}},
+    "sorcerer": {1: {1: 2}, 2: {1: 3}, 3: {1: 4, 2: 2}, 4: {1: 4, 2: 3}, 5: {1: 4, 2: 3, 3: 2}},
+    "bard":     {1: {1: 2}, 2: {1: 3}, 3: {1: 4, 2: 2}, 4: {1: 4, 2: 3}, 5: {1: 4, 2: 3, 3: 2}},
+    "paladin":  {1: {}, 2: {1: 2}, 3: {1: 3}, 4: {1: 3}, 5: {1: 4, 2: 2}},
+    "ranger":   {1: {}, 2: {1: 2}, 3: {1: 3}, 4: {1: 3}, 5: {1: 4, 2: 2}},
+    "warlock":  {1: {1: 1}, 2: {1: 2}, 3: {2: 2}, 4: {2: 2}, 5: {3: 2}},
+    "fighter":   None,
+    "barbarian": None,
+    "rogue":     None,
+    "monk":      None,
+}
+
+_MAX_SPELL_LEVEL = 5
+
+
+def get_spell_slots(character_class: str, level: int) -> dict[int, int] | None:
+    """Return {slot_level: max_count} for a class at the given level, or None for non-casters.
+
+    Returns an empty dict {} for casters with no slots at the given level (e.g. Paladin level 1).
+    Caps at level 5 for MVP scope.
+
+    Args:
+        character_class: Character class name (case-insensitive)
+        level: Character level (1+)
+
+    Returns:
+        Dict of {slot_level_int: slot_count} or None for non-spellcasting classes.
+    """
+    entry = SPELL_SLOTS_BY_CLASS_LEVEL.get(character_class.lower())
+    if entry is None:
+        return None
+    capped_level = min(level, _MAX_SPELL_LEVEL)
+    return entry.get(capped_level, {})
+
+
 def calculate_hp_max(character_class: str, con: int) -> int:
     """Return level-1 HP max per SRD 5e rules.
 
