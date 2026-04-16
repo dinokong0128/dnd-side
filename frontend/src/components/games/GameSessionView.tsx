@@ -310,6 +310,10 @@ export function GameSessionView({
     }
     const handleSessionPaused = () => setGameStatus('paused')
     const handleSessionEnded = () => setGameStatus('ended')
+    const handleLevelUpAvailable = (event: Event) => {
+      const detail = (event as CustomEvent).detail as LevelUpPayload
+      setLevelUpPayload(detail)
+    }
 
     window.addEventListener('player-message', addMessage)
     window.addEventListener('dm-message', addMessage)
@@ -317,6 +321,7 @@ export function GameSessionView({
     window.addEventListener('opening-narration', handleOpeningNarration)
     window.addEventListener('session-paused', handleSessionPaused)
     window.addEventListener('session-ended', handleSessionEnded)
+    window.addEventListener('level-up-available', handleLevelUpAvailable)
 
     return () => {
       window.removeEventListener('player-message', addMessage)
@@ -325,6 +330,7 @@ export function GameSessionView({
       window.removeEventListener('opening-narration', handleOpeningNarration)
       window.removeEventListener('session-paused', handleSessionPaused)
       window.removeEventListener('session-ended', handleSessionEnded)
+      window.removeEventListener('level-up-available', handleLevelUpAvailable)
     }
   }, [gameId])
 
