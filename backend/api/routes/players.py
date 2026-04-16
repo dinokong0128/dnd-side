@@ -118,6 +118,7 @@ async def upsert_player(
             str(lvl): {"max": raw_slots.get(lvl, 0), "used": 0}
             for lvl in range(1, 4)
         }
+    stats_dict["xp"] = 0
     upsert_result = (
         supabase_client.table("players")
         .upsert(

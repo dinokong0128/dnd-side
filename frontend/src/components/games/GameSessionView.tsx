@@ -11,6 +11,9 @@ import { TypingIndicator } from './TypingIndicator'
 import { ConfirmModal } from './ConfirmModal'
 import { SessionStatusBanner } from './SessionStatusBanner'
 import { CharacterSheetPanel } from './CharacterSheetPanel'
+import { LevelUpModal } from './LevelUpModal'
+import type { LevelUpPayload } from './LevelUpModal'
+import type { PlayerRow } from '@/lib/types/player'
 import { CHAT_PAGE_SIZE } from '@/lib/constants/game'
 
 interface GameSessionViewProps {
@@ -43,6 +46,9 @@ export function GameSessionView({
   const [oldestCreatedAt, setOldestCreatedAt] = useState<string | null>(null)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [showCharacterSheet, setShowCharacterSheet] = useState(false)
+  const [levelUpPayload, setLevelUpPayload] = useState<LevelUpPayload | null>(null)
+  const [showLevelUpModal, setShowLevelUpModal] = useState(false)
+  const [currentPlayerRow, setCurrentPlayerRow] = useState<PlayerRow | null>(null)
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isHost = game.created_by === userId
@@ -67,10 +73,10 @@ export function GameSessionView({
           .order('created_at', { ascending: false })
           .limit(1)
 
-        // Fetch all players for this game (include id for CharacterSheetPanel)
+        // Fetch all players for this game
         const playersPromise = supabase
           .from('players')
-          .select('id, profile_id, character_name')
+          .select('*')
           .eq('game_id', gameId)
 
         const [{ data: messagesData }, { data: latestData }, { data: playersData }] =
@@ -88,11 +94,7 @@ export function GameSessionView({
 
         // Build playerMap (profile_id -> character_name)
         const map = new Map<string, string>()
-        const players = (playersData ?? []) as Array<{
-          id: string
-          profile_id: string | null
-          character_name: string | null
-        }>
+        const players = (playersData ?? []) as PlayerRow[]
         players.forEach((p) => {
           if (p.profile_id && p.character_name) {
             map.set(p.profile_id, p.character_name)
@@ -100,9 +102,10 @@ export function GameSessionView({
         })
         setPlayerMap(map)
 
-        // Track current user's player ID for the character sheet
+        // Track current user's player ID and full row for the character sheet / level-up modal
         const myPlayer = players.find((p) => p.profile_id === userId)
         setCurrentPlayerId(myPlayer ? myPlayer.id : null)
+        setCurrentPlayerRow(myPlayer ?? null)
 
         // Check if current user has a character in this game
         setHasCharacter(map.has(userId))
@@ -219,9 +222,18 @@ export function GameSessionView({
       )
       .subscribe()
 
+    // Subscribe to level_up_available broadcast events
+    const levelUpSubscription = supabase
+      .channel(`game:${gameId}`)
+      .on('broadcast', { event: 'level_up_available' }, ({ payload }) => {
+        setLevelUpPayload(payload as LevelUpPayload)
+      })
+      .subscribe()
+
     return () => {
       messagesSubscription?.unsubscribe()
       gamesSubscription?.unsubscribe()
+      levelUpSubscription?.unsubscribe()
     }
   }, [gameId, userId])
 
@@ -518,6 +530,46 @@ export function GameSessionView({
             onResume={handleResume}
             onEnd={() => setShowEndModal(true)}
           />
+          {/* Level-up toast banner — persists until confirmed or dismissed */}
+          {levelUpPayload && !showLevelUpModal && (
+            <div
+              data-testid="level-up-toast"
+              style={{
+                flexShrink: 0,
+                borderTop: '1px solid rgba(201,168,76,0.4)',
+                background: 'rgba(201,168,76,0.12)',
+                padding: '8px 24px',
+              }}
+            >
+              <div style={{ maxWidth: '48rem', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+                <div>
+                  <span style={{ fontFamily: "'Cinzel', serif", fontSize: '0.75rem', color: 'var(--dnd-gold, #c9a84c)', letterSpacing: '0.06em' }}>
+                    Level Up Available!
+                  </span>
+                  <p style={{ fontFamily: "'Lora', serif", fontStyle: 'italic', fontSize: '0.75rem', color: 'var(--dnd-parchment-dim, #8a7a60)', margin: '2px 0 0 0' }}>
+                    You&apos;ve reached Level {levelUpPayload.new_level}
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <button
+                    onClick={() => setShowLevelUpModal(true)}
+                    className="dnd-btn"
+                    style={{ padding: '5px 14px', fontSize: '0.65rem' }}
+                  >
+                    Level Up
+                  </button>
+                  <button
+                    onClick={() => setLevelUpPayload(null)}
+                    className="dnd-btn-secondary"
+                    style={{ padding: '5px 10px', fontSize: '0.65rem' }}
+                    aria-label="Dismiss level up"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           <ChatInput
             gameStatus={gameStatus}
             isWaitingForDm={isWaitingForDm}
@@ -535,6 +587,20 @@ export function GameSessionView({
           />
         )}
       </div>
+
+      {/* Level-up modal */}
+      {showLevelUpModal && levelUpPayload && currentPlayerRow && (
+        <LevelUpModal
+          gameId={gameId}
+          payload={levelUpPayload}
+          player={currentPlayerRow}
+          onClose={() => setShowLevelUpModal(false)}
+          onConfirmed={() => {
+            setShowLevelUpModal(false)
+            setLevelUpPayload(null)
+          }}
+        />
+      )}
 
       <ConfirmModal
         isOpen={showPauseModal}

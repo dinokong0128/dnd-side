@@ -24,6 +24,7 @@ with patch("config.supabase_client", MagicMock()), patch(
         generate_end_message,
         generate_resume_narration,
     )
+    from services.dm_service import apply_state_changes
 
 
 class TestGenerateOpeningNarration:
@@ -1875,3 +1876,81 @@ class TestDin26CombatInstruction:
             "System prompt must mention 'ac' (armor class) for attack rolls"
         assert "goblin" in prompt.lower() or "npc" in prompt.lower() or "13" in prompt, \
             "System prompt must include NPC AC reference values"
+
+
+class TestDin28XpAwards:
+    """DIN-28: xp_awards in apply_state_changes + threshold broadcast."""
+
+    def _player(self, xp: int = 0, level: int = 1, con: int = 14) -> dict:
+        return {
+            "id": "player-1",
+            "game_id": "game-1",
+            "profile_id": "user-1",
+            "character_name": "Hero",
+            "character_class": "Fighter",
+            "level": level,
+            "hp_current": 10,
+            "hp_max": 10,
+            "stats": {
+                "str": 16, "dex": 12, "con": con, "int": 10, "wis": 10, "cha": 8,
+                "xp": xp,
+            },
+        }
+
+    def test_xp_awards_increments_stats_xp(self):
+        """apply_state_changes with xp_awards should increment stats.xp."""
+        player = self._player(xp=100, level=1)
+        captured_update: dict = {}
+
+        def update_side_effect(payload):
+            captured_update.update(payload)
+            mock = MagicMock()
+            mock.eq.return_value.execute.return_value = MagicMock()
+            return mock
+
+        with patch("services.dm_service.supabase_client") as mock_sb, \
+             patch("services.dm_service.broadcast_level_up_available"):
+            mock_sb.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(data=player)
+            mock_sb.table.return_value.update.side_effect = update_side_effect
+
+            apply_state_changes(
+                {"xp_awards": [{"character_id": "player-1", "amount": 50, "reason": "Defeated goblin"}]},
+                game_id="game-1",
+            )
+
+        assert "stats" in captured_update
+        assert captured_update["stats"]["xp"] == 150
+
+    def test_broadcast_called_when_xp_crosses_level_threshold(self):
+        """Broadcast level_up_available when new XP >= XP_THRESHOLDS[level + 1]."""
+        # Level 1, xp=250 + 100 = 350 >= threshold for level 2 (300) → broadcast
+        player = self._player(xp=250, level=1)
+
+        with patch("services.dm_service.supabase_client") as mock_sb, \
+             patch("services.dm_service.broadcast_level_up_available") as mock_broadcast:
+            mock_sb.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(data=player)
+            mock_sb.table.return_value.update.return_value.eq.return_value.execute.return_value = MagicMock()
+
+            apply_state_changes(
+                {"xp_awards": [{"character_id": "player-1", "amount": 100, "reason": "Quest complete"}]},
+                game_id="game-1",
+            )
+
+        mock_broadcast.assert_called_once_with("game-1", "player-1", 2)
+
+    def test_broadcast_not_called_when_xp_below_threshold(self):
+        """Broadcast NOT called when new XP does not reach the next level threshold."""
+        # Level 1, xp=0 + 100 = 100 < 300 → no broadcast
+        player = self._player(xp=0, level=1)
+
+        with patch("services.dm_service.supabase_client") as mock_sb, \
+             patch("services.dm_service.broadcast_level_up_available") as mock_broadcast:
+            mock_sb.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(data=player)
+            mock_sb.table.return_value.update.return_value.eq.return_value.execute.return_value = MagicMock()
+
+            apply_state_changes(
+                {"xp_awards": [{"character_id": "player-1", "amount": 100, "reason": "Minor task"}]},
+                game_id="game-1",
+            )
+
+        mock_broadcast.assert_not_called()

@@ -288,6 +288,11 @@ RULES:
    - Critical Miss (natural 1): automatic miss, narrate the fumble
    - At 0 HP: narrate unconsciousness; prompt Death Saving Throw on next player action
    - Death Saving Throw: d20, no modifier, dc: 10, label: "Death Saving Throw"
+12. XP AWARDS: When players defeat enemies or complete objectives, award XP via the
+   xp_awards field in <state_changes>. Use SRD 5e encounter XP values as a guide.
+   Award XP to all players present.
+   Format: "xp_awards": [{{"character_id": "<ID>", "amount": 100, "reason": "Defeated goblin"}}]
+   Typical values: Goblin 50 XP, Bandit 100 XP, Orc 100 XP, completing a minor quest 150–300 XP.
 
 The acting player's action:
 "{action_text}"
@@ -316,7 +321,7 @@ The acting player's action:
         # Step 4b: Extract and apply state changes (HP, inventory)
         state_changes = extract_state_changes(dm_response)
         if state_changes:
-            apply_state_changes(state_changes)
+            apply_state_changes(state_changes, game_id=game_id)
             logger.info(
                 f"[dm_response_task] Applied state changes: {list(state_changes.keys())}"
             )
