@@ -1,5 +1,6 @@
 'use client'
 
+import { useRef, useState } from 'react'
 import type { StreamSegment } from '@/lib/types/streaming'
 import type { DiceRollEvent } from '@/lib/types/message'
 import { DiceRoller } from '@/components/dice/DiceRoller'
@@ -20,11 +21,172 @@ function parseDiceRolls(content: string): DiceRollEvent[] {
 }
 
 /**
+ * Animated dice block for a streaming DM response.
+ *
+ * Mirrors the sequential animation + outcome-badge logic from ChatMessage:
+ * dice reveal one at a time; the green/red outcome badge appears after all
+ * dice settle. Mounted once when the complete block arrives mid-stream.
+ */
+function StreamingDiceBlock({ rolls }: { rolls: DiceRollEvent[] }) {
+  const settledCountRef = useRef(0)
+  const [activeDieIndex, setActiveDieIndex] = useState(0)
+  const [allSettled, setAllSettled] = useState(false)
+
+  const handleDieComplete = () => {
+    settledCountRef.current += 1
+    if (settledCountRef.current < rolls.length) {
+      setActiveDieIndex(settledCountRef.current)
+    } else {
+      setAllSettled(true)
+    }
+  }
+
+  return (
+    <>
+      {/* Dice rendered sequentially — same pattern as ChatMessage */}
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '8px',
+          marginBottom: '12px',
+        }}
+      >
+        {rolls.slice(0, activeDieIndex + 1).map((roll, idx) => {
+          const isCritHit = roll.ac !== undefined && roll.result === 20
+          const isCritMiss = roll.ac !== undefined && roll.result === 1
+          return (
+            <div
+              key={idx}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+                ...(isCritHit
+                  ? {
+                      border: '2px solid #e4c65a',
+                      borderRadius: '6px',
+                      padding: '4px',
+                    }
+                  : isCritMiss
+                    ? {
+                        border: '2px solid #c0392b',
+                        borderRadius: '6px',
+                        padding: '4px',
+                        opacity: 0.75,
+                      }
+                    : {}),
+              }}
+            >
+              <DiceRoller
+                dieType={roll.die}
+                result={roll.result}
+                modifier={roll.modifier}
+                label={roll.label}
+                instant={idx < activeDieIndex}
+                onAnimationComplete={
+                  idx === activeDieIndex ? handleDieComplete : () => {}
+                }
+              />
+              {/* Attack vs AC outcome — after animation settles */}
+              {allSettled && roll.ac !== undefined && (
+                <div
+                  style={{
+                    fontFamily: "'Cinzel', serif",
+                    fontSize: '0.75rem',
+                    letterSpacing: '0.04em',
+                    textAlign: 'center',
+                    color: roll.success
+                      ? '#6fcf97'
+                      : 'var(--dnd-parchment-dim, #b8a98c)',
+                  }}
+                >
+                  {roll.total} vs AC {roll.ac} — {roll.success ? 'Hit!' : 'Miss'}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Outcome badge for ability checks / saving throws — after all dice settle */}
+      {allSettled &&
+        rolls.some(
+          (r) => r.die === 'd20' && r.dc !== undefined && r.success !== undefined
+        ) && (
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '6px',
+              marginBottom: '8px',
+            }}
+          >
+            {rolls
+              .filter(
+                (r) =>
+                  r.die === 'd20' &&
+                  r.dc !== undefined &&
+                  r.success !== undefined
+              )
+              .map((roll, idx) => {
+                const isNat20 = roll.result === 20
+                const isNat1 = roll.result === 1
+                const isSuccess = !isNat1 && (roll.success || isNat20)
+
+                const label = isNat20
+                  ? '💥 Critical Success'
+                  : isNat1
+                    ? '💀 Critical Failure'
+                    : isSuccess
+                      ? `✓ Success — vs DC ${roll.dc}`
+                      : `✗ Failure — vs DC ${roll.dc}`
+
+                const bg = isSuccess
+                  ? 'rgba(45,106,79,0.2)'
+                  : 'rgba(139,34,50,0.2)'
+                const textColor = isSuccess ? '#6fcf97' : '#e8a0a0'
+                const borderColor = isNat20
+                  ? 'var(--dnd-gold-bright, #f0d060)'
+                  : isNat1
+                    ? 'var(--dnd-crimson-bright, #e05050)'
+                    : 'transparent'
+
+                return (
+                  <div
+                    key={idx}
+                    data-testid="streaming-outcome-badge"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      padding: '3px 10px',
+                      borderRadius: '4px',
+                      background: bg,
+                      border: `1px solid ${borderColor}`,
+                      color: textColor,
+                      fontSize: '0.78rem',
+                      fontFamily: "'Cinzel', serif",
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    {label}
+                  </div>
+                )
+              })}
+          </div>
+        )}
+    </>
+  )
+}
+
+/**
  * Live DM response bubble rendered while a stream is in flight (DIN-66).
  *
- * Interleaves plain text with complete dice_rolls blocks. The last text
- * segment gets a blinking cursor. Unmounts as soon as the real Realtime
- * DM INSERT arrives and the parent clears `streamingSegments` to null.
+ * Interleaves plain text with animated dice_rolls blocks. Dice animate
+ * sequentially (same as ChatMessage) and the outcome badge appears once all
+ * dice in a block settle. The last text segment gets a blinking cursor.
+ * Unmounts as soon as the real Realtime DM INSERT arrives and the parent
+ * clears `streamingSegments` to null.
  */
 export function StreamingDmMessage({ segments }: StreamingDmMessageProps) {
   // Find the last text segment so the cursor anchors to it.
@@ -57,30 +219,8 @@ export function StreamingDmMessage({ segments }: StreamingDmMessageProps) {
         {segments.map((segment, idx) => {
           if (segment.kind === 'dice_rolls') {
             const rolls = parseDiceRolls(segment.content)
-            return (
-              <div
-                key={`dice-${idx}`}
-                data-testid="streaming-dice"
-                style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: '8px',
-                  marginBottom: '12px',
-                }}
-              >
-                {rolls.map((roll, ri) => (
-                  <DiceRoller
-                    key={ri}
-                    dieType={roll.die}
-                    result={roll.result}
-                    modifier={roll.modifier}
-                    label={roll.label}
-                    instant
-                    onAnimationComplete={() => {}}
-                  />
-                ))}
-              </div>
-            )
+            if (!rolls.length) return null
+            return <StreamingDiceBlock key={`dice-${idx}`} rolls={rolls} />
           }
 
           const isLastText = idx === lastTextIdx
