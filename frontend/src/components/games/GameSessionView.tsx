@@ -483,7 +483,6 @@ export function GameSessionView({
                 setSuggestedActions(lines)
               }
               // 'event' and 'state_changes' consumed silently.
-            }
             } else if (event.type === 'done') {
               // Realtime INSERT fires shortly after done is published.
               // Set a 3s fallback to unblock the input if Realtime is delayed.
@@ -492,7 +491,7 @@ export function GameSessionView({
                 setIsWaitingForDm(false)
                 setStreamingSegments(null)
               }, 3000)
-          }
+            }
         }
       }
     } catch {
