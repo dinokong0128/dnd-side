@@ -144,13 +144,27 @@ export function GameSessionView({
         },
         (payload) => {
           const newMsg = payload.new as GameMessage
-          setMessages((prev) => [...prev, newMsg])
 
-          // If DM or system (error) responded, we're no longer waiting
-          if (newMsg.role === 'dm' || newMsg.role === 'system') {
-            setIsWaitingForDm(false)
-          } else if (newMsg.role === 'player') {
+          if (newMsg.role === 'player') {
+            // Reconcile: replace any optimistic message matching this player+content
+            setMessages((prev) => {
+              const filtered = prev.filter(
+                (m) =>
+                  !(
+                    m.id.startsWith('optimistic-') &&
+                    m.profile_id === newMsg.profile_id &&
+                    m.content === newMsg.content
+                  )
+              )
+              return [...filtered, newMsg]
+            })
             setIsWaitingForDm(true)
+          } else {
+            setMessages((prev) => [...prev, newMsg])
+            // If DM or system (error) responded, we're no longer waiting
+            if (newMsg.role === 'dm' || newMsg.role === 'system') {
+              setIsWaitingForDm(false)
+            }
           }
         }
       )
@@ -256,11 +270,26 @@ export function GameSessionView({
         created_at: detail.created_at || new Date().toISOString(),
         dice_rolls: detail.dice_rolls ?? null,
       }
-      setMessages((prev) => [...prev, msg])
-      if (msg.role === 'dm' || msg.role === 'system') {
-        setIsWaitingForDm(false)
-      } else if (msg.role === 'player') {
+      if (msg.role === 'player') {
+        // Reconcile: mirror the Realtime INSERT handler — remove any optimistic
+        // message with a matching profile_id + content before adding the real one.
+        setMessages((prev) => {
+          const filtered = prev.filter(
+            (m) =>
+              !(
+                m.id.startsWith('optimistic-') &&
+                m.profile_id === msg.profile_id &&
+                m.content === msg.content
+              )
+          )
+          return [...filtered, msg]
+        })
         setIsWaitingForDm(true)
+      } else {
+        setMessages((prev) => [...prev, msg])
+        if (msg.role === 'dm' || msg.role === 'system') {
+          setIsWaitingForDm(false)
+        }
       }
     }
 
@@ -312,9 +341,20 @@ export function GameSessionView({
 
   const handleSubmit = async (actionText: string) => {
     setShowRetryTimeout(false)
-    try {
-      setIsWaitingForDm(true)
 
+    // Push optimistic message immediately so the player sees their action right away
+    const optimisticMsg: GameMessage = {
+      id: `optimistic-${crypto.randomUUID()}`,
+      game_id: gameId,
+      role: 'player',
+      profile_id: userId,
+      content: actionText,
+      created_at: new Date().toISOString(),
+    }
+    setMessages((prev) => [...prev, optimisticMsg])
+    setIsWaitingForDm(true)
+
+    try {
       const response = await fetch(`/api/games/${gameId}/actions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -323,14 +363,15 @@ export function GameSessionView({
 
       if (!response.ok) {
         const errorData = await response.json()
-        // On error, re-enable input
+        // On error, remove the optimistic message and re-enable input
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id))
         setIsWaitingForDm(false)
-        // Optionally show error to user
         console.error('Action failed:', errorData.error)
       }
-      // On success, message will appear via Realtime subscription
-      // DM response will also arrive via Realtime, clearing isWaitingForDm
+      // On success, the real player message will arrive via Realtime and reconcile
+      // the optimistic message. DM response will also arrive via Realtime.
     } catch {
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id))
       setIsWaitingForDm(false)
     }
   }

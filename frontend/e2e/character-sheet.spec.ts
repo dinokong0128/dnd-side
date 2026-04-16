@@ -353,3 +353,220 @@ test.describe('DIN-15 — In-game Character Sheet Panel', () => {
     await expect(page.getByTestId('unconscious-label')).not.toBeVisible()
   })
 })
+
+// ─── DIN-27: Spell slot tracking and display ─────────────────────────────────
+//
+// Spell slots are stored in players.stats.spell_slots JSONB. The character
+// sheet renders a Spell Slots section (pip display + count label) only for
+// spellcasting classes (when stats.spell_slots is not null). Non-casters and
+// levels with max=0 are hidden. Slot usage propagates via the e2e-player-update
+// event (mirrors Supabase Realtime players UPDATE subscription).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const WIZARD_STATS = {
+  str: 8, dex: 14, con: 12, int: 18, wis: 12, cha: 10,
+  spell_slots: {
+    '1': { max: 4, used: 1 },
+    '2': { max: 2, used: 0 },
+    '3': { max: 0, used: 0 }, // max=0 → should be hidden
+  },
+  cantrips: ['Fire Bolt', 'Mage Hand'],
+}
+
+const FIGHTER_STATS = {
+  str: 16, dex: 12, con: 14, int: 10, wis: 10, cha: 8,
+  spell_slots: null,
+}
+
+const WIZARD_PLAYER = {
+  ...MOCK_PLAYER_FULL,
+  character_class: 'Wizard',
+  stats: WIZARD_STATS,
+}
+
+const FIGHTER_PLAYER = {
+  ...MOCK_PLAYER_FULL,
+  character_name: 'Bran Ironwall',
+  character_class: 'Fighter',
+  stats: FIGHTER_STATS,
+}
+
+test.describe('DIN-27 — Spell slot tracking and display', () => {
+  test('spell slots section is visible for a Wizard with spell_slots in stats', async ({ page }) => {
+    await setupGameMocks(page, { player: WIZARD_PLAYER })
+    await gotoGame(page)
+    await page.getByTestId('sheet-button').click()
+
+    const sheet = page.getByRole('dialog', { name: 'Character Sheet' })
+    await expect(sheet).toBeVisible({ timeout: 3000 })
+
+    // Spell Slots heading present
+    await expect(sheet.getByText('Spell Slots', { exact: true })).toBeVisible()
+  })
+
+  test('spell slots section is NOT visible for a Fighter (null spell_slots)', async ({ page }) => {
+    await setupGameMocks(page, { player: FIGHTER_PLAYER })
+    await gotoGame(page)
+    await page.getByTestId('sheet-button').click()
+
+    const sheet = page.getByRole('dialog', { name: 'Character Sheet' })
+    await expect(sheet).toBeVisible({ timeout: 3000 })
+
+    await expect(sheet.getByText('Spell Slots', { exact: true })).not.toBeVisible()
+  })
+
+  test('pip display shows used (●) and available (○) pips correctly', async ({ page }) => {
+    await setupGameMocks(page, { player: WIZARD_PLAYER })
+    await gotoGame(page)
+    await page.getByTestId('sheet-button').click()
+
+    const sheet = page.getByRole('dialog', { name: 'Character Sheet' })
+    await expect(sheet).toBeVisible({ timeout: 3000 })
+
+    // 1st level: 4 max, 1 used → 1 pip-used + 3 pip-available
+    const row1 = sheet.getByTestId('spell-slot-row-1')
+    await expect(row1).toBeVisible()
+    await expect(row1.getByTestId('pip-used')).toHaveCount(1)
+    await expect(row1.getByTestId('pip-available')).toHaveCount(3)
+
+    // 2nd level: 2 max, 0 used → 0 pip-used + 2 pip-available
+    const row2 = sheet.getByTestId('spell-slot-row-2')
+    await expect(row2).toBeVisible()
+    await expect(row2.getByTestId('pip-used')).toHaveCount(0)
+    await expect(row2.getByTestId('pip-available')).toHaveCount(2)
+  })
+
+  test('count label shows remaining / max in correct format', async ({ page }) => {
+    await setupGameMocks(page, { player: WIZARD_PLAYER })
+    await gotoGame(page)
+    await page.getByTestId('sheet-button').click()
+
+    const sheet = page.getByRole('dialog', { name: 'Character Sheet' })
+    await expect(sheet).toBeVisible({ timeout: 3000 })
+
+    // 1st level: 4 max, 1 used → remaining = 3
+    await expect(sheet.getByTestId('spell-slot-label-1')).toHaveText('3 / 4')
+    // 2nd level: 2 max, 0 used → remaining = 2
+    await expect(sheet.getByTestId('spell-slot-label-2')).toHaveText('2 / 2')
+  })
+
+  test('levels with max=0 are hidden from the spell slots section', async ({ page }) => {
+    await setupGameMocks(page, { player: WIZARD_PLAYER })
+    await gotoGame(page)
+    await page.getByTestId('sheet-button').click()
+
+    const sheet = page.getByRole('dialog', { name: 'Character Sheet' })
+    await expect(sheet).toBeVisible({ timeout: 3000 })
+
+    // 3rd level has max=0 — row must not appear
+    await expect(sheet.getByTestId('spell-slot-row-3')).not.toBeVisible()
+  })
+
+  test('cantrips are listed with the infinity symbol', async ({ page }) => {
+    await setupGameMocks(page, { player: WIZARD_PLAYER })
+    await gotoGame(page)
+    await page.getByTestId('sheet-button').click()
+
+    const sheet = page.getByRole('dialog', { name: 'Character Sheet' })
+    await expect(sheet).toBeVisible({ timeout: 3000 })
+
+    // Cantrip line format: "Cantrips (∞): Fire Bolt, Mage Hand"
+    await expect(sheet.getByText(/Cantrips \(∞\)/)).toBeVisible()
+    await expect(sheet.getByText(/Fire Bolt/)).toBeVisible()
+    await expect(sheet.getByText(/Mage Hand/)).toBeVisible()
+  })
+
+  test('spell slot use updates pips in real-time via e2e-player-update event', async ({ page }) => {
+    await setupGameMocks(page, { player: WIZARD_PLAYER })
+    await gotoGame(page)
+    await page.getByTestId('sheet-button').click()
+
+    const sheet = page.getByRole('dialog', { name: 'Character Sheet' })
+    await expect(sheet).toBeVisible({ timeout: 3000 })
+
+    // Initial state: 1 used, 3 available for 1st level
+    const row1 = sheet.getByTestId('spell-slot-row-1')
+    await expect(row1.getByTestId('pip-used')).toHaveCount(1)
+    await expect(row1.getByTestId('pip-available')).toHaveCount(3)
+
+    // Simulate Realtime player UPDATE — spell_slot_use increments used to 2
+    await page.evaluate((playerId) => {
+      window.dispatchEvent(
+        new CustomEvent(`e2e-player-update-${playerId}`, {
+          detail: {
+            stats: {
+              str: 8, dex: 14, con: 12, int: 18, wis: 12, cha: 10,
+              spell_slots: {
+                '1': { max: 4, used: 2 },
+                '2': { max: 2, used: 0 },
+                '3': { max: 0, used: 0 },
+              },
+              cantrips: ['Fire Bolt', 'Mage Hand'],
+            },
+          },
+        })
+      )
+    }, PLAYER_ID)
+
+    // After update: 2 used, 2 available for 1st level
+    await expect(row1.getByTestId('pip-used')).toHaveCount(2, { timeout: 2000 })
+    await expect(row1.getByTestId('pip-available')).toHaveCount(2, { timeout: 2000 })
+
+    // Count label updates to 2 / 4
+    await expect(sheet.getByTestId('spell-slot-label-1')).toHaveText('2 / 4', { timeout: 2000 })
+  })
+
+  test('long rest (spell_slots_recharge) resets all pips to available', async ({ page }) => {
+    // Start with used slots: 1st=1, 2nd=1
+    const partiallyUsedWizard = {
+      ...WIZARD_PLAYER,
+      stats: {
+        ...WIZARD_STATS,
+        spell_slots: {
+          '1': { max: 4, used: 3 },
+          '2': { max: 2, used: 1 },
+          '3': { max: 0, used: 0 },
+        },
+      },
+    }
+
+    await setupGameMocks(page, { player: partiallyUsedWizard })
+    await gotoGame(page)
+    await page.getByTestId('sheet-button').click()
+
+    const sheet = page.getByRole('dialog', { name: 'Character Sheet' })
+    await expect(sheet).toBeVisible({ timeout: 3000 })
+
+    // Initial: 3 used, 1 available for 1st level
+    const row1 = sheet.getByTestId('spell-slot-row-1')
+    await expect(row1.getByTestId('pip-used')).toHaveCount(3)
+
+    // Simulate long rest — all slots recharged (used=0)
+    await page.evaluate((playerId) => {
+      window.dispatchEvent(
+        new CustomEvent(`e2e-player-update-${playerId}`, {
+          detail: {
+            stats: {
+              str: 8, dex: 14, con: 12, int: 18, wis: 12, cha: 10,
+              spell_slots: {
+                '1': { max: 4, used: 0 },
+                '2': { max: 2, used: 0 },
+                '3': { max: 0, used: 0 },
+              },
+              cantrips: ['Fire Bolt', 'Mage Hand'],
+            },
+          },
+        })
+      )
+    }, PLAYER_ID)
+
+    // All slots recharged: 0 used, 4 available for 1st level
+    await expect(row1.getByTestId('pip-used')).toHaveCount(0, { timeout: 2000 })
+    await expect(row1.getByTestId('pip-available')).toHaveCount(4, { timeout: 2000 })
+
+    // 2nd level also recharged: 0 used, 2 available
+    const row2 = sheet.getByTestId('spell-slot-row-2')
+    await expect(row2.getByTestId('pip-used')).toHaveCount(0, { timeout: 2000 })
+    await expect(row2.getByTestId('pip-available')).toHaveCount(2, { timeout: 2000 })
+  })
+})

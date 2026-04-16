@@ -32,17 +32,9 @@ class TestCreateAction:
             return mock
 
         with patch("api.routes.actions.supabase_client") as mock_sb, patch(
-            "api.routes.actions.openai_client"
-        ) as mock_openai, patch(
             "api.routes.actions.dm_response_task"
-        ) as mock_task, patch(
-            "api.routes.actions.search_rag", return_value=[]
-        ):
+        ) as mock_task:
             mock_sb.table.side_effect = table_side_effect
-
-            mock_embedding = MagicMock()
-            mock_embedding.data = [MagicMock(embedding=[0.1] * 1536)]
-            mock_openai.embeddings.create.return_value = mock_embedding
 
             response = client.post(
                 "/games/game-uuid-1/actions",
@@ -98,8 +90,47 @@ class TestCreateAction:
         )
         assert response.status_code == 401
 
-    def test_create_action_embedding_failure_still_queues_task(self, client):
-        """Should return 202 and queue the task even when OpenAI embedding fails."""
+    def test_create_action_does_not_call_openai_embedding(self, client):
+        """DIN-64: actions endpoint must NOT call OpenAI — embedding moved to worker."""
+        mock_player_result = MagicMock()
+        mock_player_result.data = SAMPLE_PLAYER
+        mock_game_result = MagicMock()
+        mock_game_result.data = SAMPLE_GAME
+        mock_insert_result = MagicMock()
+        mock_insert_result.data = {"id": "msg-1"}
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "players":
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = (
+                    mock_player_result
+                )
+            elif name == "games":
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = (
+                    mock_game_result
+                )
+            elif name == "game_messages":
+                mock.insert.return_value.execute.return_value = mock_insert_result
+            return mock
+
+        # Patch openai_client from config to verify it's NOT imported/used in actions.py
+        with patch("api.routes.actions.supabase_client") as mock_sb, patch(
+            "api.routes.actions.dm_response_task"
+        ) as mock_task, patch("config.openai_client") as mock_openai:
+            mock_sb.table.side_effect = table_side_effect
+
+            response = client.post(
+                "/games/game-uuid-1/actions",
+                json={"action_text": "I attack the dragon!"},
+            )
+
+        assert response.status_code == 202
+        mock_task.send.assert_called_once()
+        # OpenAI must NOT be called in the request path (DIN-64)
+        mock_openai.embeddings.create.assert_not_called()
+
+    def test_create_action_send_no_rag_context_kwarg(self, client):
+        """DIN-64: dm_response_task.send() must be called without rag_context kwarg."""
         mock_player_result = MagicMock()
         mock_player_result.data = SAMPLE_PLAYER
         mock_game_result = MagicMock()
@@ -122,12 +153,9 @@ class TestCreateAction:
             return mock
 
         with patch("api.routes.actions.supabase_client") as mock_sb, patch(
-            "api.routes.actions.openai_client"
-        ) as mock_openai, patch(
             "api.routes.actions.dm_response_task"
         ) as mock_task:
             mock_sb.table.side_effect = table_side_effect
-            mock_openai.embeddings.create.side_effect = Exception("OpenAI down")
 
             response = client.post(
                 "/games/game-uuid-1/actions",
@@ -135,12 +163,9 @@ class TestCreateAction:
             )
 
         assert response.status_code == 202
-        data = response.json()
-        assert data["status"] == "queued"
         mock_task.send.assert_called_once()
-        # Verify rag_context was passed as empty list (fallback)
         call_kwargs = mock_task.send.call_args[1]
-        assert call_kwargs["rag_context"] == []
+        assert "rag_context" not in call_kwargs
 
     def test_create_action_invalid_game_state(self, client):
         """Should return 500 when game is not active."""
