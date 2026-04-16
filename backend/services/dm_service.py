@@ -8,6 +8,7 @@ import json
 import logging
 import math
 import os
+import random
 import re
 from typing import Any
 import httpx
@@ -36,6 +37,27 @@ def _proficiency_bonus(level: int) -> int:
         return 3
     return 2
 
+
+def _generate_dice_pool() -> dict[str, list[int]]:
+    """
+    Generate server-side random dice results for injection into the Claude prompt.
+
+    Claude is instructed to consume these in order rather than inventing results.
+    This ensures rolls follow the correct probability distribution for each die
+    type — e.g. multi-die totals (4d6) follow a bell curve, not Claude's biased
+    "plausible-looking" cluster around middle values.
+
+    Pool sizes are generous enough to cover any realistic combat encounter:
+    8 × d20 for checks/attacks/saves, plus 4–6 of each damage die.
+    """
+    return {
+        "d20": [random.randint(1, 20) for _ in range(8)],
+        "d12": [random.randint(1, 12) for _ in range(4)],
+        "d10": [random.randint(1, 10) for _ in range(4)],
+        "d8":  [random.randint(1, 8)  for _ in range(4)],
+        "d6":  [random.randint(1, 6)  for _ in range(6)],
+        "d4":  [random.randint(1, 4)  for _ in range(4)],
+    }
 
 def build_dm_system_prompt(
     game: dict,
@@ -146,6 +168,14 @@ def build_dm_system_prompt(
 
         party_lines.append(party_line)
 
+    # Generate a fresh random dice pool for this action.
+    # Claude will consume values in order rather than inventing results.
+    _pool = _generate_dice_pool()
+    _dice_pool_text = "\n".join(
+        f"  {die}: {chr(32).join(str(r) for r in results)}"
+        for die, results in _pool.items()
+    )
+
     return f"""You are {game['dm_persona']}. You are the Dungeon Master for a D&D 5e campaign called "{game['name']}".
 
 CURRENT PARTY:
@@ -159,12 +189,15 @@ RECENT SESSION HISTORY (last 20 messages, oldest first):
 RELEVANT PAST EVENTS (Context from RAG):
 {json.dumps(rag_context, indent=2) if rag_context else "No past events yet."}
 
+PRE-ROLLED DICE POOL — use these values in order, never invent your own results:
+{_dice_pool_text}
+
 RULES:
 1. Respond in character as the DM — never break the fourth wall
 2. Be vivid and engaging. Keep your response to 100 words.
    One paragraph if the action is simple, two if the stakes are high.
 3. Account for character abilities, equipment, and class features when narrating outcomes
-4. When a player's action requires an ability check or saving throw: determine the relevant ability and apply proficiency if the character's class would grant it for this skill, pick an appropriate DC (Very Easy 5 / Easy 10 / Medium 15 / Hard 20), generate a d20 result (1–20 — never outside this range), and embed the full roll in a <dice_rolls> block (see Rule 10). Narrate the outcome consistent with the success value. Read ability scores from the party list above — do not guess or invent modifiers.
+4. When a player's action requires an ability check or saving throw: determine the relevant ability and apply proficiency if the character's class would grant it for this skill, pick an appropriate DC (Very Easy 5 / Easy 10 / Medium 15 / Hard 20), take the next d20 value from the DICE POOL above, and embed the full roll in a <dice_rolls> block (see Rule 10). Narrate the outcome consistent with the success value. Read ability scores from the party list above — do not guess or invent modifiers.
 5. If important story events occur, mark them inline:
    <event type="combat|discovery|dialogue|death|milestone">Brief factual description</event>
 6. End with a clear invitation for the party to act
@@ -188,7 +221,9 @@ RULES:
    Search the walls for a hidden mechanism.
    </suggested_actions>
 10. DICE ROLLS: When you resolve a dice roll (ability check, saving throw, attack, or damage),
-   embed the result BEFORE your narrative text using this exact format:
+   take the next value from the appropriate column in the PRE-ROLLED DICE POOL above.
+   NEVER invent your own result — always consume the next unused pool value in order.
+   Embed the roll BEFORE your narrative text using this exact format:
    <dice_rolls>
    [
      {{
@@ -207,7 +242,7 @@ RULES:
      }}
    ]
    </dice_rolls>
-   Rules: result must satisfy 1 ≤ result ≤ (count × die_sides). Include one entry per distinct roll.
+   Rules: result must match the value taken from the DICE POOL. Include one entry per distinct roll.
    For attack rolls use "ac" (not "dc"). For ability checks/saves use "dc" (not "ac").
 11. COMBAT RULES:
    - When a player declares a combat action, adjudicate the exchange narratively:
