@@ -3,6 +3,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { GameMessage } from '@/lib/types/message'
+import {
+  type StreamSegment,
+  type SseEvent,
+  appendTextChunk,
+} from '@/lib/types/streaming'
 import { Game } from '@/lib/supabase/games'
 import { GameHeader } from './GameHeader'
 import { ChatLog } from './ChatLog'
@@ -49,6 +54,10 @@ export function GameSessionView({
   const [levelUpPayload, setLevelUpPayload] = useState<LevelUpPayload | null>(null)
   const [showLevelUpModal, setShowLevelUpModal] = useState(false)
   const [currentPlayerRow, setCurrentPlayerRow] = useState<PlayerRow | null>(null)
+  // DIN-66 live DM bubble. null = no active stream; non-null = bubble rendered
+  // below the chat list until Realtime DM INSERT reconciles (clears to null).
+  const [streamingSegments, setStreamingSegments] =
+    useState<StreamSegment[] | null>(null)
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isHost = game.created_by === userId
@@ -167,6 +176,9 @@ export function GameSessionView({
             // If DM or system (error) responded, we're no longer waiting
             if (newMsg.role === 'dm' || newMsg.role === 'system') {
               setIsWaitingForDm(false)
+              // DIN-66: reconcile — swap the live streaming bubble for the
+              // persisted DM message in a single render (no flash).
+              setStreamingSegments(null)
             }
           }
         }
@@ -301,6 +313,7 @@ export function GameSessionView({
         setMessages((prev) => [...prev, msg])
         if (msg.role === 'dm' || msg.role === 'system') {
           setIsWaitingForDm(false)
+          setStreamingSegments(null)
         }
       }
     }
@@ -360,7 +373,7 @@ export function GameSessionView({
   const handleSubmit = async (actionText: string) => {
     setShowRetryTimeout(false)
 
-    // Push optimistic message immediately so the player sees their action right away
+    // 1. Optimistic player message (DIN-64) — unchanged.
     const optimisticMsg: GameMessage = {
       id: `optimistic-${crypto.randomUUID()}`,
       game_id: gameId,
@@ -372,25 +385,104 @@ export function GameSessionView({
     setMessages((prev) => [...prev, optimisticMsg])
     setIsWaitingForDm(true)
 
+    // 2. Submit action — backend returns 202 quickly and spawns the
+    //    background streaming coroutine that publishes to Redis pub/sub.
+    let actionResponse: Response
     try {
-      const response = await fetch(`/api/games/${gameId}/actions`, {
+      actionResponse = await fetch(`/api/games/${gameId}/actions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action_text: actionText }),
       })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        // On error, remove the optimistic message and re-enable input
-        setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id))
-        setIsWaitingForDm(false)
-        console.error('Action failed:', errorData.error)
-      }
-      // On success, the real player message will arrive via Realtime and reconcile
-      // the optimistic message. DM response will also arrive via Realtime.
     } catch {
       setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id))
       setIsWaitingForDm(false)
+      return
+    }
+
+    if (!actionResponse.ok) {
+      let errorDetail: string | undefined
+      try {
+        errorDetail = (await actionResponse.json()).error
+      } catch {
+        // fall through
+      }
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id))
+      setIsWaitingForDm(false)
+      if (errorDetail) console.error('Action failed:', errorDetail)
+      return
+    }
+
+    // 3. Open SSE stream — bubble appears; tokens will stream in.
+    setStreamingSegments([])
+
+    let eventsResponse: Response
+    try {
+      eventsResponse = await fetch(`/api/games/${gameId}/events`)
+    } catch {
+      setStreamingSegments(null)
+      return
+    }
+
+    if (!eventsResponse.ok || !eventsResponse.body) {
+      setStreamingSegments(null)
+      return
+    }
+
+    const reader = eventsResponse.body.getReader()
+    const decoder = new TextDecoder()
+    let sseBuffer = ''
+
+    try {
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        sseBuffer += decoder.decode(value, { stream: true })
+
+        // SSE events are delimited by \n\n. Buffer partial frames across reads.
+        let sepIdx: number
+        while ((sepIdx = sseBuffer.indexOf('\n\n')) !== -1) {
+          const frame = sseBuffer.slice(0, sepIdx)
+          sseBuffer = sseBuffer.slice(sepIdx + 2)
+
+          for (const line of frame.split('\n')) {
+            if (!line.startsWith('data: ')) continue
+            let event: SseEvent
+            try {
+              event = JSON.parse(line.slice(6)) as SseEvent
+            } catch {
+              continue
+            }
+
+            if (event.type === 'chunk') {
+              setStreamingSegments((prev) =>
+                appendTextChunk(prev ?? [], event.text)
+              )
+            } else if (event.type === 'block') {
+              if (event.tag === 'dice_rolls') {
+                setStreamingSegments((prev) => [
+                  ...(prev ?? []),
+                  { kind: 'dice_rolls', content: event.content },
+                ])
+              } else if (event.tag === 'suggested_actions') {
+                const lines = event.content
+                  .trim()
+                  .split('\n')
+                  .map((line) => line.trim())
+                  .filter(Boolean)
+                setSuggestedActions(lines)
+              }
+              // 'event' and 'state_changes' consumed silently.
+            }
+            // 'done': keep streamingSegments until Realtime INSERT reconciles.
+          }
+        }
+      }
+    } catch {
+      // Network hiccup mid-stream: clear the bubble. The Realtime system
+      // message inserted by the backend (on stream failure) surfaces retry.
+      setStreamingSegments(null)
     }
   }
 
@@ -516,8 +608,11 @@ export function GameSessionView({
             isWaitingForDm={isWaitingForDm}
             onDeleteMessage={handleDeleteMessage}
             onEditMessage={handleEditMessage}
+            streamingSegments={streamingSegments}
           />
-          {isWaitingForDm && gameStatus === 'active' && <TypingIndicator />}
+          {isWaitingForDm &&
+            gameStatus === 'active' &&
+            streamingSegments === null && <TypingIndicator />}
           {showRetryTimeout && isWaitingForDm && gameStatus === 'active' && (
             <div style={{ flexShrink: 0, borderTop: '1px solid var(--dnd-brown)', background: 'var(--dnd-charcoal)', padding: '8px 24px' }}>
               <div style={{ maxWidth: '48rem', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', borderRadius: '6px', border: '1px solid rgba(192,57,43,0.3)', background: 'rgba(139,34,50,0.12)', padding: '8px 14px' }}>

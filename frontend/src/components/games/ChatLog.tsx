@@ -2,7 +2,9 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { GameMessage } from '@/lib/types/message'
+import type { StreamSegment } from '@/lib/types/streaming'
 import { ChatMessage } from './ChatMessage'
+import { StreamingDmMessage } from './StreamingDmMessage'
 
 interface ChatLogProps {
   messages: GameMessage[]
@@ -16,6 +18,13 @@ interface ChatLogProps {
   isWaitingForDm?: boolean
   onDeleteMessage?: (messageId: string) => void
   onEditMessage?: (messageId: string, content: string) => void
+  /**
+   * When non-null, a live DM bubble is rendered at the bottom of the chat
+   * mapping each segment to streaming text (with blinking cursor on the
+   * last text segment) or a complete dice_rolls display. Cleared to null
+   * once the real Realtime DM INSERT reconciles (DIN-66).
+   */
+  streamingSegments?: StreamSegment[] | null
 }
 
 export function ChatLog({
@@ -30,6 +39,7 @@ export function ChatLog({
   isWaitingForDm,
   onDeleteMessage,
   onEditMessage,
+  streamingSegments,
 }: ChatLogProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const topSentinelRef = useRef<HTMLDivElement>(null)
@@ -89,7 +99,7 @@ export function ChatLog({
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setHasNewMessages(true)
     }
-  }, [messages])
+  }, [messages, streamingSegments])
 
   // Handle scroll to detect if at bottom
   const handleScroll = () => {
@@ -245,6 +255,10 @@ export function ChatLog({
             />
           ))
         })()}
+
+        {streamingSegments !== null && streamingSegments !== undefined && (
+          <StreamingDmMessage segments={streamingSegments} />
+        )}
       </div>
 
       <div ref={bottomSentinelRef} />
