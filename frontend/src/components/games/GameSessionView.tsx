@@ -59,6 +59,9 @@ export function GameSessionView({
   const [streamingSegments, setStreamingSegments] =
     useState<StreamSegment[] | null>(null)
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // DIN-66 fallback: if Supabase Realtime INSERT is delayed after stream
+  // completion, force-clear streaming state after 3s to unblock the input.
+  const realtimeFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isHost = game.created_by === userId
 
@@ -179,6 +182,11 @@ export function GameSessionView({
               // DIN-66: reconcile — swap the live streaming bubble for the
               // persisted DM message in a single render (no flash).
               setStreamingSegments(null)
+              // Realtime arrived — cancel the stuck-input fallback timer.
+              if (realtimeFallbackRef.current) {
+                clearTimeout(realtimeFallbackRef.current)
+                realtimeFallbackRef.current = null
+              }
             }
           }
         }
@@ -246,6 +254,7 @@ export function GameSessionView({
       messagesSubscription?.unsubscribe()
       gamesSubscription?.unsubscribe()
       levelUpSubscription?.unsubscribe()
+      if (realtimeFallbackRef.current) clearTimeout(realtimeFallbackRef.current)
     }
   }, [gameId, userId])
 
@@ -475,7 +484,14 @@ export function GameSessionView({
               }
               // 'event' and 'state_changes' consumed silently.
             }
-            // 'done': keep streamingSegments until Realtime INSERT reconciles.
+            } else if (event.type === 'done') {
+              // Realtime INSERT fires shortly after done is published.
+              // Set a 3s fallback to unblock the input if Realtime is delayed.
+              if (realtimeFallbackRef.current) clearTimeout(realtimeFallbackRef.current)
+              realtimeFallbackRef.current = setTimeout(() => {
+                setIsWaitingForDm(false)
+                setStreamingSegments(null)
+              }, 3000)
           }
         }
       }
@@ -726,3 +742,4 @@ export function GameSessionView({
     </div>
   )
 }
+
