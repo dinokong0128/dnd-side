@@ -350,37 +350,54 @@ export function CharacterSheetPanel({ playerId, onClose }: CharacterSheetPanelPr
                 >
                   Level {player.level} {player.race} {player.character_class}
                 </p>
-                <span
-                  className="dnd-badge"
-                  style={{
-                    fontSize: '0.55rem',
-                    color:
-                      player.status === 'dead'
-                        ? '#e8a0a0'
-                        : player.status === 'active'
-                        ? '#6fcf97'
-                        : 'var(--dnd-parchment-dim, #8a7a60)',
-                    border: `1px solid ${
-                      player.status === 'dead'
-                        ? 'rgba(192,57,43,0.4)'
-                        : player.status === 'active'
-                        ? 'rgba(45,106,79,0.4)'
-                        : 'rgba(100,100,100,0.3)'
-                    }`,
-                    background:
-                      player.status === 'dead'
-                        ? 'rgba(139,34,50,0.12)'
-                        : player.status === 'active'
-                        ? 'rgba(45,106,79,0.12)'
-                        : 'rgba(60,60,60,0.15)',
-                    padding: '1px 6px',
-                    borderRadius: '3px',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.1em',
-                  }}
-                >
-                  {player.status}
-                </span>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <span
+                    className="dnd-badge"
+                    style={{
+                      fontSize: '0.55rem',
+                      color:
+                        player.status === 'dead'
+                          ? '#e8a0a0'
+                          : player.status === 'active'
+                          ? '#6fcf97'
+                          : 'var(--dnd-parchment-dim, #8a7a60)',
+                      border: `1px solid ${
+                        player.status === 'dead'
+                          ? 'rgba(192,57,43,0.4)'
+                          : player.status === 'active'
+                          ? 'rgba(45,106,79,0.4)'
+                          : 'rgba(100,100,100,0.3)'
+                      }`,
+                      background:
+                        player.status === 'dead'
+                          ? 'rgba(139,34,50,0.12)'
+                          : player.status === 'active'
+                          ? 'rgba(45,106,79,0.12)'
+                          : 'rgba(60,60,60,0.15)',
+                      padding: '1px 6px',
+                      borderRadius: '3px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.1em',
+                    }}
+                  >
+                    {player.status}
+                  </span>
+                  <span
+                    data-testid="level-badge"
+                    style={{
+                      fontFamily: "'Cinzel', serif",
+                      fontSize: '0.55rem',
+                      color: 'var(--dnd-gold, #c9a84c)',
+                      border: '1px solid rgba(201,168,76,0.35)',
+                      background: 'rgba(201,168,76,0.08)',
+                      padding: '1px 6px',
+                      borderRadius: '3px',
+                      letterSpacing: '0.08em',
+                    }}
+                  >
+                    {player.level}
+                  </span>
+                </div>
               </div>
 
               {/* HP section */}
@@ -454,6 +471,46 @@ export function CharacterSheetPanel({ playerId, onClose }: CharacterSheetPanelPr
                   </p>
                 )}
               </div>
+
+              {/* XP bar (DIN-28) */}
+              {(() => {
+                const XP_THRESHOLDS: Record<number, number> = { 1: 0, 2: 300, 3: 900, 4: 2700, 5: 6500, 6: 14000 }
+                const MVP_MAX_LEVEL = 5
+                const xp = player.stats.xp ?? 0
+                const lvl = player.level
+                const currentThreshold = XP_THRESHOLDS[lvl] ?? 0
+                const nextThreshold = XP_THRESHOLDS[lvl + 1]
+                const isMaxLevel = lvl >= MVP_MAX_LEVEL
+                const pct = isMaxLevel || !nextThreshold
+                  ? 100
+                  : Math.round(((xp - currentThreshold) / (nextThreshold - currentThreshold)) * 100)
+                return (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span style={{ fontFamily: "'Cinzel', serif", fontSize: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--dnd-parchment-dim, #8a7a60)' }}>
+                        Experience
+                      </span>
+                      <span style={{ fontFamily: "'Lora', serif", fontStyle: 'italic', fontSize: '0.65rem', color: 'var(--dnd-parchment-dim, #8a7a60)' }}>
+                        {isMaxLevel
+                          ? 'Max level'
+                          : `${xp.toLocaleString()} / ${nextThreshold?.toLocaleString()} to Lv ${lvl + 1}`}
+                      </span>
+                    </div>
+                    <div style={{ height: '5px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div
+                        data-testid="xp-bar"
+                        data-xp-pct={String(pct)}
+                        style={{
+                          height: '100%',
+                          width: `${pct}%`,
+                          background: 'var(--dnd-gold, #c9a84c)',
+                          transition: 'width 0.5s ease',
+                        }}
+                      />
+                    </div>
+                  </div>
+                )
+              })()}
 
               {/* Ability Scores */}
               <div>

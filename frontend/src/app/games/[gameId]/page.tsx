@@ -56,18 +56,12 @@ export default async function GamePage({ params }: GamePageProps) {
       <DashboardHeader />
       <div className="mx-auto max-w-2xl p-6">
         <div className="mb-6 space-y-2">
-          <h1
-            className="text-3xl font-bold tracking-wide"
-            style={{ fontFamily: "'Cinzel', serif", color: 'var(--dnd-parchment)' }}
-          >
+          <h1 className="dnd-heading text-2xl font-bold">
             {game.name}
           </h1>
-          <p style={{ color: 'var(--dnd-parchment-dim)' }}>
-            Status:{' '}
-            <span className="font-semibold capitalize">
-              {game.status}
-            </span>
-          </p>
+          <span className={`dnd-badge dnd-badge-${game.status}`}>
+            {game.status}
+          </span>
         </div>
 
         {game.created_by === user.id && game.status === 'lobby' && (
@@ -77,10 +71,7 @@ export default async function GamePage({ params }: GamePageProps) {
         )}
 
         <div className="dnd-card p-6">
-          <h2
-            className="mb-4 text-xl font-semibold tracking-wide"
-            style={{ fontFamily: "'Cinzel', serif", color: 'var(--dnd-parchment)' }}
-          >
+          <h2 className="dnd-heading mb-4 text-lg font-semibold">
             Your Character
           </h2>
           <CharacterLobbyPanel

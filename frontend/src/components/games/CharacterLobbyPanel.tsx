@@ -35,8 +35,8 @@ export function CharacterLobbyPanel({
   if (isEditing) {
     if (gameStatus !== 'lobby') {
       return (
-        <div className="rounded-lg bg-yellow-50 p-4 text-center">
-          <p className="text-sm text-yellow-800">
+        <div className="dnd-warning-box">
+          <p>
             Character creation is only available when the game is in lobby status.
           </p>
         </div>
@@ -69,15 +69,12 @@ export function CharacterLobbyPanel({
       onEdit={handleEdit}
     />
   ) : gameStatus === 'lobby' ? (
-    <button
-      onClick={handleEdit}
-      className="w-full rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
-    >
+    <button onClick={handleEdit} className="dnd-btn-primary">
       Create Your Character
     </button>
   ) : (
-    <div className="rounded-lg bg-yellow-50 p-4 text-center">
-      <p className="text-sm text-yellow-800">
+    <div className="dnd-warning-box">
+      <p>
         The game has started. No new characters can be created.
       </p>
     </div>

@@ -222,4 +222,29 @@ describe('CharacterSheetPanel', () => {
 
     expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', 'Character Sheet')
   })
+
+  describe('DIN-28: Level badge and XP bar', () => {
+    it('shows Level badge with correct level number', async () => {
+      ;(supabaseModule.createClient as jest.Mock).mockReturnValue(
+        buildMockSupabase({})  // mockPlayer has level: 3
+      )
+      render(<CharacterSheetPanel playerId="player-1" onClose={onClose} />)
+      await waitFor(() => screen.getByText('Thorin Ironforge'))
+      const badge = screen.getByTestId('level-badge')
+      expect(badge).toHaveTextContent('3')
+    })
+
+    it('XP bar renders with correct width percentage', async () => {
+      // Level 3 → 4: thresholds 900–2700. xp=1350 → (1350-900)/(2700-900) = 25%
+      ;(supabaseModule.createClient as jest.Mock).mockReturnValue(
+        buildMockSupabase({
+          playerData: { ...mockPlayer, level: 3, stats: { ...mockPlayer.stats, xp: 1350 } },
+        })
+      )
+      render(<CharacterSheetPanel playerId="player-1" onClose={onClose} />)
+      await waitFor(() => screen.getByText('Thorin Ironforge'))
+      const bar = screen.getByTestId('xp-bar')
+      expect(bar).toHaveAttribute('data-xp-pct', '25')
+    })
+  })
 })

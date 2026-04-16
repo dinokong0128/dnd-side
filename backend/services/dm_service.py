@@ -6,10 +6,13 @@ This module handles synchronous pre-processing before enqueueing.
 
 import json
 import logging
+import os
 import re
 from typing import Any
+import httpx
 from config import supabase_client
 from constants import GAME_STATUS_ACTIVE, PLAYER_STATUS_DEAD
+from utils.dnd import XP_THRESHOLDS
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +137,39 @@ def extract_state_changes(dm_response: str) -> dict:
     return parsed
 
 
-def apply_state_changes(state_changes: dict) -> None:
+def broadcast_level_up_available(game_id: str, character_id: str, new_level: int) -> None:
+    """Broadcast level_up_available event to Supabase Realtime channel via REST API."""
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    service_role_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    if not supabase_url or not service_role_key:
+        logger.warning("broadcast_level_up_available: missing SUPABASE_URL or key; skipping")
+        return
+    try:
+        httpx.post(
+            f"{supabase_url}/realtime/v1/api/broadcast",
+            headers={
+                "apikey": service_role_key,
+                "Authorization": f"Bearer {service_role_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "messages": [{
+                    "topic": f"realtime:game:{game_id}",
+                    "event": "level_up_available",
+                    "payload": {
+                        "type": "level_up_available",
+                        "character_id": character_id,
+                        "new_level": new_level,
+                    },
+                }]
+            },
+            timeout=5.0,
+        )
+    except Exception as e:
+        logger.error(f"broadcast_level_up_available: failed for game={game_id}: {e}")
+
+
+def apply_state_changes(state_changes: dict, game_id: str | None = None) -> None:
     """
     Apply mechanical state mutations from a <state_changes> block to the DB.
     All operations are best-effort — failures are logged but do NOT propagate.
@@ -234,6 +269,35 @@ def apply_state_changes(state_changes: dict) -> None:
             ).execute()
         except Exception as e:
             logger.error(f"apply_state_changes: spell_slots_recharge failed for {change}: {e}")
+
+    # XP awards (DIN-28)
+    for award in state_changes.get("xp_awards", []):
+        try:
+            character_id = award["character_id"]
+            amount = int(award["amount"])
+            player = (
+                supabase_client.table("players")
+                .select("stats, level")
+                .eq("id", character_id)
+                .single()
+                .execute()
+            )
+            stats = player.data.get("stats") or {}
+            current_xp = stats.get("xp") or 0
+            new_xp = current_xp + amount
+            stats["xp"] = new_xp
+            supabase_client.table("players").update({"stats": stats}).eq(
+                "id", character_id
+            ).execute()
+
+            # Check level threshold
+            current_level = player.data.get("level", 1)
+            next_level = current_level + 1
+            next_threshold = XP_THRESHOLDS.get(next_level)
+            if next_threshold is not None and new_xp >= next_threshold and game_id:
+                broadcast_level_up_available(game_id, character_id, next_level)
+        except Exception as e:
+            logger.error(f"apply_state_changes: xp_awards failed for {award}: {e}")
 
     # Inventory removals
     for item in state_changes.get("inventory_remove", []):

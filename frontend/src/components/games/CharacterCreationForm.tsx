@@ -130,18 +130,18 @@ export function CharacterCreationForm({
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         {formError && (
-          <div className="rounded bg-red-50 p-4 text-red-800">{formError}</div>
+          <div className="dnd-error-banner">{formError}</div>
         )}
 
         <div>
-          <label className="block text-sm font-medium text-gray-900">
+          <label className="dnd-label">
             Character Name
           </label>
           <div style={{ position: 'relative' }}>
             <input
               type="text"
               {...register('characterName')}
-              className="mt-2 w-full rounded border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="dnd-input mt-2"
               placeholder="Enter character name"
               style={{ paddingRight: '38px' }}
             />
@@ -176,19 +176,19 @@ export function CharacterCreationForm({
             </button>
           </div>
           {errors.characterName && (
-            <p className="mt-1 text-sm text-red-600">
+            <p className="dnd-field-error mt-1">
               {errors.characterName.message}
             </p>
           )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-900">
+          <label className="dnd-label">
             Character Class
           </label>
           <select
             {...register('characterClass')}
-            className="mt-2 w-full rounded border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="dnd-input mt-2"
           >
             {CHARACTER_CLASSES.map((cls) => (
               <option key={cls} value={cls}>
@@ -197,19 +197,19 @@ export function CharacterCreationForm({
             ))}
           </select>
           {errors.characterClass && (
-            <p className="mt-1 text-sm text-red-600">
+            <p className="dnd-field-error mt-1">
               {errors.characterClass.message}
             </p>
           )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-900">
+          <label className="dnd-label">
             Race
           </label>
           <select
             {...register('race')}
-            className="mt-2 w-full rounded border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="dnd-input mt-2"
           >
             {CHARACTER_RACES.map((race) => (
               <option key={race} value={race}>
@@ -218,14 +218,14 @@ export function CharacterCreationForm({
             ))}
           </select>
           {errors.race && (
-            <p className="mt-1 text-sm text-red-600">
+            <p className="dnd-field-error mt-1">
               {errors.race.message}
             </p>
           )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-900">
+          <label className="dnd-label">
             Level
           </label>
           <input
@@ -233,35 +233,33 @@ export function CharacterCreationForm({
             {...register('level', { valueAsNumber: true })}
             min="1"
             max="20"
-            className="mt-2 w-full rounded border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="dnd-input mt-2"
           />
           {errors.level && (
-            <p className="mt-1 text-sm text-red-600">
+            <p className="dnd-field-error mt-1">
               {errors.level.message}
             </p>
           )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-900 mb-3">
+          <label className="dnd-label mb-3">
             Ability Scores
           </label>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="dnd-stat-grid">
             {STAT_NAMES.map(({ key, label }) => (
-              <div key={key}>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  {label}
-                </label>
+              <div key={key} className="dnd-stat-box">
+                <label className="dnd-stat-label">{label}</label>
                 <input
                   type="number"
                   {...register(`stats.${key}`, { valueAsNumber: true })}
                   min="1"
                   max="20"
-                  className="w-full rounded border border-gray-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="dnd-stat-input"
                 />
                 {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                 {(errors.stats?.[key as keyof typeof errors.stats] as any)?.message && (
-                  <p className="mt-1 text-xs text-red-600">
+                  <p className="dnd-field-error mt-1 text-xs">
                     {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                     {(errors.stats?.[key as keyof typeof errors.stats] as any)?.message}
                   </p>
@@ -274,7 +272,7 @@ export function CharacterCreationForm({
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:bg-gray-400"
+          className="dnd-btn-primary"
         >
           {loading ? 'Saving...' : 'Save Character'}
         </button>

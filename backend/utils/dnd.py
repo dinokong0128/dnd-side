@@ -1,5 +1,108 @@
 """D&D 5e rules helpers for character generation."""
 
+# XP thresholds for levels 1–6 (MVP cap: level 5)
+XP_THRESHOLDS: dict[int, int] = {
+    1: 0,
+    2: 300,
+    3: 900,
+    4: 2700,
+    5: 6500,
+    6: 14000,
+}
+
+# Hit die sides by class (lowercase keys for case-insensitive lookup)
+HIT_DICE_BY_CLASS: dict[str, int] = {
+    "sorcerer": 6,
+    "wizard": 6,
+    "bard": 8,
+    "cleric": 8,
+    "druid": 8,
+    "monk": 8,
+    "rogue": 8,
+    "warlock": 8,
+    "fighter": 10,
+    "paladin": 10,
+    "ranger": 10,
+    "barbarian": 12,
+}
+
+# Class features unlocked at each level (levels 2–5, MVP scope)
+CLASS_FEATURES_BY_LEVEL: dict[str, dict[int, str]] = {
+    "barbarian": {
+        2: "Reckless Attack, Danger Sense",
+        3: "Primal Path feature",
+        4: "Ability Score Improvement",
+        5: "Extra Attack, Fast Movement",
+    },
+    "bard": {
+        2: "Jack of All Trades, Song of Rest",
+        3: "Bard College feature, Expertise",
+        4: "Ability Score Improvement",
+        5: "Bardic Inspiration (d8), Font of Inspiration",
+    },
+    "cleric": {
+        2: "Channel Divinity, Divine Domain feature",
+        3: "Divine Domain feature",
+        4: "Ability Score Improvement",
+        5: "Destroy Undead (CR 1/2)",
+    },
+    "druid": {
+        2: "Wild Shape, Druid Circle feature",
+        3: "Druid Circle feature",
+        4: "Wild Shape improvement, Ability Score Improvement",
+        5: "Wild Shape (CR 1)",
+    },
+    "fighter": {
+        2: "Action Surge, Fighting Style",
+        3: "Martial Archetype feature",
+        4: "Ability Score Improvement",
+        5: "Extra Attack",
+    },
+    "monk": {
+        2: "Ki, Unarmored Movement",
+        3: "Monastic Tradition feature, Deflect Missiles",
+        4: "Slow Fall, Ability Score Improvement",
+        5: "Extra Attack, Stunning Strike",
+    },
+    "paladin": {
+        2: "Divine Smite, Fighting Style, Spellcasting",
+        3: "Sacred Oath feature, Divine Health",
+        4: "Ability Score Improvement",
+        5: "Extra Attack",
+    },
+    "ranger": {
+        2: "Fighting Style, Spellcasting, Primeval Awareness",
+        3: "Ranger Archetype feature, Primeval Awareness",
+        4: "Ability Score Improvement",
+        5: "Extra Attack",
+    },
+    "rogue": {
+        2: "Cunning Action",
+        3: "Roguish Archetype feature, Sneak Attack (2d6)",
+        4: "Ability Score Improvement",
+        5: "Uncanny Dodge, Sneak Attack (3d6)",
+    },
+    "sorcerer": {
+        2: "Font of Magic",
+        3: "Sorcerous Origin feature, Metamagic",
+        4: "Ability Score Improvement",
+        5: "Sorcerous Origin feature",
+    },
+    "warlock": {
+        2: "Eldritch Invocations",
+        3: "Pact Boon",
+        4: "Ability Score Improvement",
+        5: "Eldritch Invocations improvement",
+    },
+    "wizard": {
+        2: "Arcane Tradition feature",
+        3: "Arcane Tradition feature",
+        4: "Ability Score Improvement",
+        5: "Arcane Tradition feature",
+    },
+}
+
+
 HIT_DIE: dict[str, int] = {
     "Barbarian": 12,
     "Fighter": 10,

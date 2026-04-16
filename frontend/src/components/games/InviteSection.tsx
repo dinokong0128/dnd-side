@@ -47,14 +47,12 @@ export function InviteSection({ gameId }: InviteSectionProps) {
   }
 
   return (
-    <div className="rounded-lg bg-white p-6 shadow-sm">
-      <h2 className="mb-4 text-xl font-semibold text-gray-900">
-        Invite Players
-      </h2>
+    <div className="dnd-card p-6">
+      <h2 className="dnd-heading mb-4 text-lg font-semibold">⚔ Invite Players</h2>
 
       {!inviteUrl ? (
         <div>
-          <p className="mb-4 text-sm text-gray-600">
+          <p className="dnd-subheading mb-4 text-sm">
             Generate an invite link to share with your players. Each link is
             single-use.
           </p>
@@ -62,14 +60,15 @@ export function InviteSection({ gameId }: InviteSectionProps) {
             data-testid="generate-invite-button"
             onClick={handleGenerate}
             disabled={loading}
-            className="rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:bg-gray-400"
+            className="dnd-btn-primary"
+            style={{ width: 'auto' }}
           >
             {loading ? 'Generating...' : 'Generate Invite Link'}
           </button>
         </div>
       ) : (
         <div>
-          <p className="mb-2 text-sm text-gray-600">
+          <p className="dnd-subheading mb-2 text-sm">
             Share this link with a player:
           </p>
           <div className="flex gap-2">
@@ -78,12 +77,12 @@ export function InviteSection({ gameId }: InviteSectionProps) {
               type="text"
               readOnly
               value={inviteUrl}
-              className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm text-gray-700"
+              className="dnd-input flex-1 text-sm"
             />
             <button
               data-testid="copy-button"
               onClick={handleCopy}
-              className="rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+              className="dnd-btn-copy"
             >
               {copied ? 'Copied!' : 'Copy'}
             </button>
@@ -94,7 +93,8 @@ export function InviteSection({ gameId }: InviteSectionProps) {
               setInviteUrl('')
               setCopied(false)
             }}
-            className="mt-3 text-sm text-blue-600 hover:text-blue-800"
+            className="dnd-link mt-3 text-sm"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
           >
             Generate another link
           </button>
@@ -104,7 +104,7 @@ export function InviteSection({ gameId }: InviteSectionProps) {
       {error && (
         <div
           data-testid="invite-error"
-          className="mt-3 rounded bg-red-50 p-3 text-sm text-red-800"
+          className="dnd-error-banner mt-3 text-sm"
         >
           {error}
         </div>

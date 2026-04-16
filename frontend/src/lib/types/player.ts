@@ -17,6 +17,7 @@ export type PlayerRow = {
     cha: number
     spell_slots?: Record<string, { max: number; used: number }> | null
     cantrips?: string[]
+    xp?: number
   }
   status: 'active' | 'dead' | 'inactive'
   joined_at: string

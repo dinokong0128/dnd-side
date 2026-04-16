@@ -409,11 +409,14 @@ describe('GameSessionView', () => {
     })
 
     it('retry banner disappears when isWaitingForDm goes false via Realtime', async () => {
-      let realtimeCallback: ((payload: any) => void) | null = null
+      // Capture the messages INSERT callback specifically (not just the last .on() call)
+      let insertCallback: ((payload: any) => void) | null = null
 
       const channelObj: any = {
-        on: jest.fn().mockImplementation((_event: any, _filter: any, cb: any) => {
-          realtimeCallback = cb
+        on: jest.fn().mockImplementation((event: any, filter: any, cb: any) => {
+          if (event === 'postgres_changes' && filter?.event === 'INSERT') {
+            insertCallback = cb
+          }
           return channelObj
         }),
         subscribe: jest.fn().mockReturnValue({ unsubscribe: jest.fn() }),
@@ -437,7 +440,7 @@ describe('GameSessionView', () => {
 
       // Simulate DM response arriving via Realtime
       act(() => {
-        realtimeCallback?.({
+        insertCallback?.({
           new: {
             id: 'msg-dm',
             game_id: 'game-1',
