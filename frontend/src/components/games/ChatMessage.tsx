@@ -83,6 +83,7 @@ export function ChatMessage({
           style={{
             background: 'rgba(45, 106, 79, 0.12)',
             borderColor: 'rgba(45, 106, 79, 0.25)',
+            animation: 'dnd-msg-fade-in 0.18s ease',
           }}
         >
           <div
@@ -270,6 +271,12 @@ export function ChatMessage({
           </p>
         </div>
       </div>
+      <style jsx>{`
+        @keyframes dnd-msg-fade-in {
+          from { opacity: 0; transform: translateY(2px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     )
   }
 
