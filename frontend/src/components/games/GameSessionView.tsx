@@ -492,6 +492,7 @@ export function GameSessionView({
                 setStreamingSegments(null)
               }, 3000)
             }
+          }
         }
       }
     } catch {
