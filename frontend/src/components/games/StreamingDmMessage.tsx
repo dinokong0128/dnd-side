@@ -224,23 +224,37 @@ export function StreamingDmMessage({ segments }: StreamingDmMessageProps) {
           }
 
           const isLastText = idx === lastTextIdx
+          // Split on double-newlines so paragraph breaks render as tight
+          // spacing (~0.4em) rather than a full blank line from pre-wrap.
+          const paragraphs = segment.content.split('\n\n').filter((p) => p.length > 0)
           return (
-            <p
-              key={`text-${idx}`}
-              className="font-serif italic"
-              style={{ color: 'var(--dnd-parchment)', whiteSpace: 'pre-wrap' }}
-            >
-              {segment.content}
-              {isLastText && (
-                <span
-                  aria-hidden="true"
-                  data-testid="streaming-cursor"
-                  className="streaming-cursor"
-                >
-                  |
-                </span>
-              )}
-            </p>
+            <>
+              {paragraphs.map((para, pIdx) => {
+                const isVeryLast = isLastText && pIdx === paragraphs.length - 1
+                return (
+                  <p
+                    key={`text-${idx}-p${pIdx}`}
+                    className="font-serif italic"
+                    style={{
+                      color: 'var(--dnd-parchment)',
+                      margin: 0,
+                      marginBottom: pIdx < paragraphs.length - 1 ? '0.4em' : 0,
+                    }}
+                  >
+                    {para}
+                    {isVeryLast && (
+                      <span
+                        aria-hidden="true"
+                        data-testid="streaming-cursor"
+                        className="streaming-cursor"
+                      >
+                        |
+                      </span>
+                    )}
+                  </p>
+                )
+              })}
+            </>
           )
         })}
 
