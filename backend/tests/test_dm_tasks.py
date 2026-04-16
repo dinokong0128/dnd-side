@@ -19,6 +19,7 @@ with patch("config.supabase_client", MagicMock()), patch(
 ) as mock_embed_text:
     from tasks.dm_tasks import (
         dm_response_task,
+        dm_bookkeeping_task,
         generate_opening_narration,
         generate_pause_message,
         generate_end_message,
@@ -1960,3 +1961,123 @@ class TestDin28XpAwards:
             )
 
         mock_broadcast.assert_not_called()
+
+
+
+class TestDmBookkeepingTask:
+    """Tests for dm_bookkeeping_task (DIN-66)."""
+
+    def test_updates_suggested_actions_and_timestamp(self):
+        """Bookkeeping writes suggested_actions + updated_at to games."""
+        raw_response = (
+            "The path forks.\n<suggested_actions>\nGo left.\nGo right.\n"
+            "</suggested_actions>"
+        )
+        captured: list[dict] = []
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "games":
+                def capture_update(row):
+                    captured.append(row)
+                    return MagicMock(
+                        match=MagicMock(
+                            return_value=MagicMock(
+                                execute=MagicMock(return_value=MagicMock())
+                            )
+                        )
+                    )
+                mock.update.side_effect = capture_update
+            return mock
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.embed_text"
+        ):
+            mock_sb.table.side_effect = table_side_effect
+            dm_bookkeeping_task.fn("game-1", raw_response)
+
+        assert len(captured) == 1
+        assert "updated_at" in captured[0]
+        assert captured[0]["suggested_actions"] == ["Go left.", "Go right."]
+
+    def test_embeds_events_and_inserts_to_game_events(self):
+        raw_response = (
+            'The goblin falls. <event type="combat">Goblin slain</event> '
+            'The party rests. <event type="milestone">Survived</event>'
+        )
+        captured_rows: list[list] = []
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "games":
+                mock.update.return_value.match.return_value.execute.return_value = MagicMock()
+            elif name == "game_events":
+                def capture_insert(rows):
+                    captured_rows.append(rows)
+                    return MagicMock(execute=MagicMock(return_value=MagicMock()))
+                mock.insert.side_effect = capture_insert
+            return mock
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.embed_text"
+        ) as mock_embed:
+            mock_sb.table.side_effect = table_side_effect
+            mock_embed.return_value = [0.1] * 1536
+            dm_bookkeeping_task.fn("game-1", raw_response)
+
+        assert len(captured_rows) == 1
+        rows = captured_rows[0]
+        assert len(rows) == 2
+        assert rows[0]["event_type"] == "combat"
+        assert rows[0]["summary"] == "Goblin slain"
+        assert rows[0]["embedding"] == [0.1] * 1536
+        assert rows[1]["event_type"] == "milestone"
+
+    def test_no_events_skips_game_events_insert(self):
+        raw_response = (
+            "Just narration.\n<suggested_actions>\nLook around.\n"
+            "</suggested_actions>"
+        )
+        captured_updates: list[dict] = []
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "games":
+                def capture_update(row):
+                    captured_updates.append(row)
+                    return MagicMock(
+                        match=MagicMock(
+                            return_value=MagicMock(
+                                execute=MagicMock(return_value=MagicMock())
+                            )
+                        )
+                    )
+                mock.update.side_effect = capture_update
+            return mock
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.embed_text"
+        ) as mock_embed:
+            mock_sb.table.side_effect = table_side_effect
+            dm_bookkeeping_task.fn("game-1", raw_response)
+            mock_embed.assert_not_called()
+
+        assert len(captured_updates) == 1
+        assert captured_updates[0]["suggested_actions"] == ["Look around."]
+
+    def test_exception_reraised_for_dramatiq_retry(self):
+        raw_response = 'Thing. <event type="combat">x</event>'
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "game_events":
+                mock.insert.side_effect = RuntimeError("db down")
+            return mock
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.embed_text"
+        ) as mock_embed:
+            mock_sb.table.side_effect = table_side_effect
+            mock_embed.return_value = [0.1] * 1536
+            with pytest.raises(RuntimeError):
+                dm_bookkeeping_task.fn("game-1", raw_response)

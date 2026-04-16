@@ -14,13 +14,28 @@ jest.mock('../GameHeader', () => ({
 }))
 
 jest.mock('../ChatLog', () => ({
-  ChatLog: ({ onLoadMore, hasMoreMessages, isLoadingMore, messages, userId, onDeleteMessage, onEditMessage }: any) => (
+  ChatLog: ({ onLoadMore, hasMoreMessages, isLoadingMore, messages, userId, onDeleteMessage, onEditMessage, streamingSegments }: any) => (
     <div data-testid="chat-log">
       <button data-testid="load-more" onClick={onLoadMore}>Load more</button>
       <div data-testid="has-more">{hasMoreMessages ? 'true' : 'false'}</div>
       <div data-testid="is-loading-more">{isLoadingMore ? 'true' : 'false'}</div>
       <div data-testid="messages-count">{messages ? messages.length : 0}</div>
       <div data-testid="chat-log-user-id">{userId || ''}</div>
+      <div data-testid="streaming-active">{streamingSegments === null || streamingSegments === undefined ? 'false' : 'true'}</div>
+      <div data-testid="streaming-segments-count">{streamingSegments ? streamingSegments.length : 0}</div>
+      <div data-testid="streaming-text">
+        {streamingSegments
+          ? streamingSegments
+              .filter((s: any) => s.kind === 'text')
+              .map((s: any) => s.content)
+              .join('')
+          : ''}
+      </div>
+      <div data-testid="streaming-dice-count">
+        {streamingSegments
+          ? streamingSegments.filter((s: any) => s.kind === 'dice_rolls').length
+          : 0}
+      </div>
       <button data-testid="trigger-delete" onClick={() => onDeleteMessage?.('msg-1')}>Delete</button>
       <button data-testid="trigger-edit" onClick={() => onEditMessage?.('msg-1', 'new content')}>Edit</button>
     </div>
@@ -626,6 +641,291 @@ describe('GameSessionView', () => {
         expect(screen.getByTestId('messages-count')).toHaveTextContent('0')
         expect(screen.getByTestId('is-waiting')).toHaveTextContent('false')
       })
+    })
+  })
+
+  describe('DIN-66: streaming DM responses', () => {
+    /** Build a fetch mock that returns a ReadableStream of SSE frames. */
+    function buildStreamResponse(frames: string[]) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { TextEncoder: NodeTextEncoder } = require('util')
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { ReadableStream: NodeReadableStream } = require('stream/web')
+      const encoder = new NodeTextEncoder()
+      const stream = new NodeReadableStream({
+        start(controller: ReadableStreamDefaultController<Uint8Array>) {
+          for (const frame of frames) {
+            controller.enqueue(encoder.encode(frame))
+          }
+          controller.close()
+        },
+      })
+      return { ok: true, status: 200, body: stream }
+    }
+
+    /** Queue action POST (202 JSON) + events GET (SSE stream) fetch responses. */
+    function mockTwoFetches(frames: string[]) {
+      ;(global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 202,
+          json: async () => ({ message_id: 'msg-1', status: 'queued' }),
+        })
+        .mockResolvedValueOnce(buildStreamResponse(frames))
+    }
+
+    it('opens an empty streaming bubble after the 202 response', async () => {
+      testContext.playersData = [
+        { id: 'player-1', profile_id: 'user-1', character_name: 'Thorin' },
+      ]
+      // POST /actions resolves; GET /events never resolves so we can observe
+      // the empty bubble before any chunks arrive.
+      ;(global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 202,
+          json: async () => ({ message_id: 'msg-1', status: 'queued' }),
+        })
+        .mockReturnValueOnce(new Promise(() => {}))
+
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+      await waitFor(() =>
+        expect(screen.getByTestId('chat-input')).toBeInTheDocument()
+      )
+
+      act(() => {
+        fireEvent.click(screen.getByTestId('submit-action'))
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('streaming-active')).toHaveTextContent('true')
+      })
+      expect(screen.getByTestId('streaming-segments-count')).toHaveTextContent(
+        '0'
+      )
+    })
+
+    it('appends chunk events to the streaming bubble text', async () => {
+      testContext.playersData = [
+        { id: 'player-1', profile_id: 'user-1', character_name: 'Thorin' },
+      ]
+      mockTwoFetches([
+        'data: {"type":"chunk","text":"The goblin "}\n\n',
+        'data: {"type":"chunk","text":"lunges."}\n\n',
+      ])
+
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+      await waitFor(() =>
+        expect(screen.getByTestId('chat-input')).toBeInTheDocument()
+      )
+
+      act(() => {
+        fireEvent.click(screen.getByTestId('submit-action'))
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('streaming-text')).toHaveTextContent(
+          'The goblin lunges.'
+        )
+      })
+    })
+
+    it('dice_rolls block produces a dice segment', async () => {
+      testContext.playersData = [
+        { id: 'player-1', profile_id: 'user-1', character_name: 'Thorin' },
+      ]
+      const diceContent = JSON.stringify([
+        {
+          type: 'dice_roll',
+          die: 'd20',
+          count: 1,
+          result: 15,
+          modifier: 2,
+          total: 17,
+          label: 'Stealth',
+        },
+      ])
+
+      mockTwoFetches([
+        'data: {"type":"chunk","text":"Rolling... "}\n\n',
+        `data: ${JSON.stringify({ type: 'block', tag: 'dice_rolls', attributes: {}, content: diceContent })}\n\n`,
+        'data: {"type":"chunk","text":" You sneak."}\n\n',
+        'data: {"type":"done"}\n\n',
+      ])
+
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+      await waitFor(() =>
+        expect(screen.getByTestId('chat-input')).toBeInTheDocument()
+      )
+
+      act(() => {
+        fireEvent.click(screen.getByTestId('submit-action'))
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('streaming-dice-count')).toHaveTextContent('1')
+      })
+      await waitFor(() => {
+        expect(screen.getByTestId('streaming-text')).toHaveTextContent(
+          /Rolling\.\.\.\s*You sneak\./
+        )
+      })
+    })
+
+    it('suggested_actions block mid-stream updates ChatInput suggestions', async () => {
+      testContext.playersData = [
+        { id: 'player-1', profile_id: 'user-1', character_name: 'Thorin' },
+      ]
+      mockTwoFetches([
+        'data: {"type":"chunk","text":"You wake up."}\n\n',
+        `data: ${JSON.stringify({
+          type: 'block',
+          tag: 'suggested_actions',
+          attributes: {},
+          content: '\nLook around.\nStand up.\n',
+        })}\n\n`,
+        'data: {"type":"done"}\n\n',
+      ])
+
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+      await waitFor(() =>
+        expect(screen.getByTestId('chat-input')).toBeInTheDocument()
+      )
+
+      act(() => {
+        fireEvent.click(screen.getByTestId('submit-action'))
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('suggested-actions-count')).toHaveTextContent(
+          '2'
+        )
+      })
+    })
+
+    it('event and state_changes blocks are consumed silently', async () => {
+      testContext.playersData = [
+        { id: 'player-1', profile_id: 'user-1', character_name: 'Thorin' },
+      ]
+      mockTwoFetches([
+        'data: {"type":"chunk","text":"Start. "}\n\n',
+        `data: ${JSON.stringify({
+          type: 'block',
+          tag: 'event',
+          attributes: { type: 'combat' },
+          content: 'Goblin slain',
+        })}\n\n`,
+        `data: ${JSON.stringify({
+          type: 'block',
+          tag: 'state_changes',
+          attributes: {},
+          content: '{"hp_changes":[]}',
+        })}\n\n`,
+        'data: {"type":"chunk","text":"End."}\n\n',
+        'data: {"type":"done"}\n\n',
+      ])
+
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+      await waitFor(() =>
+        expect(screen.getByTestId('chat-input')).toBeInTheDocument()
+      )
+
+      act(() => {
+        fireEvent.click(screen.getByTestId('submit-action'))
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('streaming-text')).toHaveTextContent(
+          /Start\.\s*End\./
+        )
+      })
+      expect(screen.getByTestId('streaming-dice-count')).toHaveTextContent('0')
+      expect(screen.getByTestId('streaming-text').textContent).not.toContain(
+        'Goblin slain'
+      )
+    })
+
+    it('Realtime DM INSERT clears the streaming bubble (reconciliation)', async () => {
+      const realtimeCallbacks: Array<{ event: string; cb: (payload: any) => void }> = []
+      const channelObj: any = {
+        on: jest
+          .fn()
+          .mockImplementation((_event: any, filter: any, cb: any) => {
+            realtimeCallbacks.push({ event: filter?.event, cb })
+            return channelObj
+          }),
+        subscribe: jest.fn().mockReturnValue({ unsubscribe: jest.fn() }),
+      }
+      mockSupabaseClient.channel.mockReturnValue(channelObj)
+
+      testContext.playersData = [
+        { id: 'player-1', profile_id: 'user-1', character_name: 'Thorin' },
+      ]
+      mockTwoFetches([
+        'data: {"type":"chunk","text":"Streaming text"}\n\n',
+        'data: {"type":"done"}\n\n',
+      ])
+
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+      await waitFor(() =>
+        expect(screen.getByTestId('chat-input')).toBeInTheDocument()
+      )
+
+      act(() => {
+        fireEvent.click(screen.getByTestId('submit-action'))
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('streaming-active')).toHaveTextContent('true')
+      })
+
+      const insertCb = realtimeCallbacks.find((c) => c.event === 'INSERT')?.cb
+      expect(insertCb).toBeDefined()
+      act(() => {
+        insertCb?.({
+          new: {
+            id: 'dm-msg-1',
+            game_id: 'game-1',
+            role: 'dm',
+            profile_id: null,
+            content: 'Streaming text',
+            created_at: new Date().toISOString(),
+          },
+        })
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('streaming-active')).toHaveTextContent('false')
+      })
+      expect(screen.getByTestId('is-waiting')).toHaveTextContent('false')
+    })
+
+    it('non-ok action response removes optimistic and does not open stream', async () => {
+      ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: async () => ({ error: 'boom' }),
+      })
+      testContext.playersData = [
+        { id: 'player-1', profile_id: 'user-1', character_name: 'Thorin' },
+      ]
+
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+      await waitFor(() =>
+        expect(screen.getByTestId('chat-input')).toBeInTheDocument()
+      )
+
+      act(() => {
+        fireEvent.click(screen.getByTestId('submit-action'))
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('messages-count')).toHaveTextContent('0')
+        expect(screen.getByTestId('is-waiting')).toHaveTextContent('false')
+        expect(screen.getByTestId('streaming-active')).toHaveTextContent('false')
+      })
+      // Only the /actions POST was called — no /events fetch.
+      expect(global.fetch).toHaveBeenCalledTimes(1)
     })
   })
 

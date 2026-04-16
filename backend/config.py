@@ -54,9 +54,14 @@ supabase_client = create_client(
 )
 
 # Anthropic client
-from anthropic import Anthropic
+from anthropic import Anthropic, AsyncAnthropic
 
 anthropic_client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+
+# Async Anthropic — used only by the SSE streaming path in actions.py.
+# Dramatiq tasks and all non-streaming narration paths keep using the sync
+# anthropic_client above.
+anthropic_async_client = AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
 # OpenAI client with connection reuse (DIN-65)
 import httpx
@@ -73,3 +78,10 @@ openai_client = OpenAI(
         timeout=httpx.Timeout(30.0),
     ),
 )
+
+# Async Redis — used only by the SSE streaming path for pub/sub
+# (publish from _stream_to_redis; subscribe from the /events endpoint).
+# The sync redis_client in redis_broker.py (Dramatiq broker) is unchanged.
+import redis.asyncio as aioredis
+
+redis_async_client = aioredis.from_url(settings.REDIS_URL)

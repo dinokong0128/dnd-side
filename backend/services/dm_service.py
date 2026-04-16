@@ -6,6 +6,7 @@ This module handles synchronous pre-processing before enqueueing.
 
 import json
 import logging
+import math
 import os
 import re
 from typing import Any
@@ -15,6 +16,221 @@ from constants import GAME_STATUS_ACTIVE, PLAYER_STATUS_DEAD
 from utils.dnd import XP_THRESHOLDS
 
 logger = logging.getLogger(__name__)
+
+
+def _ability_mod(score: int) -> str:
+    """Format an ability score modifier with sign (e.g. +3 or -1)."""
+    m = math.floor((score - 10) / 2)
+    return f"{m:+d}"
+
+
+def _proficiency_bonus(level: int) -> int:
+    """D&D 5e proficiency bonus progression."""
+    if level >= 17:
+        return 6
+    if level >= 13:
+        return 5
+    if level >= 9:
+        return 4
+    if level >= 5:
+        return 3
+    return 2
+
+
+def build_dm_system_prompt(
+    game: dict,
+    players: list[dict],
+    inv_by_player: dict[str, list[dict]],
+    recent_messages: list[dict],
+    rag_context: list[dict],
+    action_text: str,
+) -> str:
+    """
+    Build the Claude system prompt for a player action (DIN-66).
+
+    Shared by both the streaming /actions route and `dm_response_task`
+    (non-streaming narration paths). Pure function — no I/O. `recent_messages`
+    must be in newest-first order (matches the DB ordering); this function
+    reverses it internally for chronological prompt inclusion.
+    """
+    message_history: list[str] = []
+    for msg in reversed(recent_messages or []):
+        if msg["role"] == "dm":
+            message_history.append(f"DM: {msg['content']}")
+        elif msg["role"] == "player":
+            player_name = next(
+                (
+                    p["character_name"]
+                    for p in players
+                    if p.get("profile_id") == msg.get("profile_id")
+                ),
+                "Unknown Player",
+            )
+            message_history.append(f"{player_name}: {msg['content']}")
+
+    message_history_text = (
+        "\n\n".join(message_history) if message_history else "No messages yet."
+    )
+
+    party_lines: list[str] = []
+    for p in players:
+        inv = inv_by_player.get(p["id"], [])
+        items = (
+            ", ".join(
+                (
+                    f"{i['item_name']} (x{i['quantity']})"
+                    if i["quantity"] > 1
+                    else i["item_name"]
+                )
+                for i in inv
+            )
+            or "no equipment"
+        )
+
+        stats = p.get("stats") or {}
+        str_score = stats.get("str", 10)
+        dex_score = stats.get("dex", 10)
+        con_score = stats.get("con", 10)
+        int_score = stats.get("int", 10)
+        wis_score = stats.get("wis", 10)
+        cha_score = stats.get("cha", 10)
+
+        level = p.get("level", 1)
+        prof_bonus = _proficiency_bonus(level)
+
+        party_line = (
+            f"- {p['character_name']} [ID: {p['id']}], Level {level} "
+            f"{p.get('race', 'Human')} {p['character_class']}.\n"
+            f"  HP: {p['hp_current']}/{p['hp_max']}.\n"
+            f"  STR {str_score} ({_ability_mod(str_score)}), DEX {dex_score} ({_ability_mod(dex_score)}), "
+            f"CON {con_score} ({_ability_mod(con_score)}),\n"
+            f"  INT {int_score} ({_ability_mod(int_score)}), WIS {wis_score} ({_ability_mod(wis_score)}), "
+            f"CHA {cha_score} ({_ability_mod(cha_score)})\n"
+            f"  Proficiency bonus: +{prof_bonus}\n"
+            f"  Equipment: {items}"
+        )
+
+        spell_slots = stats.get("spell_slots")
+        if spell_slots:
+            _ordinals = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 5: "5th"}
+            slot_parts = []
+            for lvl_key in sorted(
+                (k for k in spell_slots.keys() if isinstance(k, str) and k.isdigit()),
+                key=int,
+            ):
+                slot = spell_slots[lvl_key]
+                lvl_int = int(lvl_key)
+                if slot.get("max", 0) > 0:
+                    remaining = slot["max"] - slot.get("used", 0)
+                    ordinal = _ordinals.get(lvl_int, f"{lvl_int}th")
+                    slot_parts.append(f"{ordinal}: {remaining}/{slot['max']}")
+            if slot_parts:
+                party_line += f"\n  Spell slots: {', '.join(slot_parts)}"
+
+            cls_lower = p.get("character_class", "").lower()
+            _caster_ability = {
+                "wizard": int_score, "sorcerer": cha_score, "bard": cha_score,
+                "cleric": wis_score, "druid": wis_score, "ranger": wis_score,
+                "paladin": cha_score, "warlock": cha_score,
+            }
+            if cls_lower in _caster_ability:
+                sp_ability = _caster_ability[cls_lower]
+                sp_mod = math.floor((sp_ability - 10) / 2)
+                spell_dc = 8 + prof_bonus + sp_mod
+                spell_atk = prof_bonus + sp_mod
+                party_line += f"\n  Spell save DC: {spell_dc} | Spell attack: {spell_atk:+d}"
+
+        cantrips = stats.get("cantrips")
+        if cantrips:
+            party_line += f"\n  Cantrips (unlimited): {', '.join(cantrips)}"
+
+        party_lines.append(party_line)
+
+    return f"""You are {game['dm_persona']}. You are the Dungeon Master for a D&D 5e campaign called "{game['name']}".
+
+CURRENT PARTY:
+{chr(10).join(party_lines)}
+
+RECENT SESSION HISTORY (last 20 messages, oldest first):
+---
+{message_history_text}
+---
+
+RELEVANT PAST EVENTS (Context from RAG):
+{json.dumps(rag_context, indent=2) if rag_context else "No past events yet."}
+
+RULES:
+1. Respond in character as the DM — never break the fourth wall
+2. Be vivid and engaging but keep responses to 2–3 short paragraphs (~100 words total)
+3. Account for character abilities, equipment, and class features when narrating outcomes
+4. When a player's action requires an ability check or saving throw: determine the relevant ability and apply proficiency if the character's class would grant it for this skill, pick an appropriate DC (Very Easy 5 / Easy 10 / Medium 15 / Hard 20), generate a d20 result (1–20 — never outside this range), and embed the full roll in a <dice_rolls> block (see Rule 10). Narrate the outcome consistent with the success value. Read ability scores from the party list above — do not guess or invent modifiers.
+5. If important story events occur, mark them inline:
+   <event type="combat|discovery|dialogue|death|milestone">Brief factual description</event>
+6. End with a clear invitation for the party to act
+7. Do not list game mechanics or stat changes — narrate them naturally
+8. When your narration causes HP changes or inventory changes, emit a <state_changes> block
+   AFTER your narrative text and BEFORE the <suggested_actions> block:
+   <state_changes>
+   {{
+     "hp_changes": [{{"character_id": "<ID from party list>", "delta": -8, "reason": "goblin attack"}}],
+     "inventory_add": [{{"character_id": "<ID>", "item_name": "Gold Coin", "quantity": 50}}],
+     "inventory_remove": [{{"character_id": "<ID>", "item_name": "Torch", "quantity": 1}}]
+   }}
+   </state_changes>
+   All fields are optional — only include fields that changed. Omit the block entirely if no state changes occur.
+   character_id must be the exact UUID from the party list above (e.g. [ID: abc-123]).
+   delta is signed: negative for damage, positive for healing.
+9. After your narrative response, produce 2–10 short suggested actions the player could
+   take next (imperative mood, ~10 words each). Wrap them in:
+   <suggested_actions>
+   Pick the lock using your thieves' tools.
+   Search the walls for a hidden mechanism.
+   </suggested_actions>
+10. DICE ROLLS: When you resolve a dice roll (ability check, saving throw, attack, or damage),
+   embed the result BEFORE your narrative text using this exact format:
+   <dice_rolls>
+   [
+     {{
+       "type": "dice_roll",
+       "die": "d20",
+       "count": 1,
+       "result": <integer 1–20>,
+       "modifier": <signed integer, 0 if none>,
+       "total": <result + modifier>,
+       "label": "<human-readable label, e.g. Stealth Check>",
+       "dc": <integer, only for ability checks/saves>,
+       "ac": <integer, only for attack rolls — use instead of dc>,
+       "success": <true|false, required when dc or ac is present>,
+       "advantage": <true|false, only when relevant>,
+       "all_rolls": [<roll1>, <roll2>]
+     }}
+   ]
+   </dice_rolls>
+   Rules: result must satisfy 1 ≤ result ≤ (count × die_sides). Include one entry per distinct roll.
+   For attack rolls use "ac" (not "dc"). For ability checks/saves use "dc" (not "ac").
+11. COMBAT RULES:
+   - When a player declares a combat action, adjudicate the exchange narratively:
+     1. Roll player attack (d20 + STR/DEX mod + proficiency if proficient) vs target AC
+     2. On a hit: roll damage dice per weapon type, add modifier
+     3. Narrate enemy reaction and counterattack if applicable
+     4. Embed ALL rolls in <dice_rolls> block (attack + damage + enemy rolls as separate entries)
+     5. Emit <state_changes> with hp_changes for all HP deltas in the exchange
+   - Use SRD 5e weapon damage for player characters based on their equipment list
+   - Invent plausible NPC ACs by creature type: Goblin 13, Bandit 12, Orc 13, Guard 16
+   - Critical Hit (natural 20): double the damage dice (e.g. 2d8 instead of 1d8),
+     add modifier once, note it explicitly in narration
+   - Critical Miss (natural 1): automatic miss, narrate the fumble
+   - At 0 HP: narrate unconsciousness; prompt Death Saving Throw on next player action
+   - Death Saving Throw: d20, no modifier, dc: 10, label: "Death Saving Throw"
+12. XP AWARDS: When players defeat enemies or complete objectives, award XP via the
+   xp_awards field in <state_changes>. Use SRD 5e encounter XP values as a guide.
+   Award XP to all players present.
+   Format: "xp_awards": [{{"character_id": "<ID>", "amount": 100, "reason": "Defeated goblin"}}]
+   Typical values: Goblin 50 XP, Bandit 100 XP, Orc 100 XP, completing a minor quest 150–300 XP.
+
+The acting player's action:
+"{action_text}"
+"""
 
 
 def validate_action(action: Any, player: dict, game: dict) -> None:

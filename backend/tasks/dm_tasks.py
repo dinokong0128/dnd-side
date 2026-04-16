@@ -22,6 +22,7 @@ from services.dm_service import (
     apply_state_changes,
     extract_dice_rolls,
     search_rag,
+    build_dm_system_prompt,
 )
 from services.embedding_service import embed_text
 from constants import MESSAGE_ROLE_DM, MESSAGE_ROLE_SYSTEM, EVENT_SOURCE_CLAUDE
@@ -89,33 +90,6 @@ def dm_response_task(
             players = f_players.result()
             recent_messages = f_messages.result()
 
-        # Reverse to chronological order and format
-        message_history = []
-        for msg in reversed(recent_messages.data or []):
-            if msg["role"] == "dm":
-                message_history.append(f"DM: {msg['content']}")
-            elif msg["role"] == "player":
-                # Find character name for this profile_id
-                player_name = next(
-                    (
-                        p["character_name"]
-                        for p in players.data
-                        if p.get("profile_id") == msg.get("profile_id")
-                    ),
-                    "Unknown Player",
-                )
-                message_history.append(f"{player_name}: {msg['content']}")
-            # Skip system messages in context
-
-        message_history_text = (
-            "\n\n".join(message_history) if message_history else "No messages yet."
-        )
-
-        def _ability_mod(score: int) -> str:
-            """Format an ability score modifier with sign (e.g. +3 or -1)."""
-            m = math.floor((score - 10) / 2)
-            return f"{m:+d}"
-
         # Step 1c: Fetch player inventory in batch (DIN-65)
         player_ids = [p["id"] for p in players.data]
         inv_by_player: dict[str, list] = {}
@@ -127,178 +101,16 @@ def dm_response_task(
             for item in (all_inv.data or []):
                 inv_by_player.setdefault(item["player_id"], []).append(item)
 
-        party_lines = []
-        for p in players.data:
-            inv = inv_by_player.get(p["id"], [])
+        # Step 2: Build Claude system prompt (shared with the streaming /actions route — DIN-66)
+        system_prompt = build_dm_system_prompt(
+            game=game.data,
+            players=players.data or [],
+            inv_by_player=inv_by_player,
+            recent_messages=recent_messages.data or [],
+            rag_context=rag_context,
+            action_text=action_text,
+        )
 
-            items = (
-                ", ".join(
-                    (
-                        f"{i['item_name']} (x{i['quantity']})"
-                        if i["quantity"] > 1
-                        else i["item_name"]
-                    )
-                    for i in inv
-                )
-                or "no equipment"
-            )
-
-            stats = p.get("stats") or {}
-            str_score = stats.get("str", 10)
-            dex_score = stats.get("dex", 10)
-            con_score = stats.get("con", 10)
-            int_score = stats.get("int", 10)
-            wis_score = stats.get("wis", 10)
-            cha_score = stats.get("cha", 10)
-
-            level = p.get("level", 1)
-            if level >= 17:
-                prof_bonus = 6
-            elif level >= 13:
-                prof_bonus = 5
-            elif level >= 9:
-                prof_bonus = 4
-            elif level >= 5:
-                prof_bonus = 3
-            else:
-                prof_bonus = 2
-
-            party_line = (
-                f"- {p['character_name']} [ID: {p['id']}], Level {level} "
-                f"{p.get('race', 'Human')} {p['character_class']}.\n"
-                f"  HP: {p['hp_current']}/{p['hp_max']}.\n"
-                f"  STR {str_score} ({_ability_mod(str_score)}), DEX {dex_score} ({_ability_mod(dex_score)}), "
-                f"CON {con_score} ({_ability_mod(con_score)}),\n"
-                f"  INT {int_score} ({_ability_mod(int_score)}), WIS {wis_score} ({_ability_mod(wis_score)}), "
-                f"CHA {cha_score} ({_ability_mod(cha_score)})\n"
-                f"  Proficiency bonus: +{prof_bonus}\n"
-                f"  Equipment: {items}"
-            )
-
-            # Spell slots (DIN-27)
-            spell_slots = stats.get("spell_slots")
-            if spell_slots:
-                _ordinals = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 5: "5th"}
-                slot_parts = []
-                for lvl_key in sorted(
-                    (k for k in spell_slots.keys() if isinstance(k, str) and k.isdigit()),
-                    key=int,
-                ):
-                    slot = spell_slots[lvl_key]
-                    lvl_int = int(lvl_key)
-                    if slot.get("max", 0) > 0:
-                        remaining = slot["max"] - slot.get("used", 0)
-                        ordinal = _ordinals.get(lvl_int, f"{lvl_int}th")
-                        slot_parts.append(f"{ordinal}: {remaining}/{slot['max']}")
-                if slot_parts:
-                    party_line += f"\n  Spell slots: {', '.join(slot_parts)}"
-
-                # Spell save DC and spell attack bonus
-                cls_lower = p.get("character_class", "").lower()
-                _caster_ability = {
-                    "wizard": int_score, "sorcerer": cha_score, "bard": cha_score,
-                    "cleric": wis_score, "druid": wis_score, "ranger": wis_score,
-                    "paladin": cha_score, "warlock": cha_score,
-                }
-                if cls_lower in _caster_ability:
-                    sp_ability = _caster_ability[cls_lower]
-                    sp_mod = math.floor((sp_ability - 10) / 2)
-                    spell_dc = 8 + prof_bonus + sp_mod
-                    spell_atk = prof_bonus + sp_mod
-                    party_line += f"\n  Spell save DC: {spell_dc} | Spell attack: {spell_atk:+d}"
-
-            cantrips = stats.get("cantrips")
-            if cantrips:
-                party_line += f"\n  Cantrips (unlimited): {', '.join(cantrips)}"
-
-            party_lines.append(party_line)
-
-        # Step 2: Build Claude system prompt
-        system_prompt = f"""You are {game.data['dm_persona']}. You are the Dungeon Master for a D&D 5e campaign called "{game.data['name']}".
-
-CURRENT PARTY:
-{chr(10).join(party_lines)}
-
-RECENT SESSION HISTORY (last 20 messages, oldest first):
----
-{message_history_text}
----
-
-RELEVANT PAST EVENTS (Context from RAG):
-{json.dumps(rag_context, indent=2) if rag_context else "No past events yet."}
-
-RULES:
-1. Respond in character as the DM — never break the fourth wall
-2. Be vivid and engaging but keep responses to 2–3 short paragraphs (~100 words total)
-3. Account for character abilities, equipment, and class features when narrating outcomes
-4. When a player's action requires an ability check or saving throw: determine the relevant ability and apply proficiency if the character's class would grant it for this skill, pick an appropriate DC (Very Easy 5 / Easy 10 / Medium 15 / Hard 20), generate a d20 result (1–20 — never outside this range), and embed the full roll in a <dice_rolls> block (see Rule 10). Narrate the outcome consistent with the success value. Read ability scores from the party list above — do not guess or invent modifiers.
-5. If important story events occur, mark them inline:
-   <event type="combat|discovery|dialogue|death|milestone">Brief factual description</event>
-6. End with a clear invitation for the party to act
-7. Do not list game mechanics or stat changes — narrate them naturally
-8. When your narration causes HP changes or inventory changes, emit a <state_changes> block
-   AFTER your narrative text and BEFORE the <suggested_actions> block:
-   <state_changes>
-   {{
-     "hp_changes": [{{"character_id": "<ID from party list>", "delta": -8, "reason": "goblin attack"}}],
-     "inventory_add": [{{"character_id": "<ID>", "item_name": "Gold Coin", "quantity": 50}}],
-     "inventory_remove": [{{"character_id": "<ID>", "item_name": "Torch", "quantity": 1}}]
-   }}
-   </state_changes>
-   All fields are optional — only include fields that changed. Omit the block entirely if no state changes occur.
-   character_id must be the exact UUID from the party list above (e.g. [ID: abc-123]).
-   delta is signed: negative for damage, positive for healing.
-9. After your narrative response, produce 2–10 short suggested actions the player could
-   take next (imperative mood, ~10 words each). Wrap them in:
-   <suggested_actions>
-   Pick the lock using your thieves' tools.
-   Search the walls for a hidden mechanism.
-   </suggested_actions>
-10. DICE ROLLS: When you resolve a dice roll (ability check, saving throw, attack, or damage),
-   embed the result BEFORE your narrative text using this exact format:
-   <dice_rolls>
-   [
-     {{
-       "type": "dice_roll",
-       "die": "d20",
-       "count": 1,
-       "result": <integer 1–20>,
-       "modifier": <signed integer, 0 if none>,
-       "total": <result + modifier>,
-       "label": "<human-readable label, e.g. Stealth Check>",
-       "dc": <integer, only for ability checks/saves>,
-       "ac": <integer, only for attack rolls — use instead of dc>,
-       "success": <true|false, required when dc or ac is present>,
-       "advantage": <true|false, only when relevant>,
-       "all_rolls": [<roll1>, <roll2>]
-     }}
-   ]
-   </dice_rolls>
-   Rules: result must satisfy 1 ≤ result ≤ (count × die_sides). Include one entry per distinct roll.
-   For attack rolls use "ac" (not "dc"). For ability checks/saves use "dc" (not "ac").
-11. COMBAT RULES:
-   - When a player declares a combat action, adjudicate the exchange narratively:
-     1. Roll player attack (d20 + STR/DEX mod + proficiency if proficient) vs target AC
-     2. On a hit: roll damage dice per weapon type, add modifier
-     3. Narrate enemy reaction and counterattack if applicable
-     4. Embed ALL rolls in <dice_rolls> block (attack + damage + enemy rolls as separate entries)
-     5. Emit <state_changes> with hp_changes for all HP deltas in the exchange
-   - Use SRD 5e weapon damage for player characters based on their equipment list
-   - Invent plausible NPC ACs by creature type: Goblin 13, Bandit 12, Orc 13, Guard 16
-   - Critical Hit (natural 20): double the damage dice (e.g. 2d8 instead of 1d8),
-     add modifier once, note it explicitly in narration
-   - Critical Miss (natural 1): automatic miss, narrate the fumble
-   - At 0 HP: narrate unconsciousness; prompt Death Saving Throw on next player action
-   - Death Saving Throw: d20, no modifier, dc: 10, label: "Death Saving Throw"
-12. XP AWARDS: When players defeat enemies or complete objectives, award XP via the
-   xp_awards field in <state_changes>. Use SRD 5e encounter XP values as a guide.
-   Award XP to all players present.
-   Format: "xp_awards": [{{"character_id": "<ID>", "amount": 100, "reason": "Defeated goblin"}}]
-   Typical values: Goblin 50 XP, Bandit 100 XP, Orc 100 XP, completing a minor quest 150–300 XP.
-
-The acting player's action:
-"{action_text}"
-"""
 
         # Step 3: Call Claude API
         response = anthropic_client.messages.create(
@@ -831,6 +643,75 @@ Write 2–3 paragraphs."""
             ).execute()
         except Exception:
             logger.error("[generate_resume_narration] Failed to insert error message")
+        raise
+
+
+@dramatiq.actor(max_retries=DM_TASK_MAX_RETRIES, min_backoff=1000)
+def dm_bookkeeping_task(game_id: str, dm_response: str) -> None:
+    """
+    Post-stream bookkeeping for a streamed DM response (DIN-66).
+
+    Runs AFTER the complete DM message has been inserted to game_messages
+    by the SSE streaming path (see api/routes/actions.py::_stream_to_redis).
+    Handles work that doesn't need to block the player's first token:
+
+    1. Extract <event> blocks → embed each → insert to game_events (RAG)
+    2. Extract <suggested_actions> → update games.suggested_actions
+    3. Update games.updated_at
+
+    state_changes handling is intentionally deferred to Epic-7 — the
+    streaming path consumes those blocks silently for now.
+
+    Failures re-raise so Dramatiq retries the task. Because the DM message
+    is already persisted before this task runs, retries never risk a
+    duplicate DM message in the chat.
+    """
+    logger.info(f"[dm_bookkeeping_task] Starting for game={game_id}")
+
+    try:
+        events = extract_events_from_response(dm_response)
+        logger.info(f"[dm_bookkeeping_task] Extracted {len(events)} events")
+
+        event_rows = []
+        for event in events:
+            embedding = embed_text(event["description"])
+            event_rows.append(
+                {
+                    "game_id": game_id,
+                    "event_type": event["type"],
+                    "summary": event["description"],
+                    "embedding": embedding,
+                    "source": EVENT_SOURCE_CLAUDE,
+                }
+            )
+        if event_rows:
+            supabase_client.table("game_events").insert(event_rows).execute()
+            logger.info(f"[dm_bookkeeping_task] Inserted {len(event_rows)} events")
+
+        suggested_match = re.search(
+            r"<suggested_actions>(.*?)</suggested_actions>",
+            dm_response,
+            flags=re.DOTALL,
+        )
+        suggested_actions: list[str] = []
+        if suggested_match:
+            suggested_actions = [
+                line.strip()
+                for line in suggested_match.group(1).splitlines()
+                if line.strip()
+            ]
+
+        supabase_client.table("games").update(
+            {
+                "updated_at": datetime.utcnow().isoformat(),
+                "suggested_actions": suggested_actions,
+            }
+        ).match({"id": game_id}).execute()
+
+        logger.info(f"[dm_bookkeeping_task] Success for game={game_id}")
+
+    except Exception as e:
+        logger.error(f"[dm_bookkeeping_task] Error: {e}", exc_info=True)
         raise
 
 
