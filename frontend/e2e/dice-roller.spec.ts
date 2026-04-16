@@ -299,7 +299,6 @@ test.describe('DIN-24 — Dice Roller in DM chat messages', () => {
   test('dice arrive via Realtime (custom event) with dice_rolls', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
 
-    // Start with no initial messages
     await setupGameMocks(page)
 
     await page.goto(`/games/${GAME_ID}`)
@@ -360,5 +359,319 @@ test.describe('DIN-24 — Dice Roller in DM chat messages', () => {
 
     // No dice roller for player messages
     await expect(page.getByTestId('die-type-badge')).not.toBeVisible()
+  })
+})
+
+// ─── DIN-25: Ability check outcome badge + advantage/disadvantage display ─────
+//
+// Claude emits <dice_rolls> blocks for ability checks (d20 rolls) that include
+// a dc and success flag. ChatMessage.tsx renders an outcome badge after the
+// dice animation settles, and shows both rolls side-by-side for
+// advantage/disadvantage.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test.describe('DIN-25 — Ability check outcome badge', () => {
+  test('success badge renders after animation with dc label (reduced motion)', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+
+    const successRoll: DiceRollEvent = {
+      type: 'dice_roll',
+      die: 'd20',
+      count: 1,
+      result: 14,
+      modifier: 3,
+      total: 17,
+      label: 'Stealth Check',
+      dc: 15,
+      success: true,
+    }
+
+    await setupGameMocks(page, {
+      initialDmMessage: {
+        content: 'You slip past the guard unnoticed.',
+        dice_rolls: [successRoll],
+      },
+    })
+
+    await page.goto(`/games/${GAME_ID}`)
+    await expect(page.getByText('The Shadow Heist')).toBeVisible({ timeout: 5000 })
+
+    const badge = page.getByTestId('outcome-badge')
+    await expect(badge).toBeVisible({ timeout: 3000 })
+    // Badge contains success indicator and DC
+    await expect(badge).toContainText('Success')
+    await expect(badge).toContainText('15')
+  })
+
+  test('failure badge renders after animation with dc label (reduced motion)', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+
+    const failRoll: DiceRollEvent = {
+      type: 'dice_roll',
+      die: 'd20',
+      count: 1,
+      result: 5,
+      modifier: 3,
+      total: 8,
+      label: 'Stealth Check',
+      dc: 15,
+      success: false,
+    }
+
+    await setupGameMocks(page, {
+      initialDmMessage: {
+        content: 'The guard spots you in the shadows.',
+        dice_rolls: [failRoll],
+      },
+    })
+
+    await page.goto(`/games/${GAME_ID}`)
+    await expect(page.getByText('The Shadow Heist')).toBeVisible({ timeout: 5000 })
+
+    const badge = page.getByTestId('outcome-badge')
+    await expect(badge).toBeVisible({ timeout: 3000 })
+    await expect(badge).toContainText('Failure')
+    await expect(badge).toContainText('15')
+  })
+
+  test('natural 20 shows Critical Success label with gold border', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+
+    const nat20Roll: DiceRollEvent = {
+      type: 'dice_roll',
+      die: 'd20',
+      count: 1,
+      result: 20,
+      modifier: 3,
+      total: 23,
+      label: 'Perception Check',
+      dc: 12,
+      success: true,
+    }
+
+    await setupGameMocks(page, {
+      initialDmMessage: {
+        content: 'You notice every detail of the trap mechanism.',
+        dice_rolls: [nat20Roll],
+      },
+    })
+
+    await page.goto(`/games/${GAME_ID}`)
+    await expect(page.getByText('The Shadow Heist')).toBeVisible({ timeout: 5000 })
+
+    const badge = page.getByTestId('outcome-badge')
+    await expect(badge).toBeVisible({ timeout: 3000 })
+    await expect(badge).toContainText('💥 Critical Success')
+  })
+
+  test('natural 1 shows Critical Failure label with crimson border', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+
+    const nat1Roll: DiceRollEvent = {
+      type: 'dice_roll',
+      die: 'd20',
+      count: 1,
+      result: 1,
+      modifier: 3,
+      total: 4,
+      label: 'Acrobatics Check',
+      dc: 10,
+      success: false,
+    }
+
+    await setupGameMocks(page, {
+      initialDmMessage: {
+        content: 'You slip and fall flat on your face.',
+        dice_rolls: [nat1Roll],
+      },
+    })
+
+    await page.goto(`/games/${GAME_ID}`)
+    await expect(page.getByText('The Shadow Heist')).toBeVisible({ timeout: 5000 })
+
+    const badge = page.getByTestId('outcome-badge')
+    await expect(badge).toBeVisible({ timeout: 3000 })
+    await expect(badge).toContainText('💀 Critical Failure')
+  })
+
+  test('no outcome badge for non-d20 roll without dc', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+
+    // Damage roll — d6, no dc, no success field
+    await setupGameMocks(page, {
+      initialDmMessage: {
+        content: 'Your blade finds its mark.',
+        dice_rolls: [DAMAGE_ROLL],
+      },
+    })
+
+    await page.goto(`/games/${GAME_ID}`)
+    await expect(page.getByText('The Shadow Heist')).toBeVisible({ timeout: 5000 })
+
+    // Die type badge visible (d6 damage), but no outcome badge
+    await expect(page.getByTestId('die-type-badge')).toBeVisible({ timeout: 3000 })
+    await expect(page.getByTestId('outcome-badge')).not.toBeVisible()
+  })
+
+  test('no outcome badge for d20 roll without dc field', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+
+    // d20 initiative roll — no dc, no success
+    const initiativeRoll: DiceRollEvent = {
+      type: 'dice_roll',
+      die: 'd20',
+      count: 1,
+      result: 11,
+      modifier: 2,
+      total: 13,
+      label: 'Initiative',
+    }
+
+    await setupGameMocks(page, {
+      initialDmMessage: {
+        content: 'Combat begins — roll for initiative.',
+        dice_rolls: [initiativeRoll],
+      },
+    })
+
+    await page.goto(`/games/${GAME_ID}`)
+    await expect(page.getByText('The Shadow Heist')).toBeVisible({ timeout: 5000 })
+
+    await expect(page.getByTestId('die-type-badge')).toBeVisible({ timeout: 3000 })
+    await expect(page.getByTestId('outcome-badge')).not.toBeVisible()
+  })
+
+  test('outcome badge appears via Realtime dm-message with dice_rolls (reduced motion)', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await setupGameMocks(page)
+
+    await page.goto(`/games/${GAME_ID}`)
+    await expect(page.getByText('The Shadow Heist')).toBeVisible({ timeout: 5000 })
+    // Wait for initializeSession to complete before dispatching the Realtime event
+    await expect(page.getByText('The adventure begins.')).toBeVisible({ timeout: 3000 })
+
+    const checkRoll: DiceRollEvent = {
+      type: 'dice_roll',
+      die: 'd20',
+      count: 1,
+      result: 18,
+      modifier: 4,
+      total: 22,
+      label: 'Investigation Check',
+      dc: 15,
+      success: true,
+    }
+
+    await page.evaluate(
+      ({ narration, roll }) => {
+        window.dispatchEvent(
+          new CustomEvent('dm-message', {
+            detail: {
+              game_id: 'test-game-dice',
+              role: 'dm',
+              content: narration,
+              dice_rolls: [roll],
+              created_at: new Date().toISOString(),
+            },
+          })
+        )
+      },
+      { narration: 'You find a hidden compartment in the bookshelf.', roll: checkRoll }
+    )
+
+    const badge = page.getByTestId('outcome-badge')
+    await expect(badge).toBeVisible({ timeout: 3000 })
+    await expect(badge).toContainText('Success')
+  })
+})
+
+test.describe('DIN-25 — Advantage / disadvantage pip display', () => {
+  test('advantage: both all_rolls shown — kept die normal, discarded struck through', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+
+    // Advantage: rolled 14 and 7, kept 14 (higher)
+    const advRoll: DiceRollEvent = {
+      type: 'dice_roll',
+      die: 'd20',
+      count: 1,
+      result: 14,
+      modifier: 3,
+      total: 17,
+      label: 'Stealth Check',
+      dc: 12,
+      success: true,
+      advantage: true,
+      all_rolls: [14, 7],
+    }
+
+    await setupGameMocks(page, {
+      initialDmMessage: {
+        content: 'Advantage favours the bold.',
+        dice_rolls: [advRoll],
+      },
+    })
+
+    await page.goto(`/games/${GAME_ID}`)
+    await expect(page.getByText('The Shadow Heist')).toBeVisible({ timeout: 5000 })
+
+    // Both roll values are shown
+    const kept = page.getByTestId('adv-kept')
+    const discarded = page.getByTestId('adv-discarded')
+    await expect(kept).toBeVisible({ timeout: 3000 })
+    await expect(discarded).toBeVisible()
+
+    // Kept die shows the result (14), discarded shows the other roll (7)
+    await expect(kept).toHaveText('14')
+    await expect(discarded).toHaveText('7')
+
+    // Kept is not struck through; discarded has line-through
+    await expect(kept).not.toHaveCSS('text-decoration-line', 'line-through')
+    await expect(discarded).toHaveCSS('text-decoration-line', 'line-through')
+  })
+
+  test('disadvantage: kept die is lower roll — higher roll struck through', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+
+    // Disadvantage: rolled 16 and 5, kept 5 (lower)
+    const disadvRoll: DiceRollEvent = {
+      type: 'dice_roll',
+      die: 'd20',
+      count: 1,
+      result: 5,
+      modifier: 3,
+      total: 8,
+      label: 'Stealth Check',
+      dc: 12,
+      success: false,
+      advantage: false,
+      all_rolls: [16, 5],
+    }
+
+    await setupGameMocks(page, {
+      initialDmMessage: {
+        content: 'Misfortune stalks your steps.',
+        dice_rolls: [disadvRoll],
+      },
+    })
+
+    await page.goto(`/games/${GAME_ID}`)
+    await expect(page.getByText('The Shadow Heist')).toBeVisible({ timeout: 5000 })
+
+    const kept = page.getByTestId('adv-kept')
+    const discarded = page.getByTestId('adv-discarded')
+    await expect(kept).toBeVisible({ timeout: 3000 })
+    await expect(discarded).toBeVisible()
+
+    // Disadvantage keeps lower (5), discards higher (16)
+    await expect(kept).toHaveText('5')
+    await expect(discarded).toHaveText('16')
+
+    // Discarded (higher) is struck through
+    await expect(discarded).toHaveCSS('text-decoration-line', 'line-through')
+    await expect(kept).not.toHaveCSS('text-decoration-line', 'line-through')
   })
 })

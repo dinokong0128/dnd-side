@@ -297,3 +297,214 @@ describe('DIN-24: dice_rolls rendering in DM messages', () => {
     expect(screen.getByText('The dragon stirs.')).toBeVisible()
   })
 })
+
+describe('DIN-25: ability check outcome badge and advantage display', () => {
+  beforeEach(() => {
+    jest.useFakeTimers()
+  })
+  afterEach(() => {
+    jest.useRealTimers()
+    jest.clearAllMocks()
+  })
+
+  const successRoll: DiceRollEvent = {
+    type: 'dice_roll',
+    die: 'd20',
+    count: 1,
+    result: 14,
+    modifier: 3,
+    total: 17,
+    label: 'Stealth Check',
+    dc: 15,
+    success: true,
+  }
+
+  const failureRoll: DiceRollEvent = {
+    type: 'dice_roll',
+    die: 'd20',
+    count: 1,
+    result: 6,
+    modifier: 1,
+    total: 7,
+    label: 'Athletics Check',
+    dc: 12,
+    success: false,
+  }
+
+  const nat20Roll: DiceRollEvent = {
+    type: 'dice_roll',
+    die: 'd20',
+    count: 1,
+    result: 20,
+    modifier: 2,
+    total: 22,
+    label: 'Perception Check',
+    dc: 15,
+    success: true,
+  }
+
+  const nat1Roll: DiceRollEvent = {
+    type: 'dice_roll',
+    die: 'd20',
+    count: 1,
+    result: 1,
+    modifier: 2,
+    total: 3,
+    label: 'Acrobatics Check',
+    dc: 12,
+    success: false,
+  }
+
+  const advantageRoll: DiceRollEvent = {
+    type: 'dice_roll',
+    die: 'd20',
+    count: 1,
+    result: 18,
+    modifier: 3,
+    total: 21,
+    label: 'Perception Check',
+    dc: 15,
+    success: true,
+    advantage: true,
+    all_rolls: [11, 18],
+  }
+
+  const disadvantageRoll: DiceRollEvent = {
+    type: 'dice_roll',
+    die: 'd20',
+    count: 1,
+    result: 5,
+    modifier: 1,
+    total: 6,
+    label: 'Stealth Check',
+    dc: 12,
+    success: false,
+    advantage: false,
+    all_rolls: [5, 14],
+  }
+
+  it('success badge renders after animation with dc label', () => {
+    render(
+      <ChatMessage
+        role="dm"
+        content="You slip past unnoticed."
+        diceRolls={[successRoll]}
+      />
+    )
+    // Badge not visible before animation
+    expect(screen.queryByTestId('outcome-badge')).not.toBeInTheDocument()
+
+    act(() => { jest.runAllTimers() })
+
+    const badge = screen.getByTestId('outcome-badge')
+    expect(badge).toBeInTheDocument()
+    expect(badge).toHaveTextContent('Success')
+    expect(badge).toHaveTextContent('DC 15')
+  })
+
+  it('failure badge renders after animation with dc label', () => {
+    render(
+      <ChatMessage
+        role="dm"
+        content="You stumble and fall."
+        diceRolls={[failureRoll]}
+      />
+    )
+    act(() => { jest.runAllTimers() })
+
+    const badge = screen.getByTestId('outcome-badge')
+    expect(badge).toHaveTextContent('Failure')
+    expect(badge).toHaveTextContent('DC 12')
+  })
+
+  it('natural 20 shows critical success label', () => {
+    render(
+      <ChatMessage
+        role="dm"
+        content="You notice every detail."
+        diceRolls={[nat20Roll]}
+      />
+    )
+    act(() => { jest.runAllTimers() })
+
+    const badge = screen.getByTestId('outcome-badge')
+    expect(badge).toHaveTextContent('Critical Success')
+  })
+
+  it('natural 1 shows critical failure label', () => {
+    render(
+      <ChatMessage
+        role="dm"
+        content="You completely botch it."
+        diceRolls={[nat1Roll]}
+      />
+    )
+    act(() => { jest.runAllTimers() })
+
+    const badge = screen.getByTestId('outcome-badge')
+    expect(badge).toHaveTextContent('Critical Failure')
+  })
+
+  it('no outcome badge for non-d20 rolls without dc', () => {
+    const damageRoll: DiceRollEvent = {
+      type: 'dice_roll',
+      die: 'd6',
+      count: 1,
+      result: 4,
+      modifier: 2,
+      total: 6,
+      label: 'Damage',
+    }
+    render(
+      <ChatMessage
+        role="dm"
+        content="The blade strikes."
+        diceRolls={[damageRoll]}
+      />
+    )
+    act(() => { jest.runAllTimers() })
+
+    expect(screen.queryByTestId('outcome-badge')).not.toBeInTheDocument()
+  })
+
+  it('advantage: both all_rolls shown; kept die not struck through, discarded die struck through', () => {
+    render(
+      <ChatMessage
+        role="dm"
+        content="You spot the hidden door."
+        diceRolls={[advantageRoll]}
+      />
+    )
+    act(() => { jest.runAllTimers() })
+
+    const kept = screen.getByTestId('adv-kept')
+    const discarded = screen.getByTestId('adv-discarded')
+
+    // kept die is the result (18 for advantage)
+    expect(kept).toHaveTextContent('18')
+    expect(kept).not.toHaveStyle({ textDecoration: 'line-through' })
+
+    // discarded die is the other roll (11)
+    expect(discarded).toHaveTextContent('11')
+    expect(discarded).toHaveStyle({ textDecoration: 'line-through' })
+  })
+
+  it('disadvantage: kept die is the lower roll; higher roll is struck through', () => {
+    render(
+      <ChatMessage
+        role="dm"
+        content="You fail to stay silent."
+        diceRolls={[disadvantageRoll]}
+      />
+    )
+    act(() => { jest.runAllTimers() })
+
+    const kept = screen.getByTestId('adv-kept')
+    const discarded = screen.getByTestId('adv-discarded')
+
+    // kept die is the result (5 for disadvantage)
+    expect(kept).toHaveTextContent('5')
+    expect(discarded).toHaveTextContent('14')
+    expect(discarded).toHaveStyle({ textDecoration: 'line-through' })
+  })
+})
