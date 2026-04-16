@@ -478,16 +478,11 @@ export function GameSessionView({
             }
 
             if (event.type === 'chunk') {
-              // Ignore late chunks arriving after Realtime already reconciled.
-              // Prevents re-populating the streaming bubble from null state.
-              if (realtimeReceivedRef.current) continue
               setStreamingSegments((prev) =>
                 appendTextChunk(prev ?? [], event.text)
               )
             } else if (event.type === 'block') {
               if (event.tag === 'dice_rolls') {
-                // Same guard — drop dice_rolls blocks that arrive post-reconcile.
-                if (realtimeReceivedRef.current) continue
                 setStreamingSegments((prev) => [
                   ...(prev ?? []),
                   { kind: 'dice_rolls', content: event.content },
@@ -502,19 +497,14 @@ export function GameSessionView({
               }
               // 'event' and 'state_changes' consumed silently.
             } else if (event.type === 'done') {
-              // Only schedule the fallback if Realtime hasn't already arrived.
-              // When Realtime arrives first (the common case because the DB insert
-              // happens before `done` is published), the flag is already true and
-              // we skip the timer entirely — preventing it from firing 3s later
-              // and clearing a new stream started by the next player action.
-              if (!realtimeReceivedRef.current) {
-                if (realtimeFallbackRef.current) clearTimeout(realtimeFallbackRef.current)
-                realtimeFallbackRef.current = setTimeout(() => {
-                  setIsWaitingForDm(false)
-                  setStreamingSegments(null)
-                  realtimeFallbackRef.current = null
-                }, 3000)
-              }
+              // `done` is the authoritative signal from the backend that streaming
+              // has completed (either successfully or via error — it's always
+              // published in the finally block). Clear the streaming bubble and
+              // re-enable the input immediately. The persisted DM (or system error)
+              // message arrives separately via Realtime and appears in the chat log
+              // a moment later — if it's already arrived, this is a harmless no-op.
+              setStreamingSegments(null)
+              setIsWaitingForDm(false)
             }
           }
         }
