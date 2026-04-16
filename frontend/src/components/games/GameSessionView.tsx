@@ -62,6 +62,9 @@ export function GameSessionView({
   // DIN-66 fallback: if Supabase Realtime INSERT is delayed after stream
   // completion, force-clear streaming state after 3s to unblock the input.
   const realtimeFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Tracks whether the Realtime DM INSERT already arrived for the current action.
+  // Prevents the fallback timer from firing when Realtime arrives before `done`.
+  const realtimeReceivedRef = useRef(false)
 
   const isHost = game.created_by === userId
 
@@ -182,7 +185,9 @@ export function GameSessionView({
               // DIN-66: reconcile — swap the live streaming bubble for the
               // persisted DM message in a single render (no flash).
               setStreamingSegments(null)
-              // Realtime arrived — cancel the stuck-input fallback timer.
+              // Mark Realtime as received — prevents the fallback timer from
+              // firing if `done` arrives after this (the common case).
+              realtimeReceivedRef.current = true
               if (realtimeFallbackRef.current) {
                 clearTimeout(realtimeFallbackRef.current)
                 realtimeFallbackRef.current = null
@@ -381,6 +386,8 @@ export function GameSessionView({
 
   const handleSubmit = async (actionText: string) => {
     setShowRetryTimeout(false)
+    // Reset Realtime-received flag for this new action.
+    realtimeReceivedRef.current = false
 
     // 1. Optimistic player message (DIN-64) — unchanged.
     const optimisticMsg: GameMessage = {
@@ -484,13 +491,19 @@ export function GameSessionView({
               }
               // 'event' and 'state_changes' consumed silently.
             } else if (event.type === 'done') {
-              // Realtime INSERT fires shortly after done is published.
-              // Set a 3s fallback to unblock the input if Realtime is delayed.
-              if (realtimeFallbackRef.current) clearTimeout(realtimeFallbackRef.current)
-              realtimeFallbackRef.current = setTimeout(() => {
-                setIsWaitingForDm(false)
-                setStreamingSegments(null)
-              }, 3000)
+              // Only schedule the fallback if Realtime hasn't already arrived.
+              // When Realtime arrives first (the common case because the DB insert
+              // happens before `done` is published), the flag is already true and
+              // we skip the timer entirely — preventing it from firing 3s later
+              // and clearing a new stream started by the next player action.
+              if (!realtimeReceivedRef.current) {
+                if (realtimeFallbackRef.current) clearTimeout(realtimeFallbackRef.current)
+                realtimeFallbackRef.current = setTimeout(() => {
+                  setIsWaitingForDm(false)
+                  setStreamingSegments(null)
+                  realtimeFallbackRef.current = null
+                }, 3000)
+              }
             }
           }
         }
