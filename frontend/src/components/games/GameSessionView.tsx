@@ -176,7 +176,13 @@ export function GameSessionView({
               )
               return [...filtered, newMsg]
             })
-            setIsWaitingForDm(true)
+            // Only flip to waiting if a DIFFERENT user submitted. For our own
+            // action, handleSubmit already set isWaitingForDm(true); re-setting
+            // it here can race with a late Realtime echo arriving AFTER the DM
+            // Realtime has already cleared the waiting state.
+            if (newMsg.profile_id !== userId) {
+              setIsWaitingForDm(true)
+            }
           } else {
             setMessages((prev) => [...prev, newMsg])
             // If DM or system (error) responded, we're no longer waiting
@@ -472,11 +478,16 @@ export function GameSessionView({
             }
 
             if (event.type === 'chunk') {
+              // Ignore late chunks arriving after Realtime already reconciled.
+              // Prevents re-populating the streaming bubble from null state.
+              if (realtimeReceivedRef.current) continue
               setStreamingSegments((prev) =>
                 appendTextChunk(prev ?? [], event.text)
               )
             } else if (event.type === 'block') {
               if (event.tag === 'dice_rolls') {
+                // Same guard — drop dice_rolls blocks that arrive post-reconcile.
+                if (realtimeReceivedRef.current) continue
                 setStreamingSegments((prev) => [
                   ...(prev ?? []),
                   { kind: 'dice_rolls', content: event.content },
