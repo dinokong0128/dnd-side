@@ -77,6 +77,7 @@ export function ChatMessage({
 
   if (role === 'dm') {
     return (
+      <>
       <div className="mb-4 flex justify-start">
         <div
           className="max-w-2xl rounded-lg border px-5 py-4"
@@ -277,6 +278,7 @@ export function ChatMessage({
           to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
+      </>
     )
   }
 
