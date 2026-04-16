@@ -264,14 +264,30 @@ RULES:
        "modifier": <signed integer, 0 if none>,
        "total": <result + modifier>,
        "label": "<human-readable label, e.g. Stealth Check>",
-       "dc": <integer, only for checks/saves>,
-       "success": <true|false, only when dc is present>,
+       "dc": <integer, only for ability checks/saves>,
+       "ac": <integer, only for attack rolls — use instead of dc>,
+       "success": <true|false, required when dc or ac is present>,
        "advantage": <true|false, only when relevant>,
        "all_rolls": [<roll1>, <roll2>]
      }}
    ]
    </dice_rolls>
    Rules: result must satisfy 1 ≤ result ≤ (count × die_sides). Include one entry per distinct roll.
+   For attack rolls use "ac" (not "dc"). For ability checks/saves use "dc" (not "ac").
+11. COMBAT RULES:
+   - When a player declares a combat action, adjudicate the exchange narratively:
+     1. Roll player attack (d20 + STR/DEX mod + proficiency if proficient) vs target AC
+     2. On a hit: roll damage dice per weapon type, add modifier
+     3. Narrate enemy reaction and counterattack if applicable
+     4. Embed ALL rolls in <dice_rolls> block (attack + damage + enemy rolls as separate entries)
+     5. Emit <state_changes> with hp_changes for all HP deltas in the exchange
+   - Use SRD 5e weapon damage for player characters based on their equipment list
+   - Invent plausible NPC ACs by creature type: Goblin 13, Bandit 12, Orc 13, Guard 16
+   - Critical Hit (natural 20): double the damage dice (e.g. 2d8 instead of 1d8),
+     add modifier once, note it explicitly in narration
+   - Critical Miss (natural 1): automatic miss, narrate the fumble
+   - At 0 HP: narrate unconsciousness; prompt Death Saving Throw on next player action
+   - Death Saving Throw: d20, no modifier, dc: 10, label: "Death Saving Throw"
 
 The acting player's action:
 "{action_text}"

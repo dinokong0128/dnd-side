@@ -508,3 +508,140 @@ describe('DIN-25: ability check outcome badge and advantage display', () => {
     expect(discarded).toHaveStyle({ textDecoration: 'line-through' })
   })
 })
+
+describe('DIN-26: combat roll display', () => {
+  beforeEach(() => {
+    jest.useFakeTimers()
+  })
+  afterEach(() => {
+    jest.useRealTimers()
+    jest.clearAllMocks()
+  })
+
+  const critHitRoll: DiceRollEvent = {
+    type: 'dice_roll',
+    die: 'd20',
+    count: 1,
+    result: 20,
+    modifier: 4,
+    total: 24,
+    label: 'Sword Attack',
+    ac: 13,
+    success: true,
+  }
+
+  const critMissRoll: DiceRollEvent = {
+    type: 'dice_roll',
+    die: 'd20',
+    count: 1,
+    result: 1,
+    modifier: 4,
+    total: 5,
+    label: 'Sword Attack',
+    ac: 13,
+    success: false,
+  }
+
+  const normalHitRoll: DiceRollEvent = {
+    type: 'dice_roll',
+    die: 'd20',
+    count: 1,
+    result: 15,
+    modifier: 4,
+    total: 19,
+    label: 'Sword Attack',
+    ac: 13,
+    success: true,
+  }
+
+  const normalMissRoll: DiceRollEvent = {
+    type: 'dice_roll',
+    die: 'd20',
+    count: 1,
+    result: 5,
+    modifier: 2,
+    total: 7,
+    label: 'Bow Attack',
+    ac: 13,
+    success: false,
+  }
+
+  const deathSaveSuccess: DiceRollEvent = {
+    type: 'dice_roll',
+    die: 'd20',
+    count: 1,
+    result: 12,
+    modifier: 0,
+    total: 12,
+    label: 'Death Saving Throw',
+    dc: 10,
+    success: true,
+  }
+
+  it('critical hit roll card is marked with data-crit=hit (gold border)', () => {
+    render(
+      <ChatMessage
+        role="dm"
+        content="A devastating blow!"
+        diceRolls={[critHitRoll]}
+      />
+    )
+    act(() => { jest.runAllTimers() })
+    expect(screen.getByTestId('dice-roll-card-0')).toHaveAttribute('data-crit', 'hit')
+  })
+
+  it('critical miss roll card is marked with data-crit=miss (crimson border)', () => {
+    render(
+      <ChatMessage
+        role="dm"
+        content="You fumble badly!"
+        diceRolls={[critMissRoll]}
+      />
+    )
+    act(() => { jest.runAllTimers() })
+    expect(screen.getByTestId('dice-roll-card-0')).toHaveAttribute('data-crit', 'miss')
+  })
+
+  it('attack roll with ac shows hit outcome after animation', () => {
+    render(
+      <ChatMessage
+        role="dm"
+        content="Your sword connects!"
+        diceRolls={[normalHitRoll]}
+      />
+    )
+    act(() => { jest.runAllTimers() })
+    const outcome = screen.getByTestId('attack-outcome-0')
+    expect(outcome).toHaveTextContent(`vs AC ${normalHitRoll.ac}`)
+    expect(outcome).toHaveTextContent('Hit!')
+  })
+
+  it('attack roll with ac shows miss outcome after animation', () => {
+    render(
+      <ChatMessage
+        role="dm"
+        content="Your blade glances off."
+        diceRolls={[normalMissRoll]}
+      />
+    )
+    act(() => { jest.runAllTimers() })
+    const outcome = screen.getByTestId('attack-outcome-0')
+    expect(outcome).toHaveTextContent(`vs AC ${normalMissRoll.ac}`)
+    expect(outcome).toHaveTextContent('Miss')
+  })
+
+  it('death saving throw shows cumulative tally when priorDeathSaves provided', () => {
+    render(
+      <ChatMessage
+        role="dm"
+        content="Roll to survive!"
+        diceRolls={[deathSaveSuccess]}
+        priorDeathSaves={{ successes: 1, failures: 1 }}
+      />
+    )
+    act(() => { jest.runAllTimers() })
+    const tally = screen.getByTestId('death-save-tally')
+    expect(tally).toHaveTextContent('Successes: 2/3')
+    expect(tally).toHaveTextContent('Failures: 1/3')
+  })
+})

@@ -1805,3 +1805,73 @@ class TestDin27SpellSlotsInSystemPrompt:
         # Should not raise ValueError
         prompt = self._run_task_and_capture_prompt(players_data)
         assert isinstance(prompt, str)
+
+
+class TestDin26CombatInstruction:
+    """DIN-26: Combat instruction block in dm_response_task system prompt."""
+
+    def _run_task_and_capture_prompt(self, players_data):
+        """Helper: run dm_response_task and return the captured system prompt."""
+        game_data = {"id": "game-1", "name": "Quest", "dm_persona": "DM"}
+        captured_prompt = {}
+
+        game_messages_mock = MagicMock()
+        game_messages_mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
+        game_messages_mock.insert.return_value.execute.return_value = MagicMock()
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "games":
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = MagicMock(data=game_data)
+                mock.update.return_value.match.return_value.execute.return_value = MagicMock()
+                return mock
+            elif name == "players":
+                mock.select.return_value.match.return_value.execute.return_value = MagicMock(data=players_data)
+            elif name == "game_messages":
+                return game_messages_mock
+            elif name == "player_inventory":
+                mock.select.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+            elif name == "game_events":
+                mock.insert.return_value.execute.return_value = MagicMock()
+            return mock
+
+        def capture_create(**kwargs):
+            captured_prompt["system"] = kwargs.get("system", "")
+            resp = MagicMock()
+            resp.content = [MagicMock(text="The goblin falls.")]
+            return resp
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, \
+             patch("tasks.dm_tasks.anthropic_client") as mock_anthropic, \
+             patch("tasks.dm_tasks.openai_client") as mock_openai, \
+             patch("tasks.dm_tasks.embed_text", return_value=[0.1] * 1536), \
+             patch("tasks.dm_tasks.search_rag", return_value=[]):
+            mock_sb.table.side_effect = table_side_effect
+            mock_anthropic.messages.create.side_effect = capture_create
+            mock_openai.embeddings.create.return_value = MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
+            dm_response_task.fn("game-1", "msg-1", "I attack the goblin!")
+
+        return captured_prompt.get("system", "")
+
+    def test_combat_instruction_block_in_system_prompt(self):
+        """DIN-26: system prompt must include COMBAT RULES instruction block."""
+        players_data = [
+            {
+                "id": "player-1",
+                "character_name": "Hero",
+                "race": "Human",
+                "level": 1,
+                "character_class": "Fighter",
+                "hp_current": 10,
+                "hp_max": 10,
+                "profile_id": "user-1",
+                "stats": {"str": 16, "dex": 12, "con": 14, "int": 10, "wis": 10, "cha": 8},
+            }
+        ]
+        prompt = self._run_task_and_capture_prompt(players_data)
+        assert "COMBAT RULES" in prompt, \
+            "System prompt must include COMBAT RULES instruction block"
+        assert "ac" in prompt.lower(), \
+            "System prompt must mention 'ac' (armor class) for attack rolls"
+        assert "goblin" in prompt.lower() or "npc" in prompt.lower() or "13" in prompt, \
+            "System prompt must include NPC AC reference values"

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import React, { useState, useRef } from 'react'
 import type { DiceRollEvent } from '@/lib/types/message'
 import { DiceRoller } from '@/components/dice/DiceRoller'
 
@@ -13,6 +13,7 @@ interface ChatMessageProps {
   isLastMessage?: boolean
   isWaitingForDm?: boolean
   diceRolls?: DiceRollEvent[] | null
+  priorDeathSaves?: { successes: number; failures: number }
   onRetry?: () => void
   onDelete?: () => void
   onEdit?: (newContent: string) => void
@@ -27,6 +28,7 @@ export function ChatMessage({
   isLastMessage,
   isWaitingForDm,
   diceRolls,
+  priorDeathSaves,
   onRetry,
   onDelete,
   onEdit,
@@ -102,42 +104,84 @@ export function ChatMessage({
                 marginBottom: '12px',
               }}
             >
-              {diceRolls!.slice(0, activeDieIndex + 1).map((roll, idx) => (
-                <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <DiceRoller
-                    dieType={roll.die}
-                    result={roll.result}
-                    modifier={roll.modifier}
-                    label={roll.label}
-                    instant={idx < activeDieIndex}
-                    onAnimationComplete={idx === activeDieIndex ? handleDieComplete : () => {}}
-                  />
-                  {/* Advantage/disadvantage pip display — shown after animation settles */}
-                  {narrationVisible && roll.advantage !== undefined && Array.isArray(roll.all_rolls) && (
-                    <div style={{ display: 'flex', gap: '10px', fontSize: '0.85rem', marginTop: '2px' }}>
-                      {roll.all_rolls.filter((r) => typeof r === 'number').map((r, ri) => {
-                        const isKept = r === roll.result
-                        return (
-                          <span
-                            key={ri}
-                            data-testid={isKept ? 'adv-kept' : 'adv-discarded'}
-                            style={{
-                              color: isKept
-                                ? 'var(--dnd-parchment)'
-                                : 'var(--dnd-parchment-dim, rgba(230,210,170,0.45))',
-                              textDecoration: isKept ? 'none' : 'line-through',
-                              fontFamily: "'Cinzel', serif",
-                              fontSize: '0.8rem',
-                            }}
-                          >
-                            {r}
-                          </span>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              ))}
+              {diceRolls!.slice(0, activeDieIndex + 1).map((roll, idx) => {
+                const isCritHit = roll.ac !== undefined && roll.result === 20
+                const isCritMiss = roll.ac !== undefined && roll.result === 1
+                return (
+                  <div
+                    key={idx}
+                    data-testid={`dice-roll-card-${idx}`}
+                    data-crit={isCritHit ? 'hit' : isCritMiss ? 'miss' : undefined}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '4px',
+                      ...(isCritHit ? {
+                        borderWidth: '2px',
+                        borderStyle: 'solid',
+                        borderColor: '#e4c65a',
+                        borderRadius: '6px',
+                        padding: '4px',
+                      } : isCritMiss ? {
+                        borderWidth: '2px',
+                        borderStyle: 'solid',
+                        borderColor: '#c0392b',
+                        borderRadius: '6px',
+                        padding: '4px',
+                        opacity: 0.75,
+                      } : {}),
+                    }}
+                  >
+                    <DiceRoller
+                      dieType={roll.die}
+                      result={roll.result}
+                      modifier={roll.modifier}
+                      label={roll.label}
+                      instant={idx < activeDieIndex}
+                      onAnimationComplete={idx === activeDieIndex ? handleDieComplete : () => {}}
+                    />
+                    {/* Advantage/disadvantage pip display — shown after animation settles */}
+                    {narrationVisible && roll.advantage !== undefined && Array.isArray(roll.all_rolls) && (
+                      <div style={{ display: 'flex', gap: '10px', fontSize: '0.85rem', marginTop: '2px' }}>
+                        {roll.all_rolls.filter((r) => typeof r === 'number').map((r, ri) => {
+                          const isKept = r === roll.result
+                          return (
+                            <span
+                              key={ri}
+                              data-testid={isKept ? 'adv-kept' : 'adv-discarded'}
+                              style={{
+                                color: isKept
+                                  ? 'var(--dnd-parchment)'
+                                  : 'var(--dnd-parchment-dim, rgba(230,210,170,0.45))',
+                                textDecoration: isKept ? 'none' : 'line-through',
+                                fontFamily: "'Cinzel', serif",
+                                fontSize: '0.8rem',
+                              }}
+                            >
+                              {r}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {/* Attack vs AC outcome — shown after animation settles */}
+                    {narrationVisible && roll.ac !== undefined && (
+                      <div
+                        data-testid={`attack-outcome-${idx}`}
+                        style={{
+                          fontFamily: "'Cinzel', serif",
+                          fontSize: '0.75rem',
+                          letterSpacing: '0.04em',
+                          textAlign: 'center',
+                          color: roll.success ? '#6fcf97' : 'var(--dnd-parchment-dim, #b8a98c)',
+                        }}
+                      >
+                        {roll.total} vs AC {roll.ac} — {roll.success ? 'Hit!' : 'Miss'}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
 
@@ -174,24 +218,42 @@ export function ChatMessage({
                       : 'transparent'
 
                   return (
-                    <div
-                      key={idx}
-                      data-testid="outcome-badge"
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        padding: '3px 10px',
-                        borderRadius: '4px',
-                        background: bg,
-                        border: `1px solid ${borderColor}`,
-                        color: textColor,
-                        fontSize: '0.78rem',
-                        fontFamily: "'Cinzel', serif",
-                        letterSpacing: '0.04em',
-                      }}
-                    >
-                      {label}
-                    </div>
+                    <React.Fragment key={idx}>
+                      <div
+                        data-testid="outcome-badge"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          padding: '3px 10px',
+                          borderRadius: '4px',
+                          background: bg,
+                          border: `1px solid ${borderColor}`,
+                          color: textColor,
+                          fontSize: '0.78rem',
+                          fontFamily: "'Cinzel', serif",
+                          letterSpacing: '0.04em',
+                        }}
+                      >
+                        {label}
+                      </div>
+                      {/* Death save cumulative tally */}
+                      {roll.label === 'Death Saving Throw' && priorDeathSaves && (
+                        <div
+                          data-testid="death-save-tally"
+                          style={{
+                            fontFamily: "'Cinzel', serif",
+                            fontSize: '0.7rem',
+                            color: 'var(--dnd-parchment-dim, #b8a98c)',
+                            letterSpacing: '0.04em',
+                            alignSelf: 'center',
+                          }}
+                        >
+                          Successes: {priorDeathSaves.successes + (roll.success ? 1 : 0)}/3
+                          {' | '}
+                          Failures: {priorDeathSaves.failures + (!roll.success ? 1 : 0)}/3
+                        </div>
+                      )}
+                    </React.Fragment>
                   )
                 })}
             </div>
