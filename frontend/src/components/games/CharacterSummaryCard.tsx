@@ -18,51 +18,52 @@ export function CharacterSummaryCard({
   const isLobby = gameStatus === 'lobby'
 
   return (
-    <div className="space-y-6 rounded border border-gray-300 bg-white p-6">
+    <div className="dnd-card space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">
+          <h2 className="dnd-heading text-2xl font-bold">
             {player.character_name}
           </h2>
-          <p className="text-lg text-gray-600">
+          <p className="dnd-subheading text-base">
             Level {player.level} {player.race} {player.character_class}
           </p>
         </div>
         {isLobby && (
           <button
             onClick={onEdit}
-            className="rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
+            className="dnd-btn-secondary"
           >
             Edit Character
           </button>
         )}
       </div>
 
-      <div className="rounded bg-gray-50 p-4">
-        <p className="text-sm font-medium text-gray-700">Hit Points</p>
-        <p className="mt-1 text-2xl font-bold text-gray-900">
-          {player.hp_current}/{player.hp_max}
-        </p>
-        <div className="mt-2 h-3 rounded-full bg-gray-200">
+      <div className="space-y-2">
+        <p className="dnd-stat-label">Hit Points</p>
+        <span className="dnd-hp-badge">
+          {'❤ '}<span>{player.hp_current}/{player.hp_max}</span>
+        </span>
+        <div className="mt-2 h-2 rounded-full" style={{ background: 'var(--input-border)' }}>
           <div
-            className="h-full rounded-full bg-green-500"
+            className="h-full rounded-full"
             style={{
-              width: `${(player.hp_current / player.hp_max) * 100}%`,
+              width: `${Math.min((player.hp_current / player.hp_max) * 100, 100)}%`,
+              background: 'var(--dnd-crimson)',
             }}
           />
         </div>
       </div>
 
       <div>
-        <p className="mb-3 text-sm font-medium text-gray-700">Ability Scores</p>
-        <div className="grid grid-cols-3 gap-3">
+        <p className="dnd-stat-label mb-3">Ability Scores</p>
+        <div className="dnd-stat-grid">
           {STAT_NAMES.map(({ key, label }) => {
             const score = player.stats[key as 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha']
             return (
-              <div key={key} className="rounded bg-gray-100 p-3 text-center">
-                <p className="text-xs font-medium text-gray-600">{label}</p>
-                <p className="mt-1 text-lg font-bold text-gray-900">{score}</p>
-                <p className="text-xs text-gray-500">
+              <div key={key} className="dnd-stat-box">
+                <p className="dnd-stat-label">{label}</p>
+                <p className="dnd-stat-value">{score}</p>
+                <p className="dnd-stat-modifier">
                   {formatModifier(score)}
                 </p>
               </div>
@@ -71,7 +72,7 @@ export function CharacterSummaryCard({
         </div>
       </div>
 
-      <div className="text-xs text-gray-500">
+      <div className="dnd-helper">
         <p>Status: {player.status}</p>
         <p>Joined: {new Date(player.joined_at).toLocaleDateString()}</p>
       </div>
