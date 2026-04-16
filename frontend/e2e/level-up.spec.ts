@@ -593,4 +593,43 @@ test.describe('DIN-28 — LevelUpModal confirm and API', () => {
 
     await expect(page.getByRole('button', { name: /Confirm Level Up/i })).toBeEnabled()
   })
+
+  test('confirming "Roll" sends hp_choice: "roll" to POST /api/games/{gameId}/level-up', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+
+    let capturedBody: Record<string, unknown> | null = null
+    await page.route(`**/api/games/${GAME_ID}/level-up`, (route) => {
+      if (route.request().method() === 'POST') {
+        const raw = route.request().postData()
+        if (raw) capturedBody = JSON.parse(raw) as Record<string, unknown>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ level: 2, hp_max: 22, hp_gained: 10 }),
+        })
+      }
+    })
+
+    await openModal(page)
+
+    // Select Roll option
+    const rollCard = page.getByTestId('hp-choice-roll')
+    await rollCard.click()
+
+    // Confirm button should become enabled
+    await expect(page.getByRole('button', { name: /Confirm Level Up/i })).toBeEnabled()
+
+    await page.getByRole('button', { name: /Confirm Level Up/i }).click()
+
+    // Modal should close
+    await expect(page.getByRole('dialog', { name: 'Level Up' })).not.toBeVisible({
+      timeout: 3000,
+    })
+
+    // Verify the API received hp_choice: 'roll'
+    expect(capturedBody).not.toBeNull()
+    expect((capturedBody as Record<string, unknown>).hp_choice).toBe('roll')
+  })
 })
