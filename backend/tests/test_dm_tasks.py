@@ -276,12 +276,16 @@ class TestDmResponseTask:
             "tasks.dm_tasks.anthropic_client"
         ) as mock_anthropic, patch(
             "tasks.dm_tasks.openai_client"
-        ) as mock_openai:
+        ) as mock_openai, patch(
+            "tasks.dm_tasks.embed_text", return_value=[0.1] * 1536
+        ), patch(
+            "tasks.dm_tasks.search_rag", return_value=[]
+        ):
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.return_value = mock_anthropic_response
             mock_openai.embeddings.create.return_value = mock_embedding_result
 
-            dm_response_task.fn("game-1", "msg-1", "I attack!", [])
+            dm_response_task.fn("game-1", "msg-1", "I attack!")
 
             # Verify game_messages insert was called
             assert game_messages_mock.insert.called
@@ -360,12 +364,16 @@ class TestDmResponseTask:
             "tasks.dm_tasks.anthropic_client"
         ) as mock_anthropic, patch(
             "tasks.dm_tasks.openai_client"
-        ) as mock_openai:
+        ) as mock_openai, patch(
+            "tasks.dm_tasks.embed_text", return_value=[0.1] * 1536
+        ), patch(
+            "tasks.dm_tasks.search_rag", return_value=[]
+        ):
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.return_value = mock_anthropic_response
             mock_openai.embeddings.create.return_value = mock_embedding_result
 
-            dm_response_task.fn("game-1", "msg-1", "I attack!", [])
+            dm_response_task.fn("game-1", "msg-1", "I attack!")
 
             # Verify game_events insert was called
             assert game_events_mock.insert.called
@@ -395,12 +403,16 @@ class TestDmResponseTask:
 
         with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
             "tasks.dm_tasks.CurrentMessage"
-        ) as mock_current_message:
+        ) as mock_current_message, patch(
+            "tasks.dm_tasks.embed_text", return_value=[0.1] * 1536
+        ), patch(
+            "tasks.dm_tasks.search_rag", return_value=[]
+        ):
             mock_sb.table.side_effect = table_side_effect
             mock_current_message.get_current_message.return_value = mock_message
 
             with pytest.raises(Exception):
-                dm_response_task.fn("game-1", "msg-1", "I attack!", [])
+                dm_response_task.fn("game-1", "msg-1", "I attack!")
 
             # Assert system error was inserted on the terminal retry
             assert game_messages_mock.insert.called
@@ -432,15 +444,159 @@ class TestDmResponseTask:
 
         with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
             "tasks.dm_tasks.CurrentMessage"
-        ) as mock_current_message:
+        ) as mock_current_message, patch(
+            "tasks.dm_tasks.embed_text", return_value=[0.1] * 1536
+        ), patch(
+            "tasks.dm_tasks.search_rag", return_value=[]
+        ):
             mock_sb.table.side_effect = table_side_effect
             mock_current_message.get_current_message.return_value = mock_message
 
             with pytest.raises(Exception):
-                dm_response_task.fn("game-1", "msg-1", "I attack!", [])
+                dm_response_task.fn("game-1", "msg-1", "I attack!")
 
             # Assert system error was NOT inserted — a later retry may still succeed
             assert not game_messages_mock.insert.called
+
+
+class TestDin64LatencyChanges:
+    """DIN-64: Embedding moved to task, DM insert before event embedding."""
+
+    def _make_standard_mocks(self):
+        game_data = {"id": "game-1", "name": "Quest", "dm_persona": "DM"}
+        players_data = [
+            {
+                "id": "player-1",
+                "character_name": "Hero",
+                "race": "Human",
+                "level": 1,
+                "character_class": "Fighter",
+                "hp_current": 10,
+                "hp_max": 10,
+                "profile_id": "user-1",
+                "stats": {"str": 15, "dex": 12, "con": 13, "int": 8, "wis": 10, "cha": 9},
+            }
+        ]
+        return game_data, players_data
+
+    def test_dm_response_task_embeds_action_text_at_task_start(self):
+        """DIN-64: embed_text must be called with the action text inside the task."""
+        game_data, players_data = self._make_standard_mocks()
+
+        mock_game_result = MagicMock()
+        mock_game_result.data = game_data
+        mock_players_result = MagicMock()
+        mock_players_result.data = players_data
+        mock_messages_result = MagicMock()
+        mock_messages_result.data = []
+        mock_inventory_result = MagicMock()
+        mock_inventory_result.data = []
+        mock_anthropic_response = MagicMock()
+        mock_anthropic_response.content = [MagicMock(text="The adventure continues.")]
+        mock_embedding_result = MagicMock()
+        mock_embedding_result.data = [MagicMock(embedding=[0.1] * 1536)]
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "games":
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = mock_game_result
+                mock.update.return_value.match.return_value.execute.return_value = MagicMock()
+            elif name == "players":
+                mock.select.return_value.match.return_value.execute.return_value = mock_players_result
+            elif name == "game_messages":
+                mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = mock_messages_result
+                mock.insert.return_value.execute.return_value = MagicMock()
+            elif name == "player_inventory":
+                mock.select.return_value.eq.return_value.execute.return_value = mock_inventory_result
+            elif name == "game_events":
+                mock.insert.return_value.execute.return_value = MagicMock()
+            return mock
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, \
+             patch("tasks.dm_tasks.anthropic_client") as mock_anthropic, \
+             patch("tasks.dm_tasks.openai_client") as mock_openai, \
+             patch("tasks.dm_tasks.embed_text", return_value=[0.1] * 1536) as mock_embed, \
+             patch("tasks.dm_tasks.search_rag", return_value=[]):
+            mock_sb.table.side_effect = table_side_effect
+            mock_anthropic.messages.create.return_value = mock_anthropic_response
+            mock_openai.embeddings.create.return_value = mock_embedding_result
+
+            dm_response_task.fn("game-1", "msg-1", "I attack!")
+
+            mock_embed.assert_called_with("I attack!")
+
+    def test_dm_response_task_inserts_dm_message_before_game_events(self):
+        """DIN-64: game_messages insert must happen before game_events insert."""
+        game_data, players_data = self._make_standard_mocks()
+
+        mock_game_result = MagicMock()
+        mock_game_result.data = game_data
+        mock_players_result = MagicMock()
+        mock_players_result.data = players_data
+        mock_messages_result = MagicMock()
+        mock_messages_result.data = []
+        mock_inventory_result = MagicMock()
+        mock_inventory_result.data = []
+        mock_anthropic_response = MagicMock()
+        mock_anthropic_response.content = [MagicMock(
+            text='The goblin falls. <event type="combat">Goblin defeated</event>'
+        )]
+        mock_embedding_result = MagicMock()
+        mock_embedding_result.data = [MagicMock(embedding=[0.1] * 1536)]
+
+        call_order: list[str] = []
+
+        game_messages_mock = MagicMock()
+        game_messages_mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = mock_messages_result
+
+        def gm_insert(data):
+            call_order.append("game_messages")
+            m = MagicMock()
+            m.execute.return_value = MagicMock()
+            return m
+
+        game_messages_mock.insert.side_effect = gm_insert
+
+        game_events_mock = MagicMock()
+
+        def ge_insert(data):
+            call_order.append("game_events")
+            m = MagicMock()
+            m.execute.return_value = MagicMock()
+            return m
+
+        game_events_mock.insert.side_effect = ge_insert
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "games":
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = mock_game_result
+                mock.update.return_value.match.return_value.execute.return_value = MagicMock()
+            elif name == "players":
+                mock.select.return_value.match.return_value.execute.return_value = mock_players_result
+            elif name == "game_messages":
+                return game_messages_mock
+            elif name == "player_inventory":
+                mock.select.return_value.eq.return_value.execute.return_value = mock_inventory_result
+            elif name == "game_events":
+                return game_events_mock
+            return mock
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, \
+             patch("tasks.dm_tasks.anthropic_client") as mock_anthropic, \
+             patch("tasks.dm_tasks.openai_client") as mock_openai, \
+             patch("tasks.dm_tasks.embed_text", return_value=[0.1] * 1536), \
+             patch("tasks.dm_tasks.search_rag", return_value=[]):
+            mock_sb.table.side_effect = table_side_effect
+            mock_anthropic.messages.create.return_value = mock_anthropic_response
+            mock_openai.embeddings.create.return_value = mock_embedding_result
+
+            dm_response_task.fn("game-1", "msg-1", "I attack!")
+
+            assert "game_messages" in call_order, "game_messages insert not called"
+            assert "game_events" in call_order, "game_events insert not called"
+            assert call_order.index("game_messages") < call_order.index("game_events"), \
+                "game_messages must be inserted before game_events"
 
 
 class TestDmResponseTaskSuggestedActions:
@@ -551,12 +707,16 @@ class TestDmResponseTaskSuggestedActions:
             "tasks.dm_tasks.anthropic_client"
         ) as mock_anthropic, patch(
             "tasks.dm_tasks.openai_client"
-        ) as mock_openai:
+        ) as mock_openai, patch(
+            "tasks.dm_tasks.embed_text", return_value=[0.1] * 1536
+        ), patch(
+            "tasks.dm_tasks.search_rag", return_value=[]
+        ):
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.return_value = mock_anthropic_response
             mock_openai.embeddings.create.return_value = mock_embedding_result
 
-            dm_response_task.fn("game-1", "msg-1", "I examine the door.", [])
+            dm_response_task.fn("game-1", "msg-1", "I examine the door.")
 
         assert "suggested_actions" in captured_update_payload
         assert captured_update_payload["suggested_actions"] == [
@@ -633,12 +793,16 @@ class TestDmResponseTaskSuggestedActions:
             "tasks.dm_tasks.anthropic_client"
         ) as mock_anthropic, patch(
             "tasks.dm_tasks.openai_client"
-        ) as mock_openai:
+        ) as mock_openai, patch(
+            "tasks.dm_tasks.embed_text", return_value=[0.1] * 1536
+        ), patch(
+            "tasks.dm_tasks.search_rag", return_value=[]
+        ):
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.return_value = mock_anthropic_response
             mock_openai.embeddings.create.return_value = mock_embedding_result
 
-            dm_response_task.fn("game-1", "msg-1", "I approach the guard.", [])
+            dm_response_task.fn("game-1", "msg-1", "I approach the guard.")
 
         assert "suggested_actions" not in captured_insert_content.get("content", "")
         assert narrative in captured_insert_content.get("content", "")
@@ -702,12 +866,16 @@ class TestDmResponseTaskSuggestedActions:
             "tasks.dm_tasks.anthropic_client"
         ) as mock_anthropic, patch(
             "tasks.dm_tasks.openai_client"
-        ) as mock_openai:
+        ) as mock_openai, patch(
+            "tasks.dm_tasks.embed_text", return_value=[0.1] * 1536
+        ), patch(
+            "tasks.dm_tasks.search_rag", return_value=[]
+        ):
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.return_value = mock_anthropic_response
             mock_openai.embeddings.create.return_value = mock_embedding_result
 
-            dm_response_task.fn("game-1", "msg-1", "I attack!", [])
+            dm_response_task.fn("game-1", "msg-1", "I attack!")
 
         assert captured_update_payload.get("suggested_actions") == []
 
@@ -1180,12 +1348,16 @@ class TestStateChanges:
 
         with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
             "tasks.dm_tasks.anthropic_client"
-        ) as mock_anthropic, patch("tasks.dm_tasks.openai_client") as mock_openai:
+        ) as mock_anthropic, patch("tasks.dm_tasks.openai_client") as mock_openai, patch(
+            "tasks.dm_tasks.embed_text", return_value=[0.1] * 1536
+        ), patch(
+            "tasks.dm_tasks.search_rag", return_value=[]
+        ):
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.side_effect = capture_create
             mock_openai.embeddings.create.return_value = MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
 
-            dm_response_task.fn("game-1", "msg-1", "I attack!", [])
+            dm_response_task.fn("game-1", "msg-1", "I attack!")
 
         assert "[ID: player-uuid-1]" in captured_prompt.get("system", ""), \
             "Party line must contain [ID: {uuid}] for Claude state_changes tracking"
@@ -1237,12 +1409,16 @@ class TestStateChanges:
 
         with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
             "tasks.dm_tasks.anthropic_client"
-        ) as mock_anthropic, patch("tasks.dm_tasks.openai_client") as mock_openai:
+        ) as mock_anthropic, patch("tasks.dm_tasks.openai_client") as mock_openai, patch(
+            "tasks.dm_tasks.embed_text", return_value=[0.1] * 1536
+        ), patch(
+            "tasks.dm_tasks.search_rag", return_value=[]
+        ):
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.return_value = MagicMock(content=[MagicMock(text=dm_text)])
             mock_openai.embeddings.create.return_value = MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
 
-            dm_response_task.fn("game-1", "msg-1", "I attack!", [])
+            dm_response_task.fn("game-1", "msg-1", "I attack!")
 
         stored_content = captured_content.get("content", "")
         assert "<state_changes>" not in stored_content, "state_changes block must be stripped from stored content"
@@ -1286,12 +1462,16 @@ class TestStateChanges:
 
         with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
             "tasks.dm_tasks.anthropic_client"
-        ) as mock_anthropic, patch("tasks.dm_tasks.openai_client") as mock_openai:
+        ) as mock_anthropic, patch("tasks.dm_tasks.openai_client") as mock_openai, patch(
+            "tasks.dm_tasks.embed_text", return_value=[0.1] * 1536
+        ), patch(
+            "tasks.dm_tasks.search_rag", return_value=[]
+        ):
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.return_value = MagicMock(content=[MagicMock(text=dm_text)])
             mock_openai.embeddings.create.return_value = MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
 
-            dm_response_task.fn("game-1", "msg-1", "I attack!", [])
+            dm_response_task.fn("game-1", "msg-1", "I attack!")
 
         stored_content = captured_content.get("content", "")
         assert "Goblin defeated" in stored_content, "Event inner text must be preserved in clean_response"
@@ -1359,12 +1539,16 @@ class TestStateChanges:
 
         with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
             "tasks.dm_tasks.anthropic_client"
-        ) as mock_anthropic, patch("tasks.dm_tasks.openai_client") as mock_openai:
+        ) as mock_anthropic, patch("tasks.dm_tasks.openai_client") as mock_openai, patch(
+            "tasks.dm_tasks.embed_text", return_value=[0.1] * 1536
+        ), patch(
+            "tasks.dm_tasks.search_rag", return_value=[]
+        ):
             mock_sb.table.side_effect = table_side_effect
             mock_anthropic.messages.create.side_effect = capture_create
             mock_openai.embeddings.create.return_value = MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
 
-            dm_response_task.fn("game-1", "msg-1", "I attack!", [])
+            dm_response_task.fn("game-1", "msg-1", "I attack!")
 
         system_prompt = captured_prompt.get("system", "")
         assert f"Proficiency bonus: {expected_bonus}" in system_prompt, (

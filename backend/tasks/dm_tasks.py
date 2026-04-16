@@ -7,7 +7,6 @@ Dramatiq tasks for async work:
 
 import math
 import dramatiq
-from typing import List, Dict, Any
 import json
 from datetime import datetime
 import logging
@@ -36,22 +35,22 @@ def dm_response_task(
     game_id: str,
     message_id: str,
     action_text: str,
-    rag_context: List[Dict[str, Any]],
+    rag_context: list | None = None,  # deprecated: kept for in-flight job compat; ignored at runtime
 ):
     """
     Async Dramatiq task: Process DM response
 
+    0.  Embed action text + RAG search (moved here from request path for lower latency)
     1.  Fetch game state + players
     1b. Fetch last 20 messages for history context
     1c. Fetch player inventory for each player
     2.  Build Claude system prompt with history, inventory, RAG context
     3.  Call Claude API
-    4.  Extract events from raw response
-    5.  Embed events
-    6.  Strip event markers from displayed message
-    7.  Insert cleaned DM response to game_messages
-    8.  Insert events to game_events
-    9.  Update game timestamp
+    4.  Extract events + state changes + dice rolls from raw response
+    5.  Strip all structured blocks from display message
+    6.  Insert DM response to game_messages  ← fires Realtime immediately
+    7.  Update game state (suggested_actions, timestamp)
+    8.  Embed and insert events to game_events  ← no longer blocks Realtime
 
     On failure: insert system error message, then re-raise for Dramatiq retry.
     If fails 3 times: dead-letter queue (requires manual review)
@@ -60,6 +59,13 @@ def dm_response_task(
     logger.info(f"[dm_response_task] Starting for game={game_id}, message={message_id}")
 
     try:
+        # Step 0: Embed action text + RAG search (moved out of request path for lower latency)
+        try:
+            action_embedding = embed_text(action_text)
+            rag_context = search_rag(game_id, action_embedding, top_k=5)
+        except Exception as e:
+            logger.warning(f"[dm_response_task] RAG search failed (fallback to no RAG): {e}")
+            rag_context = []
         # Step 1: Fetch game state
         game = (
             supabase_client.table("games")
@@ -264,26 +270,7 @@ The acting player's action:
         dice_rolls = extract_dice_rolls(dm_response)
         logger.info(f"[dm_response_task] Extracted {len(dice_rolls)} dice rolls")
 
-        # Step 5: Embed events
-        event_rows = []
-        for event in events:
-            event_embedding = openai_client.embeddings.create(
-                model="text-embedding-3-small",
-                input=event["description"],
-                dimensions=1536,
-            )
-
-            event_rows.append(
-                {
-                    "game_id": game_id,
-                    "event_type": event["type"],
-                    "summary": event["description"],
-                    "embedding": event_embedding.data[0].embedding,
-                    "source": EVENT_SOURCE_CLAUDE,
-                }
-            )
-
-        # Step 6: Parse and strip suggested_actions block
+        # Step 5: Parse and strip suggested_actions block
         suggested_match = re.search(
             r'<suggested_actions>(.*?)</suggested_actions>',
             dm_response,
@@ -329,7 +316,7 @@ The acting player's action:
             flags=re.DOTALL,
         ).strip()
 
-        # Step 7: Insert DM response to game_messages
+        # Step 6: Insert DM response to game_messages — fires Realtime so player sees it now
         response_message = {
             "game_id": game_id,
             "profile_id": None,
@@ -341,18 +328,43 @@ The acting player's action:
         supabase_client.table("game_messages").insert(response_message).execute()
         logger.info("[dm_response_task] Inserted DM response")
 
-        # Step 8: Insert events to game_events
-        if event_rows:
-            supabase_client.table("game_events").insert(event_rows).execute()
-            logger.info(f"[dm_response_task] Inserted {len(event_rows)} events")
-
-        # Step 9: Update game state (including suggested actions)
+        # Step 7: Update game state (suggested_actions, timestamp) — also unblocked
         supabase_client.table("games").update(
             {
                 "updated_at": datetime.utcnow().isoformat(),
                 "suggested_actions": suggested_actions,
             }
         ).match({"id": game_id}).execute()
+
+        # Step 8+9: Embed events and insert to game_events — best-effort; failure here must NOT
+        # trigger a task retry because the DM message is already persisted (Step 6). A retry
+        # would re-call Claude and insert a duplicate DM message, corrupting the game timeline.
+        try:
+            event_rows = []
+            for event in events:
+                event_embedding = openai_client.embeddings.create(
+                    model="text-embedding-3-small",
+                    input=event["description"],
+                    dimensions=1536,
+                )
+
+                event_rows.append(
+                    {
+                        "game_id": game_id,
+                        "event_type": event["type"],
+                        "summary": event["description"],
+                        "embedding": event_embedding.data[0].embedding,
+                        "source": EVENT_SOURCE_CLAUDE,
+                    }
+                )
+
+            if event_rows:
+                supabase_client.table("game_events").insert(event_rows).execute()
+                logger.info(f"[dm_response_task] Inserted {len(event_rows)} events")
+        except Exception as embed_err:
+            logger.warning(
+                f"[dm_response_task] Event embedding/insert failed (best-effort, not retried): {embed_err}"
+            )
 
         logger.info(f"[dm_response_task] Success! game_id={game_id}")
 

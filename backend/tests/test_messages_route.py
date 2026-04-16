@@ -195,14 +195,7 @@ class TestPatchMessage:
 
         with patch("api.routes.messages.supabase_client", _make_supabase(gm)), patch(
             "api.routes.messages.dm_response_task"
-        ) as mock_task, patch(
-            "api.routes.messages.openai_client"
-        ) as mock_openai, patch(
-            "api.routes.messages.search_rag", return_value=[]
-        ):
-            mock_openai.embeddings.create.return_value = MagicMock(
-                data=[MagicMock(embedding=[0.1] * 1536)]
-            )
+        ) as mock_task:
             mock_task.send = MagicMock()
 
             res = client.patch(
@@ -214,19 +207,12 @@ class TestPatchMessage:
         assert res.json()["content"] == "I search for traps."
 
     def test_dm_response_task_send_called(self, client):
-        """PATCH calls dm_response_task.send with updated content."""
+        """PATCH calls dm_response_task.send with updated content (no rag_context — DIN-64)."""
         gm = _build_gm_mock()
 
         with patch("api.routes.messages.supabase_client", _make_supabase(gm)), patch(
             "api.routes.messages.dm_response_task"
-        ) as mock_task, patch(
-            "api.routes.messages.openai_client"
-        ) as mock_openai, patch(
-            "api.routes.messages.search_rag", return_value=[]
-        ):
-            mock_openai.embeddings.create.return_value = MagicMock(
-                data=[MagicMock(embedding=[0.1] * 1536)]
-            )
+        ) as mock_task:
             mock_task.send = MagicMock()
 
             client.patch(
@@ -238,7 +224,6 @@ class TestPatchMessage:
                 game_id=GAME_ID,
                 message_id=MSG_ID,
                 action_text="I search for traps.",
-                rag_context=[],
             )
 
     def test_409_when_not_last_message(self, client):
@@ -303,18 +288,13 @@ class TestPatchMessage:
 
         assert res.status_code == 401
 
-    def test_embedding_failure_falls_back_to_no_rag(self, client):
-        """PATCH still queues DM task even if embedding fails."""
+    def test_send_does_not_include_rag_context_kwarg(self, client):
+        """PATCH: dm_response_task.send must NOT include rag_context kwarg (DIN-64 — embedding moved to worker)."""
         gm = _build_gm_mock()
 
         with patch("api.routes.messages.supabase_client", _make_supabase(gm)), patch(
             "api.routes.messages.dm_response_task"
-        ) as mock_task, patch(
-            "api.routes.messages.openai_client"
-        ) as mock_openai, patch(
-            "api.routes.messages.search_rag", return_value=[]
-        ):
-            mock_openai.embeddings.create.side_effect = Exception("Embedding unavailable")
+        ) as mock_task:
             mock_task.send = MagicMock()
 
             res = client.patch(
@@ -323,9 +303,6 @@ class TestPatchMessage:
             )
 
         assert res.status_code == 200
-        mock_task.send.assert_called_once_with(
-            game_id=GAME_ID,
-            message_id=MSG_ID,
-            action_text="I cast magic missile.",
-            rag_context=[],
-        )
+        mock_task.send.assert_called_once()
+        call_kwargs = mock_task.send.call_args[1]
+        assert "rag_context" not in call_kwargs
