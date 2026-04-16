@@ -361,3 +361,225 @@ test.describe('DIN-66 — non-ok response clears streaming state', () => {
     await expect(textarea).toBeEnabled()
   })
 })
+
+test.describe('DIN-66 — suggested_actions tag not visible in streaming bubble', () => {
+  test('suggested_actions block content never appears in the chat bubble', async ({ page }) => {
+    await setupStreamMocks(page)
+    const suggestionContent =
+      'Charge the goblin with your sword.\nShout for backup.\nSneak past and run.'
+
+    await mockStreamingFlow(page, [
+      { type: 'chunk', text: 'The goblin blocks the path. ' },
+      {
+        type: 'block',
+        tag: 'suggested_actions',
+        attributes: {},
+        content: suggestionContent,
+      },
+      { type: 'chunk', text: 'Decide quickly.' },
+      { type: 'done' },
+    ])
+
+    await gotoGame(page)
+
+    await page.getByTestId('chat-textarea').fill('I face the goblin.')
+    await page.getByRole('button', { name: /Send/i }).click()
+
+    const bubble = page.getByTestId('streaming-dm-message')
+    await expect(bubble).toContainText('The goblin blocks the path.', { timeout: 3000 })
+    await expect(bubble).toContainText('Decide quickly.')
+    await expect(bubble).not.toContainText('Charge the goblin')
+    await expect(bubble).not.toContainText('Shout for backup')
+    await expect(bubble).not.toContainText('<suggested_actions>')
+  })
+})
+
+test.describe('DIN-66 — suggested_actions block enables cycle UI after reconciliation', () => {
+  test('cycle button activates with new suggestions once Realtime DM INSERT fires', async ({
+    page,
+  }) => {
+    await setupStreamMocks(page)
+    const suggestions = [
+      'Draw your sword and charge.',
+      'Call out to the figure in the shadows.',
+      'Duck behind the crates for cover.',
+    ]
+
+    await mockStreamingFlow(page, [
+      { type: 'chunk', text: 'A cloaked figure emerges. ' },
+      {
+        type: 'block',
+        tag: 'suggested_actions',
+        attributes: {},
+        content: suggestions.join('\n'),
+      },
+      { type: 'done' },
+    ])
+
+    await gotoGame(page)
+
+    const cycleBtn = page.getByTestId('cycle-suggestion-btn')
+    // Starts disabled — game has no suggested_actions initially
+    await expect(cycleBtn).toBeDisabled()
+
+    await page.getByTestId('chat-textarea').fill('I peer into the shadows.')
+    await page.getByRole('button', { name: /Send/i }).click()
+
+    // Still disabled while isWaitingForDm is true (streaming active)
+    await expect(cycleBtn).toBeDisabled({ timeout: 1000 })
+
+    // Simulate Realtime DM INSERT — triggers reconciliation
+    await page.evaluate(
+      ({ gameId }) => {
+        window.dispatchEvent(
+          new CustomEvent('dm-message', {
+            detail: {
+              id: 'msg-dm-suggest',
+              game_id: gameId,
+              profile_id: null,
+              role: 'dm',
+              content: 'A cloaked figure emerges.',
+              created_at: new Date().toISOString(),
+            },
+          })
+        )
+      },
+      { gameId: GAME_ID }
+    )
+
+    // After reconciliation isWaitingForDm=false → cycle button enabled with streamed suggestions
+    await expect(cycleBtn).toBeEnabled({ timeout: 3000 })
+
+    // Clicking populates the textarea with the first suggestion
+    await cycleBtn.click()
+    await expect(page.getByTestId('chat-textarea')).toHaveValue(suggestions[0])
+  })
+})
+
+test.describe('DIN-66 — Realtime reconciliation: no duplicate, no flash', () => {
+  test('confirmed DM INSERT clears streaming bubble and renders single message', async ({
+    page,
+  }) => {
+    await setupStreamMocks(page)
+    const streamedText = 'The orc raises his axe.'
+    const confirmedText = 'The orc raises his axe and bellows a war cry.'
+
+    await mockStreamingFlow(page, [
+      { type: 'chunk', text: streamedText },
+      { type: 'done' },
+    ])
+
+    await gotoGame(page)
+
+    await page.getByTestId('chat-textarea').fill('I stand my ground.')
+    await page.getByRole('button', { name: /Send/i }).click()
+
+    // Streaming bubble visible with the streamed text while waiting for Realtime
+    const streamBubble = page.getByTestId('streaming-dm-message')
+    await expect(streamBubble).toBeVisible({ timeout: 3000 })
+    await expect(streamBubble).toContainText(streamedText)
+
+    // Simulate Realtime DM INSERT — backend persisted the clean version
+    await page.evaluate(
+      ({ gameId, content }) => {
+        window.dispatchEvent(
+          new CustomEvent('dm-message', {
+            detail: {
+              id: 'msg-dm-confirmed',
+              game_id: gameId,
+              profile_id: null,
+              role: 'dm',
+              content,
+              created_at: new Date().toISOString(),
+            },
+          })
+        )
+      },
+      { gameId: GAME_ID, content: confirmedText }
+    )
+
+    // Streaming bubble disappears — swapped for confirmed DB message
+    await expect(streamBubble).toHaveCount(0, { timeout: 3000 })
+
+    // Confirmed message appears exactly once (no duplicate)
+    await expect(page.getByText(confirmedText)).toBeVisible({ timeout: 3000 })
+    await expect(page.getByText(confirmedText)).toHaveCount(1)
+
+    // Input re-enabled after reconciliation
+    await expect(page.getByTestId('chat-textarea')).toBeEnabled()
+  })
+})
+
+test.describe('DIN-66 — GET /events non-200 clears streaming state', () => {
+  test('events endpoint error clears bubble; system message re-enables input', async ({
+    page,
+  }) => {
+    await setupStreamMocks(page)
+
+    await page.route(`**/api/games/${GAME_ID}/actions`, async (route) => {
+      if (route.request().method() === 'POST') {
+        await route.fulfill({
+          status: 202,
+          contentType: 'application/json',
+          body: JSON.stringify({ status: 'queued', message_id: 'msg-1' }),
+        })
+      } else {
+        await route.continue()
+      }
+    })
+
+    await page.route(`**/api/games/${GAME_ID}/events`, async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'Stream unavailable' }),
+        })
+      } else {
+        await route.continue()
+      }
+    })
+
+    await gotoGame(page)
+
+    const textarea = page.getByTestId('chat-textarea')
+    await textarea.fill('I cast fireball.')
+    await page.getByRole('button', { name: /Send/i }).click()
+
+    // Bubble must clear after the events endpoint error
+    await expect(page.getByTestId('streaming-dm-message')).toHaveCount(0, {
+      timeout: 3000,
+    })
+
+    // isWaitingForDm stays true — input remains disabled until backend signal
+    await expect(textarea).toBeDisabled()
+
+    // Simulate backend inserting a system error message via Supabase Realtime
+    await page.evaluate(
+      ({ gameId }) => {
+        window.dispatchEvent(
+          new CustomEvent('system-message', {
+            detail: {
+              id: 'msg-system-err',
+              game_id: gameId,
+              profile_id: null,
+              role: 'system',
+              content:
+                'The Dungeon Master encountered an error. Please try your action again.',
+              created_at: new Date().toISOString(),
+            },
+          })
+        )
+      },
+      { gameId: GAME_ID }
+    )
+
+    // Error message visible in chat log
+    await expect(
+      page.getByText(/The Dungeon Master encountered an error/i)
+    ).toBeVisible({ timeout: 3000 })
+
+    // Input re-enabled after system message arrives
+    await expect(textarea).toBeEnabled({ timeout: 3000 })
+  })
+})
