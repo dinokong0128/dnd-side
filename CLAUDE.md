@@ -1,7 +1,7 @@
 # D&D Multiplayer App — Project Context
 
-**Last Updated:** April 6, 2026
-**Status:** MVP in active development (~50% complete)
+**Last Updated:** April 17, 2026
+**Status:** MVP complete ✅ — Post-MVP (v1.0 — Full Gameplay) in progress
 **Repository:** `dinokong0128/dnd-side` (GitHub, `develop` branch)
 **Detailed Architecture:** See `docs/ARCHITECTURE.md`
 
@@ -9,7 +9,7 @@
 
 ## Project Overview
 
-A multiplayer D&D app where Claude acts as the Dungeon Master. Players send actions via Next.js frontend; FastAPI backend validates, embeds, and queues a Dramatiq task; a worker calls Claude with RAG context; the DM response broadcasts to all players via Supabase Realtime.
+A multiplayer D&D app where Claude acts as the Dungeon Master. Players submit actions via the Next.js frontend; FastAPI validates, embeds, and orchestrates the DM response with RAG context; Claude streams narration back over SSE while structured block data (`<state_changes>`, `<dice_rolls>`, `<suggested_actions>`, `<event>`) travels alongside for the frontend and backend to apply.
 
 ---
 
@@ -17,26 +17,35 @@ A multiplayer D&D app where Claude acts as the Dungeon Master. Players send acti
 
 | Component | Technology | Host |
 |---|---|---|
-| Frontend | Next.js 16 (App Router, TypeScript strict) | Vercel |
-| Backend | FastAPI + Python | Render |
-| Database | Supabase (Postgres + pgvector + Realtime) | Managed |
-| Job Queue | Dramatiq + Redis | Render (Key Value) |
-| Auth | Supabase Auth (JWT) | Supabase |
-| LLM | `claude-sonnet-4-20250514` | Anthropic API |
-| Embeddings | OpenAI `text-embedding-3-small` (1536-dim) | OpenAI API (called from FastAPI backend) |
+| Frontend | Next.js 16.2.3 (App Router, TypeScript strict), React 19.2.5, Tailwind 4 | Vercel |
+| Backend | FastAPI 0.135 + Python | Render (web service — Dramatiq worker embedded in the start command) |
+| Database | Supabase (Postgres + pgvector + Realtime) | Managed (`ytxncykyfbhoyvxkocrs`) |
+| Job Queue | Dramatiq 2.1 + Redis 7 | Render Key Value |
+| Auth | Supabase Auth via `@supabase/ssr` 0.10 (JWT) | Supabase |
+| LLM | `claude-sonnet-4-20250514` (streaming via `anthropic` 0.93) | Anthropic API |
+| Embeddings | OpenAI `text-embedding-3-small` (1536-dim, `openai` 2.31) | OpenAI API (called from FastAPI) |
+| Validation | Zod v4 (frontend), Pydantic v2 (backend) | — |
 
 **→ Full rationale in `docs/ARCHITECTURE.md`**
 
 ---
 
-## 🏗️ Architecture: Scenario A (DM Orchestration in FastAPI)
+## 🏗️ Architecture
 
-**Flow:** Player action → Next.js proxy → FastAPI validation + embed + RAG → Queue Dramatiq task → Worker calls Claude → Inserts DM response + events → Supabase Realtime broadcasts → Frontend re-renders
+**Flow (DIN-66 streaming):**
 
-**Why FastAPI (not Next.js)?**
-- ✅ No cold start penalty on DM latency (always-on Render worker)
-- ✅ Proper job queue pattern (Dramatiq with retries)
-- ✅ Separation of concerns (frontend = UI, backend = business logic)
+1. Player submits action → Next.js proxy route → FastAPI `POST /games/{id}/actions`
+2. FastAPI validates JWT, inserts player message, returns 202 immediately
+3. Background coroutine in FastAPI: embed action → RAG search on `game_events` → call Claude with `stream=True`
+4. Each streamed token/block is published to Redis channel `stream:{game_id}`
+5. The acting player's browser subscribes to `GET /games/{id}/events` (SSE); tokens render live
+6. When stream completes: FastAPI inserts the full DM message (Supabase Realtime fans out to other players), then enqueues `dm_bookkeeping_task` (Dramatiq) to embed extracted events + persist `suggested_actions`
+
+**Why FastAPI (not Next.js) for DM orchestration?**
+- ✅ No cold start penalty — Render web service is always-on
+- ✅ Job queue pattern for durable bookkeeping (Dramatiq retries)
+- ✅ Separation of concerns: frontend = UI, backend = business logic + AI
+- ✅ Server-side embeddings keep OpenAI keys off the client
 
 **→ Detailed flow in `docs/ARCHITECTURE.md`**
 
@@ -46,23 +55,29 @@ A multiplayer D&D app where Claude acts as the Dungeon Master. Players send acti
 
 ```
 dnd-side/
-├── frontend/          # Next.js 16 (App Router, TypeScript)
+├── frontend/                   # Next.js 16 (App Router, TypeScript)
 │   ├── src/
-│   │   ├── app/       # Pages, API routes (proxy layer only)
+│   │   ├── app/
+│   │   │   ├── api/            # Proxy routes to FastAPI
+│   │   │   ├── auth/           # login, signup, callback
+│   │   │   ├── dashboard/
+│   │   │   └── games/[gameId]/
 │   │   ├── components/
-│   │   ├── lib/       # Supabase clients, types, validations
-│   │   └── proxy.ts   # Auth middleware (Next.js 16 convention)
-│   └── e2e/           # Playwright end-to-end tests
-├── backend/           # FastAPI (Render)
-│   ├── api/routes/    # games, players, actions, invites
-│   ├── services/      # dm_service, db_service, embedding_service
-│   ├── tasks/         # dm_tasks.py (Dramatiq actors)
-│   ├── models/        # Pydantic models
-│   └── tests/         # pytest
-├── docs/
-│   ├── ARCHITECTURE.md  # Full design, flows, decisions
-│   └── DATA_MODEL.md    # Schema reference
-└── supabase/migrations/ # All DB migrations
+│   │   │   ├── auth/
+│   │   │   ├── games/          # Chat, character sheet, session, dice
+│   │   │   └── dice/           # DiceRoller
+│   │   ├── lib/                # Supabase clients, types, Zod validations, utils
+│   │   └── proxy.ts            # Auth middleware (Next.js 16 convention)
+│   └── e2e/                    # Playwright
+├── backend/                    # FastAPI (Render)
+│   ├── api/routes/             # games, players, actions, invites, messages, level_up, events
+│   ├── services/               # dm_service, db_service, embedding_service, stream_parser
+│   ├── tasks/                  # dm_tasks.py (Dramatiq actors)
+│   ├── utils/                  # dnd.py (class tables, XP thresholds, hit dice)
+│   ├── models/                 # Pydantic models
+│   └── tests/                  # pytest
+├── docs/                       # ARCHITECTURE.md, DATA_MODEL.md, TDD_WORKFLOW.md
+└── supabase/migrations/
 ```
 
 **→ Complete directory tree in `docs/ARCHITECTURE.md`**
@@ -71,17 +86,19 @@ dnd-side/
 
 ## 🗄️ Database Schema
 
-Seven tables in Supabase (`ytxncykyfbhoyvxkocrs`):
+Seven public tables in Supabase (`ytxncykyfbhoyvxkocrs`) + a `secrets` table for server-side credentials:
 
 | Table | Purpose |
 |---|---|
 | `profiles` | Extends Supabase Auth users |
-| `games` | Game sessions + DM persona |
-| `players` | Characters per game (class, race, level, HP, stats) |
+| `games` | Game sessions + DM persona + `suggested_actions` cache |
+| `players` | Characters per game (class, race, level, HP, stats JSONB) |
 | `player_inventory` | Items per player |
-| `game_messages` | Chat log — Realtime broadcast source |
-| `game_events` | Narrative events with pgvector embeddings (RAG) |
+| `game_messages` | Chat log — Realtime broadcast source; `dice_rolls` JSONB for mechanical overlays |
+| `game_events` | Narrative events with pgvector embeddings (RAG memory) |
 | `invites` | One-time invite codes per game |
+
+**`players.stats` JSONB** holds ability scores plus optional keys added by Epic-7 / Epic-8: `xp`, `spell_slots`, `cantrips` — no schema migration needed when new state types are added.
 
 **→ Full schema with columns, indexes, and RLS in `docs/DATA_MODEL.md`**
 
@@ -91,11 +108,13 @@ Seven tables in Supabase (`ytxncykyfbhoyvxkocrs`):
 
 | Decision | Choice | Why |
 |---|---|---|
-| DM Orchestration | FastAPI backend | Job queues, retries, always-on workers |
-| Embeddings | FastAPI backend (actions.py + dm_tasks.py) | Keeps all AI logic server-side |
-| Job Queue | Dramatiq + Redis | Lightweight, Render-compatible |
+| DM Orchestration | FastAPI backend | Always-on, streaming, job queues |
+| Streaming | SSE via Redis pub/sub (`stream:{gameId}`) | Fans out natively to all players in multiplayer (DIN-67) |
+| Structured blocks | `<state_changes>`, `<dice_rolls>`, `<suggested_actions>`, `<event>` | Keeps narrative prose clean while passing mechanical data; each block has its own extractor + sink |
+| Embeddings | FastAPI backend (`embed_text()` in `embedding_service.py`) | Keeps API keys server-side |
+| Job Queue | Dramatiq + Redis | Lightweight, embedded into Render web service start command |
 | Auth | Supabase JWT | Built-in, integrates with RLS |
-| Realtime | Supabase Changes | Native Postgres, no extra infra |
+| Realtime | Supabase Postgres Changes | Native, no extra infra |
 | Auth middleware | `proxy.ts` (not `middleware.ts`) | Next.js 16 convention |
 
 **→ Full rationale in `docs/ARCHITECTURE.md`**
@@ -104,33 +123,40 @@ Seven tables in Supabase (`ytxncykyfbhoyvxkocrs`):
 
 ## 🎯 Service Boundaries
 
-### Next.js (Frontend — Vercel)
-- Auth UI (login, signup via invite link)
+### Next.js (Vercel)
+- Auth UI (login, signup via invite, account management)
 - Dashboard, game lobby, real-time game view
-- Supabase Realtime subscriptions
-- **All mutations proxy through FastAPI** (no direct Supabase writes except reads for lists/lobbies)
+- Supabase Realtime subscriptions + SSE stream consumer
+- **All mutations proxy through FastAPI** (direct Supabase reads are acceptable for lists/lobbies)
 
-### FastAPI (Backend — Render)
+### FastAPI (Render)
 - All business logic validation
-- Claude DM orchestration (RAG, prompt building, response parsing)
-- OpenAI embeddings for action text + narrative events
-- Job queue management (Dramatiq tasks)
-- All DB mutations
+- Claude DM orchestration (RAG, prompt building, streaming, block extraction)
+- OpenAI embeddings for actions + narrative events
+- Dramatiq tasks (bookkeeping after stream completes)
+- All DB mutations via service role
 
 ### Supabase
 - User auth (JWT, refresh tokens)
 - Data persistence + RLS
 - Realtime broadcasting (`game_messages`)
-- Vector similarity search (`game_events` via pgvector)
+- Vector similarity search (`game_events` via pgvector HNSW)
 
 ---
 
 ## 🚀 Deployment
 
-| Service | Platform | URL |
+| Service | Platform | URL / ID |
 |---|---|---|
-| Frontend | Vercel | `https://dnd-side.vercel.app` |
-| Backend | Render | Auto-deploy on `develop` push |
+| Frontend | Vercel | `https://dnd-side.vercel.app` (project `prj_fgN3YvJDnx0o0IWPws3nxPDjvp2i`) |
+| Backend | Render (auto-deploy on `develop` push) | `https://dnd-backend-xk1o.onrender.com` (service `srv-d72p7jvfte5s73a5lbrg`) |
+| Redis | Render Key Value | Referenced via `REDIS_URL` env var |
+
+**Render start command** (Dramatiq + Gunicorn combined — Render free tier doesn't allow a separate worker service):
+
+```
+dramatiq tasks.dm_tasks --processes 1 --threads 2 & gunicorn main:app --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+```
 
 **→ Deployment details in `docs/ARCHITECTURE.md`**
 
@@ -138,35 +164,46 @@ Seven tables in Supabase (`ytxncykyfbhoyvxkocrs`):
 
 ## 🔑 Implementation Notes
 
-**RAG Flow (in `actions.py` + `dm_tasks.py`):**
-1. Embed player action text via OpenAI (in `actions.py`)
+**RAG flow (in `actions.py` + `dm_tasks.py`):**
+1. Embed player action text via OpenAI (in `actions.py`, inside the background coroutine)
 2. Cosine similarity search on `game_events` (top 5)
-3. Pass context to Dramatiq task
-4. Inject events into Claude system prompt
-5. Parse Claude response for `<event type="...">...</event>` markers
-6. Embed extracted events + insert to `game_events`
+3. Inject RAG context + party state into Claude system prompt
+4. Stream Claude response → publish to Redis → SSE to browser
+5. Parse streamed tokens for `<event>`, `<state_changes>`, `<dice_rolls>`, `<suggested_actions>` blocks
+6. Apply `<state_changes>` immediately (HP/spell slots/XP/inventory). Persist `dice_rolls` on the DM message row. Cache `suggested_actions` on the game row.
+7. `dm_bookkeeping_task` (Dramatiq) embeds extracted events and inserts to `game_events`
 
 **`proxy.ts`:** Next.js 16 renamed `middleware.ts` → `proxy.ts` and `middleware()` → `proxy()`. Handles JWT session refresh + route protection for `/dashboard` and `/games/*`.
 
 **Service role key:** Required for all `game_events` writes and DM `game_messages` inserts. Never expose in `NEXT_PUBLIC_` env vars.
 
+**Realtime JWT propagation:** `@supabase/ssr` browser client doesn't auto-send JWT to Realtime WebSocket — `GameSessionView.tsx` calls `supabase.realtime.setAuth(session.access_token)` inside `initializeSession`.
+
 ---
 
-## 📊 Current MVP Status
+## 📊 Current Status
 
-| Epic | Feature | Status |
-|---|---|---|
-| Auth & Invite | Sign up via invite link (US-01) | 🔄 In Progress |
-| Auth & Invite | Login (US-02) | ✅ Done |
-| Game Creation | Create game (US-04) | ✅ Done |
-| Game Creation | Dashboard (US-05) | ✅ Done |
-| Character Creation | Build character (US-08) | ✅ Done |
-| Character Creation | Starting inventory (US-09) | ✅ Done |
-| Session Lifecycle | Start session + opening narration (US-11) | 🔄 In Progress |
-| Session Lifecycle | Pause/end session (US-12) | 🔄 In Progress |
-| Core Game Loop | Submit action (US-14) | 🔄 In Progress |
-| Core Game Loop | Receive DM response in real-time (US-15) | 🔄 In Progress |
-| Core Game Loop | Scroll chat log (US-17) | 🔄 In Progress |
+### MVP — Complete ✅
+
+All MVP epics shipped: Auth & Invite, Game Creation, Lobby & Joining, Character Creation, Session Lifecycle, Core Game Loop, Character State (Epic-7), Combat (Epic-8). Live at `dnd-side.vercel.app`.
+
+### Post-MVP — "v1.0 — Full Gameplay" (in progress)
+
+Organized under three epics, sequenced rules → multiplayer → polish:
+
+**Epic-9: Rules Engine** — move mechanical state from Claude's memory into the DB
+- DIN-37 Conditions · DIN-39 Skill Proficiency · DIN-38 Rests · DIN-40 Heroic Inspiration · DIN-48 Death saves
+- Suggested start: DIN-37 + DIN-39 in parallel (both foundational, High priority)
+
+**Epic-10: Multiplayer** — features that require 2+ players
+- DIN-23 Lobby host view · DIN-44 IC/OOC chat · DIN-45 Whispers · DIN-43 Group decisions
+
+**Epic-11: Immersion & Polish** — quality-of-life and atmosphere
+- DIN-29 Visual turn-based combat · DIN-41 Session recap · DIN-46 Ambience · DIN-47 Portraits
+
+### "v1.1: Campaign Depth & Progression" (scoped, not started)
+
+NPC memory, feats, backgrounds, magic items, currency, journal, encounter tables, push notifications, mid-session join.
 
 ---
 
@@ -174,28 +211,31 @@ Seven tables in Supabase (`ytxncykyfbhoyvxkocrs`):
 
 | Document | Contents |
 |---|---|
-| **docs/ARCHITECTURE.md** | Complete design: flows, decisions, code examples |
-| **docs/DATA_MODEL.md** | Tables, columns, enums, indexes, triggers, RLS |
-| **docs/TDD_WORKFLOW.md** | Test file placement, mocking rules, and stub patterns per layer |
-| **This file (CLAUDE.md)** | Project overview & reference links for AI agents |
+| **docs/ARCHITECTURE.md** | Complete design: flows, decisions, code examples, streaming |
+| **docs/DATA_MODEL.md** | Tables, columns, enums, indexes, triggers, RLS, migrations |
+| **docs/TDD_WORKFLOW.md** | Test file placement, mocking rules per layer, stub patterns |
+| **SMOKE_TEST.md** (Claude project file, not in repo) | Post-merge smoke test script |
+| **This file (CLAUDE.md)** | Project overview + reference links for AI agents |
 
 ---
 
 ## Conventions
 
-- **Frontend:** TypeScript strict, named exports, no `any`, `@supabase/ssr` (never deprecated auth-helpers), Zod v4 validation
-- **Backend:** Type hints, Pydantic validation, docstrings, pytest tests
-- **Both:** Environment variables in `.env`, migrations tracked in `supabase/migrations/`
-- **No direct Supabase mutations from Next.js** — all writes go through FastAPI
+- **Frontend:** TypeScript strict, named exports, no `any`, no `console.log`, `@supabase/ssr` (never deprecated auth-helpers), Zod v4 validation, no Supabase calls in components (they go through Next.js API routes → FastAPI)
+- **Backend:** Type hints, Pydantic v2 validation, docstrings, pytest with full mocks
+- **Both:** `.env` files for secrets, all migrations tracked in `supabase/migrations/`
+- **Issue tracking:** Linear ("DnD Side Project") — GitHub Issues deprecated
 
 ---
 
 ## 🧪 TDD Skeleton Workflow
 
-Before writing any production code for a Linear issue, produce three artifacts in order:
+Before writing production code for a Linear issue, produce three artifacts in order:
 1. **Spec doc** — ACs from the issue, layers touched, mock boundary per layer
 2. **Failing test stubs** — runnable stubs that fail (not error) immediately
-3. **Implementation scaffold** — minimum stubs needed for test imports to resolve
+3. **Implementation scaffold** — minimum stubs so test imports resolve
+
+Five test layers: React components, Next.js API routes, Supabase lib helpers, FastAPI endpoints, Dramatiq tasks.
 
 **→ File placement conventions, mocking rules per layer, and examples: `docs/TDD_WORKFLOW.md`**
 
@@ -203,11 +243,11 @@ Before writing any production code for a Linear issue, produce three artifacts i
 
 ## Cost & Constraints (Free Tier)
 
-- **Render:** 750 hrs/month (always-on backend + worker)
-- **Supabase:** 500MB storage (~6KB per embedding vector)
-- **Redis:** 30MB (Render Key Value)
-- **OpenAI embeddings:** ~$0.02/1M tokens
-- **Claude API:** Pay-as-you-go (`claude-sonnet-4-20250514`)
+- **Render:** 750 hrs/month (web service hosts FastAPI + embedded Dramatiq worker)
+- **Supabase:** 500MB storage (~6KB per 1536-dim embedding)
+- **Redis (Render Key Value):** 30MB
+- **OpenAI embeddings:** ~$0.02 / 1M tokens (`text-embedding-3-small`)
+- **Claude API:** pay-as-you-go (`claude-sonnet-4-20250514`)
 
 ---
 
@@ -217,4 +257,4 @@ Before writing any production code for a Linear issue, produce three artifacts i
 - **GitHub repo:** https://github.com/dinokong0128/dnd-side
 - **Supabase project:** `ytxncykyfbhoyvxkocrs`
 - **Vercel project:** `dnd-side.vercel.app`
-- **Linear board:** DnD Side Project
+- **Linear board:** DnD Side Project (milestone `v1.0 — Full Gameplay`)

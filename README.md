@@ -1,6 +1,6 @@
 # dnd-side
 
-A multiplayer D&D web app where **Claude acts as the Dungeon Master**. Players send free-text actions; the AI DM responds with rich narration, tracks narrative events in a vector database, and uses RAG to maintain long-term story memory across sessions.
+A multiplayer D&D web app where **Claude acts as the Dungeon Master**. Players send free-text actions; the AI DM streams rich narration in real time, tracks narrative events in a vector database, and uses RAG to maintain long-term story memory across sessions.
 
 ---
 
@@ -8,9 +8,10 @@ A multiplayer D&D web app where **Claude acts as the Dungeon Master**. Players s
 
 - **Invite-only onboarding** — hosts generate unique invite links; players sign up and land directly in the game lobby
 - **Character creation** — choose class, race, roll stats; receive class-appropriate starting inventory
-- **AI Dungeon Master** — Claude (`claude-sonnet-4-20250514`) narrates the campaign, responds to player actions, extracts and stores story events
+- **AI Dungeon Master** — Claude (`claude-sonnet-4-20250514`) narrates the campaign, streams responses over SSE, extracts and stores story events, and adjudicates dice rolls + state changes through structured blocks
 - **RAG memory** — narrative events are embedded with OpenAI and stored in pgvector; the most relevant past events are injected into every Claude prompt
-- **Real-time multiplayer** — all players see DM responses simultaneously via Supabase Realtime
+- **Live character sheet** — HP, XP, spell slots, inventory, and dice rolls update in real time via Supabase Realtime as the story unfolds
+- **Real-time multiplayer** — all players see DM responses via Supabase Realtime; the acting player sees the stream token-by-token
 
 ---
 
@@ -18,12 +19,12 @@ A multiplayer D&D web app where **Claude acts as the Dungeon Master**. Players s
 
 | Layer | Technology |
 |---|---|
-| Frontend | Next.js 16, TypeScript strict, Tailwind 4, Zod v4 |
-| Backend | FastAPI (Python), Dramatiq + Redis (job queue) |
+| Frontend | Next.js 16 (App Router), React 19, TypeScript strict, Tailwind 4, Zod v4 |
+| Backend | FastAPI (Python), Dramatiq + Redis (bookkeeping queue) |
 | Database | Supabase — Postgres + pgvector + Realtime |
-| Auth | Supabase Auth (JWT) |
-| AI | Claude `claude-sonnet-4-20250514` (DM), OpenAI `text-embedding-3-small` (embeddings) |
-| Hosting | Vercel (frontend), Render (backend + worker) |
+| Auth | Supabase Auth (JWT) via `@supabase/ssr` |
+| AI | Claude `claude-sonnet-4-20250514` (streaming DM), OpenAI `text-embedding-3-small` (embeddings) |
+| Hosting | Vercel (frontend), Render (backend + embedded Dramatiq worker) |
 
 ---
 
@@ -32,25 +33,19 @@ A multiplayer D&D web app where **Claude acts as the Dungeon Master**. Players s
 ```
 Player action (UI)
        ↓
-Next.js API route  →  FastAPI backend
-                           ↓
-                  Validate + embed action (OpenAI)
-                           ↓
-                  RAG search on game_events (pgvector)
-                           ↓
-                  Queue Dramatiq task  →  202 Accepted
-                           ↓ (async)
-                  Dramatiq worker calls Claude
-                           ↓
-                  Extract <event> markers
-                           ↓
-                  Embed + store events in game_events
-                           ↓
-                  Insert DM response → game_messages
-                           ↓
-                  Supabase Realtime broadcasts
-                           ↓
-                     All players see response
+Next.js proxy route  →  FastAPI POST /games/{id}/actions
+                              ↓
+                     Validate + insert player message + return 202
+                              ↓ (background coroutine)
+                     Embed action + RAG search (pgvector)
+                              ↓
+                     Stream Claude response → publish to Redis stream:{gameId}
+                              ↓                              ↓
+            GET /events (SSE) ← Browser subscribes      Stream completes
+                                                              ↓
+                     Apply <state_changes> (HP/XP/inventory)
+                     Insert DM message (Supabase Realtime fan-out)
+                     Enqueue dm_bookkeeping_task → embed <event>s → game_events
 ```
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design, and [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) for the complete schema.
@@ -64,17 +59,18 @@ dnd-side/
 ├── frontend/               # Next.js 16 app (Vercel)
 │   ├── src/
 │   │   ├── app/            # Pages + API proxy routes
-│   │   ├── components/     # Auth + game UI components
-│   │   ├── lib/            # Supabase clients, types, Zod schemas
-│   │   └── proxy.ts        # Auth middleware (Next.js 16)
+│   │   ├── components/     # Auth, game, and dice UI
+│   │   ├── lib/            # Supabase clients, types, Zod schemas, utils
+│   │   └── proxy.ts        # Auth middleware (Next.js 16 convention)
 │   └── e2e/                # Playwright tests
 ├── backend/                # FastAPI app (Render)
-│   ├── api/routes/         # games, players, actions, invites
-│   ├── services/           # dm_service, db_service, embedding_service
+│   ├── api/routes/         # games, players, actions, invites, messages, level_up, events
+│   ├── services/           # dm_service, db_service, embedding_service, stream_parser
 │   ├── tasks/              # dm_tasks.py (Dramatiq actors)
+│   ├── utils/              # dnd.py (class tables, XP thresholds)
 │   ├── models/             # Pydantic models
 │   └── tests/              # pytest
-├── docs/                   # ARCHITECTURE.md, DATA_MODEL.md
+├── docs/                   # ARCHITECTURE.md, DATA_MODEL.md, TDD_WORKFLOW.md
 └── supabase/migrations/    # All applied DB migrations
 ```
 
@@ -112,7 +108,7 @@ pip install -r requirements.txt
 # Start API server
 uvicorn main:app --reload
 
-# Start Dramatiq worker (separate terminal)
+# Start Dramatiq worker (separate terminal, local-dev only — on Render it's embedded in the start command)
 python -m dramatiq tasks.dm_tasks
 ```
 
@@ -159,6 +155,8 @@ cd frontend && npx playwright test
 
 **All mutations go through FastAPI.** Next.js is a proxy and render layer only — it never writes directly to Supabase. This keeps business logic centralized and prevents RLS bypass via client-side service keys.
 
+**Streaming + structured blocks.** The DM response streams over SSE via Redis pub/sub (`stream:{gameId}`), while mechanical data (`<state_changes>`, `<dice_rolls>`, `<suggested_actions>`, `<event>`) rides along in tagged blocks and is extracted + applied by the backend.
+
 **Embeddings are server-side.** Both action embeddings (for RAG search) and event embeddings (for storage) happen in the FastAPI backend, keeping OpenAI API keys off the client.
 
 **`proxy.ts`, not `middleware.ts`.** This project uses Next.js 16, which renamed the file convention from `middleware.ts` → `proxy.ts` and the export from `middleware()` → `proxy()`.
@@ -172,7 +170,7 @@ cd frontend && npx playwright test
 | Service | Platform | URL |
 |---|---|---|
 | Frontend | Vercel | [dnd-side.vercel.app](https://dnd-side.vercel.app) |
-| Backend | Render | Auto-deploy on `develop` push |
+| Backend | Render (auto-deploy on `develop` push) | `dnd-backend-xk1o.onrender.com` (Dramatiq worker is embedded in the web service start command) |
 
 ---
 
@@ -182,20 +180,19 @@ cd frontend && npx playwright test
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Full system design, flows, service boundaries, deployment |
 | [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) | Schema, columns, enums, indexes, RLS, migrations |
-| [`CLAUDE.md`](CLAUDE.md) / [`AGENT.md`](AGENT.md) | Condensed project context for AI coding agents |
+| [`docs/TDD_WORKFLOW.md`](docs/TDD_WORKFLOW.md) | Test layers, mocking rules, stub patterns |
+| [`CLAUDE.md`](CLAUDE.md) / [`AGENTS.md`](AGENTS.md) | Condensed project context for AI coding agents |
 
 ---
 
 ## Project Status
 
-MVP is actively in development. Progress is tracked in [Linear (DnD Side Project)](https://linear.app/dino-kong).
+MVP is complete ✅ — auth, game creation, lobby, character creation, session lifecycle, core game loop, character state (Epic-7), and combat (Epic-8) are all live at [dnd-side.vercel.app](https://dnd-side.vercel.app).
 
-| Area | Status |
-|---|---|
-| Auth (login, signup via invite) | ✅ Done |
-| Game creation + dashboard | ✅ Done |
-| Character creation + inventory | ✅ Done |
-| Session lifecycle (start/pause/end) | 🔄 In Progress |
-| Core game loop (action → DM response → realtime) | 🔄 In Progress |
-| Character sheet during game | 📋 Todo |
-| Dice roller UI | 📋 Todo |
+Post-MVP work is tracked in the `v1.0 — Full Gameplay` milestone in [Linear (DnD Side Project)](https://linear.app/dino-kong) and organized into three epics:
+
+| Epic | Theme | Status |
+|---|---|---|
+| Epic-9: Rules Engine | Conditions, rests, skill proficiencies, death saves, inspiration | 🔄 Next up |
+| Epic-10: Multiplayer | IC/OOC chat, whispers, group decisions, host lobby view | 📋 Queued |
+| Epic-11: Immersion & Polish | Visual combat UI, session recap, ambience, portraits | 📋 Queued |
