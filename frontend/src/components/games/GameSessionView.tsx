@@ -346,10 +346,17 @@ export function GameSessionView({
     window.addEventListener('level-up-available', handleLevelUpAvailable)
 
     // Marker so Playwright can wait for listeners to be attached before
-    // dispatching simulated events (avoids a hydration race).
-    document.body.dataset.e2eListenersReady = 'true'
+    // dispatching simulated events (avoids a hydration race). Defer via
+    // setTimeout so that in React Strict Mode (Next.js dev default) the
+    // marker only appears after the mount → cleanup → mount cycle settles,
+    // never in the synchronous gap where the first listeners are about to
+    // be removed.
+    const markerTimer = setTimeout(() => {
+      document.body.dataset.e2eListenersReady = 'true'
+    }, 0)
 
     return () => {
+      clearTimeout(markerTimer)
       window.removeEventListener('player-message', addMessage)
       window.removeEventListener('dm-message', addMessage)
       window.removeEventListener('system-message', addMessage)

@@ -117,10 +117,19 @@ export function CharacterSheetPanel({ playerId, onClose }: CharacterSheetPanelPr
     const eventName = `e2e-player-update-${playerId}`
     window.addEventListener(eventName, handlePlayerUpdate)
     // Marker so Playwright can wait for listener attach before dispatching.
-    document.body.dataset.e2ePlayerListenerReady = playerId
+    // Defer via setTimeout so that in React Strict Mode (Next.js dev default)
+    // the marker only appears after the mount → cleanup → mount cycle settles,
+    // never in the synchronous gap where the first listener is about to be
+    // removed.
+    const markerTimer = setTimeout(() => {
+      document.body.dataset.e2ePlayerListenerReady = playerId
+    }, 0)
     return () => {
+      clearTimeout(markerTimer)
       window.removeEventListener(eventName, handlePlayerUpdate)
-      delete document.body.dataset.e2ePlayerListenerReady
+      if (document.body.dataset.e2ePlayerListenerReady === playerId) {
+        delete document.body.dataset.e2ePlayerListenerReady
+      }
     }
   }, [playerId])
 
