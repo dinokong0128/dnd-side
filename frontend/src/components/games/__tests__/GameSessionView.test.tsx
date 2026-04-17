@@ -36,6 +36,14 @@ jest.mock('../ChatLog', () => ({
           ? streamingSegments.filter((s: any) => s.kind === 'dice_rolls').length
           : 0}
       </div>
+      <div data-testid="last-dm-content">
+        {messages
+          ? [...messages]
+              .reverse()
+              .find((m: any) => m.role === 'dm' || m.role === 'system')
+              ?.content ?? ''
+          : ''}
+      </div>
       <button data-testid="trigger-delete" onClick={() => onDeleteMessage?.('msg-1')}>Delete</button>
       <button data-testid="trigger-edit" onClick={() => onEditMessage?.('msg-1', 'new content')}>Edit</button>
     </div>
@@ -926,6 +934,391 @@ describe('GameSessionView', () => {
       })
       // Only the /actions POST was called — no /events fetch.
       expect(global.fetch).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('DIN-66: SSE ↔ Realtime race conditions', () => {
+    /** Controllable SSE stream — lets the test enqueue frames across ticks. */
+    function buildControllableStream() {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { TextEncoder: NodeTextEncoder } = require('util')
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { ReadableStream: NodeReadableStream } = require('stream/web')
+      const encoder = new NodeTextEncoder()
+      let ctrl: ReadableStreamDefaultController<Uint8Array>
+      const stream = new NodeReadableStream({
+        start(c: ReadableStreamDefaultController<Uint8Array>) {
+          ctrl = c
+        },
+      })
+      return {
+        response: { ok: true, status: 200, body: stream },
+        enqueue: (frame: string) => ctrl.enqueue(encoder.encode(frame)),
+        close: () => ctrl.close(),
+      }
+    }
+
+    /** Capture Supabase Realtime subscription callbacks so tests can fire them. */
+    function captureChannelCallbacks() {
+      const cbs: Array<{ event: string; cb: (payload: any) => void }> = []
+      const channelObj: any = {
+        on: jest.fn((_evt: any, filter: any, cb: any) => {
+          cbs.push({ event: filter?.event, cb })
+          return channelObj
+        }),
+        subscribe: jest.fn().mockReturnValue({ unsubscribe: jest.fn() }),
+      }
+      mockSupabaseClient.channel.mockReturnValue(channelObj)
+      return {
+        getInsertCb: () => cbs.find((c) => c.event === 'INSERT')?.cb,
+      }
+    }
+
+    /** Queue the POST /actions 202 and the GET /events stream response. */
+    function mockActionThenEvents(eventsResponse: any) {
+      ;(global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 202,
+          json: async () => ({ message_id: 'msg-1', status: 'queued' }),
+        })
+        .mockResolvedValueOnce(eventsResponse)
+    }
+
+    it('Realtime DM INSERT before SSE done: streaming clears on Realtime, done becomes a no-op', async () => {
+      testContext.playersData = [
+        { id: 'player-1', profile_id: 'user-1', character_name: 'Thorin' },
+      ]
+      const { getInsertCb } = captureChannelCallbacks()
+      const stream = buildControllableStream()
+      mockActionThenEvents(stream.response)
+
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+      await waitFor(() =>
+        expect(screen.getByTestId('chat-input')).toBeInTheDocument()
+      )
+
+      act(() => {
+        fireEvent.click(screen.getByTestId('submit-action'))
+      })
+
+      stream.enqueue('data: {"type":"chunk","text":"Streaming text"}\n\n')
+      await waitFor(() => {
+        expect(screen.getByTestId('streaming-text')).toHaveTextContent(
+          'Streaming text'
+        )
+      })
+      expect(screen.getByTestId('streaming-active')).toHaveTextContent('true')
+
+      const insertCb = getInsertCb()
+      expect(insertCb).toBeDefined()
+      act(() => {
+        insertCb?.({
+          new: {
+            id: 'dm-1',
+            game_id: 'game-1',
+            role: 'dm',
+            profile_id: null,
+            content: 'Streaming text',
+            created_at: new Date().toISOString(),
+          },
+        })
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('streaming-active')).toHaveTextContent(
+          'false'
+        )
+      })
+      // Optimistic player (never reconciled — we did not fire the player echo)
+      // + the freshly inserted DM message.
+      expect(screen.getByTestId('messages-count')).toHaveTextContent('2')
+      expect(screen.getByTestId('last-dm-content')).toHaveTextContent(
+        'Streaming text'
+      )
+      expect(screen.getByTestId('is-waiting')).toHaveTextContent('false')
+
+      // `done` arrives after Realtime — must be a no-op. Nothing changes.
+      stream.enqueue('data: {"type":"done"}\n\n')
+      stream.close()
+      await new Promise((r) => setTimeout(r, 20))
+
+      expect(screen.getByTestId('streaming-active')).toHaveTextContent('false')
+      expect(screen.getByTestId('messages-count')).toHaveTextContent('2')
+      expect(screen.getByTestId('last-dm-content')).toHaveTextContent(
+        'Streaming text'
+      )
+      expect(screen.getByTestId('is-waiting')).toHaveTextContent('false')
+    })
+
+    it('SSE done before Realtime DM (consistent content): streaming persists, Realtime swaps to persisted message', async () => {
+      testContext.playersData = [
+        { id: 'player-1', profile_id: 'user-1', character_name: 'Thorin' },
+      ]
+      const { getInsertCb } = captureChannelCallbacks()
+      const stream = buildControllableStream()
+      mockActionThenEvents(stream.response)
+
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+      await waitFor(() =>
+        expect(screen.getByTestId('chat-input')).toBeInTheDocument()
+      )
+
+      act(() => {
+        fireEvent.click(screen.getByTestId('submit-action'))
+      })
+
+      stream.enqueue('data: {"type":"chunk","text":"The goblin lunges."}\n\n')
+      stream.enqueue('data: {"type":"done"}\n\n')
+      stream.close()
+
+      // done processed — is-waiting false — streaming bubble persists with
+      // the streamed content (new post-persist-streamed-content behavior).
+      await waitFor(() => {
+        expect(screen.getByTestId('is-waiting')).toHaveTextContent('false')
+      })
+      expect(screen.getByTestId('streaming-active')).toHaveTextContent('true')
+      expect(screen.getByTestId('streaming-text')).toHaveTextContent(
+        'The goblin lunges.'
+      )
+      expect(screen.getByTestId('last-dm-content')).toHaveTextContent('')
+
+      // Realtime INSERT arrives with matching content — reconciliation
+      // swaps streaming bubble for persisted DM message.
+      act(() => {
+        getInsertCb()?.({
+          new: {
+            id: 'dm-1',
+            game_id: 'game-1',
+            role: 'dm',
+            profile_id: null,
+            content: 'The goblin lunges.',
+            created_at: new Date().toISOString(),
+          },
+        })
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('streaming-active')).toHaveTextContent(
+          'false'
+        )
+      })
+      expect(screen.getByTestId('last-dm-content')).toHaveTextContent(
+        'The goblin lunges.'
+      )
+      expect(screen.getByTestId('is-waiting')).toHaveTextContent('false')
+    })
+
+    it('SSE done before Realtime DM (inconsistent content): persisted content overrides streamed content', async () => {
+      testContext.playersData = [
+        { id: 'player-1', profile_id: 'user-1', character_name: 'Thorin' },
+      ]
+      const { getInsertCb } = captureChannelCallbacks()
+      const stream = buildControllableStream()
+      mockActionThenEvents(stream.response)
+
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+      await waitFor(() =>
+        expect(screen.getByTestId('chat-input')).toBeInTheDocument()
+      )
+
+      act(() => {
+        fireEvent.click(screen.getByTestId('submit-action'))
+      })
+
+      stream.enqueue('data: {"type":"chunk","text":"The goblin lunges."}\n\n')
+      stream.enqueue('data: {"type":"done"}\n\n')
+      stream.close()
+
+      await waitFor(() => {
+        expect(screen.getByTestId('is-waiting')).toHaveTextContent('false')
+      })
+      // Pre-reconciliation: streamed text visible, no persisted DM yet.
+      expect(screen.getByTestId('streaming-active')).toHaveTextContent('true')
+      expect(screen.getByTestId('streaming-text')).toHaveTextContent(
+        'The goblin lunges.'
+      )
+      expect(screen.getByTestId('last-dm-content')).toHaveTextContent('')
+
+      // Authoritative Realtime DM differs — must replace the streamed version.
+      act(() => {
+        getInsertCb()?.({
+          new: {
+            id: 'dm-1',
+            game_id: 'game-1',
+            role: 'dm',
+            profile_id: null,
+            content: 'The goblin lunges and misses.',
+            created_at: new Date().toISOString(),
+          },
+        })
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('streaming-active')).toHaveTextContent(
+          'false'
+        )
+      })
+      expect(screen.getByTestId('last-dm-content')).toHaveTextContent(
+        'The goblin lunges and misses.'
+      )
+    })
+
+    it('SSE done with no Realtime: streamed content stays on screen, chat input re-enabled', async () => {
+      testContext.playersData = [
+        { id: 'player-1', profile_id: 'user-1', character_name: 'Thorin' },
+      ]
+      // Capture callbacks but never fire them.
+      captureChannelCallbacks()
+      const stream = buildControllableStream()
+      mockActionThenEvents(stream.response)
+
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+      await waitFor(() =>
+        expect(screen.getByTestId('chat-input')).toBeInTheDocument()
+      )
+
+      act(() => {
+        fireEvent.click(screen.getByTestId('submit-action'))
+      })
+
+      stream.enqueue('data: {"type":"chunk","text":"Streamed result."}\n\n')
+      stream.enqueue('data: {"type":"done"}\n\n')
+      stream.close()
+
+      await waitFor(() => {
+        expect(screen.getByTestId('is-waiting')).toHaveTextContent('false')
+      })
+      expect(screen.getByTestId('streaming-active')).toHaveTextContent('true')
+      expect(screen.getByTestId('streaming-text')).toHaveTextContent(
+        'Streamed result.'
+      )
+      expect(screen.getByTestId('last-dm-content')).toHaveTextContent('')
+
+      // Give any stray microtasks a chance to run — state must remain stable.
+      await new Promise((r) => setTimeout(r, 30))
+
+      expect(screen.getByTestId('streaming-active')).toHaveTextContent('true')
+      expect(screen.getByTestId('streaming-text')).toHaveTextContent(
+        'Streamed result.'
+      )
+      expect(screen.getByTestId('last-dm-content')).toHaveTextContent('')
+      expect(screen.getByTestId('is-waiting')).toHaveTextContent('false')
+    })
+
+    it('SSE done then late Realtime DM: streamed content shown until Realtime arrives, then reconciled', async () => {
+      testContext.playersData = [
+        { id: 'player-1', profile_id: 'user-1', character_name: 'Thorin' },
+      ]
+      const { getInsertCb } = captureChannelCallbacks()
+      const stream = buildControllableStream()
+      mockActionThenEvents(stream.response)
+
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+      await waitFor(() =>
+        expect(screen.getByTestId('chat-input')).toBeInTheDocument()
+      )
+
+      act(() => {
+        fireEvent.click(screen.getByTestId('submit-action'))
+      })
+
+      stream.enqueue('data: {"type":"chunk","text":"Streamed result."}\n\n')
+      stream.enqueue('data: {"type":"done"}\n\n')
+      stream.close()
+
+      await waitFor(() => {
+        expect(screen.getByTestId('is-waiting')).toHaveTextContent('false')
+      })
+      expect(screen.getByTestId('streaming-active')).toHaveTextContent('true')
+      expect(screen.getByTestId('streaming-text')).toHaveTextContent(
+        'Streamed result.'
+      )
+
+      // Simulate Realtime arriving LATE (well after `done`).
+      await new Promise((r) => setTimeout(r, 75))
+      // Streamed content still on screen — no fallback timer clears it.
+      expect(screen.getByTestId('streaming-active')).toHaveTextContent('true')
+      expect(screen.getByTestId('streaming-text')).toHaveTextContent(
+        'Streamed result.'
+      )
+
+      act(() => {
+        getInsertCb()?.({
+          new: {
+            id: 'dm-1',
+            game_id: 'game-1',
+            role: 'dm',
+            profile_id: null,
+            content: 'Streamed result.',
+            created_at: new Date().toISOString(),
+          },
+        })
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('streaming-active')).toHaveTextContent(
+          'false'
+        )
+      })
+      expect(screen.getByTestId('last-dm-content')).toHaveTextContent(
+        'Streamed result.'
+      )
+    })
+
+    it('Realtime DM without SSE done: streaming bubble clears, persisted DM renders', async () => {
+      testContext.playersData = [
+        { id: 'player-1', profile_id: 'user-1', character_name: 'Thorin' },
+      ]
+      const { getInsertCb } = captureChannelCallbacks()
+      const stream = buildControllableStream()
+      mockActionThenEvents(stream.response)
+
+      render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
+      await waitFor(() =>
+        expect(screen.getByTestId('chat-input')).toBeInTheDocument()
+      )
+
+      act(() => {
+        fireEvent.click(screen.getByTestId('submit-action'))
+      })
+
+      // A chunk streams in, but the backend never emits `done` (worker crash,
+      // stream drop mid-flight). Realtime is the ONLY reconciliation signal.
+      stream.enqueue('data: {"type":"chunk","text":"Streaming text"}\n\n')
+      await waitFor(() => {
+        expect(screen.getByTestId('streaming-text')).toHaveTextContent(
+          'Streaming text'
+        )
+      })
+      expect(screen.getByTestId('streaming-active')).toHaveTextContent('true')
+      expect(screen.getByTestId('is-waiting')).toHaveTextContent('true')
+
+      act(() => {
+        getInsertCb()?.({
+          new: {
+            id: 'dm-1',
+            game_id: 'game-1',
+            role: 'dm',
+            profile_id: null,
+            content: 'Streaming text',
+            created_at: new Date().toISOString(),
+          },
+        })
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('streaming-active')).toHaveTextContent(
+          'false'
+        )
+      })
+      expect(screen.getByTestId('last-dm-content')).toHaveTextContent(
+        'Streaming text'
+      )
+      expect(screen.getByTestId('is-waiting')).toHaveTextContent('false')
+
+      // Close the stream so the reader loop can terminate cleanly.
+      stream.close()
     })
   })
 

@@ -59,12 +59,6 @@ export function GameSessionView({
   const [streamingSegments, setStreamingSegments] =
     useState<StreamSegment[] | null>(null)
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // DIN-66 fallback: if Supabase Realtime INSERT is delayed after stream
-  // completion, force-clear streaming state after 3s to unblock the input.
-  const realtimeFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Tracks whether the Realtime DM INSERT already arrived for the current action.
-  // Prevents the fallback timer from firing when Realtime arrives before `done`.
-  const realtimeReceivedRef = useRef(false)
 
   const isHost = game.created_by === userId
 
@@ -191,13 +185,6 @@ export function GameSessionView({
               // DIN-66: reconcile — swap the live streaming bubble for the
               // persisted DM message in a single render (no flash).
               setStreamingSegments(null)
-              // Mark Realtime as received — prevents the fallback timer from
-              // firing if `done` arrives after this (the common case).
-              realtimeReceivedRef.current = true
-              if (realtimeFallbackRef.current) {
-                clearTimeout(realtimeFallbackRef.current)
-                realtimeFallbackRef.current = null
-              }
             }
           }
         }
@@ -265,7 +252,6 @@ export function GameSessionView({
       messagesSubscription?.unsubscribe()
       gamesSubscription?.unsubscribe()
       levelUpSubscription?.unsubscribe()
-      if (realtimeFallbackRef.current) clearTimeout(realtimeFallbackRef.current)
     }
   }, [gameId, userId])
 
@@ -392,8 +378,6 @@ export function GameSessionView({
 
   const handleSubmit = async (actionText: string) => {
     setShowRetryTimeout(false)
-    // Reset Realtime-received flag for this new action.
-    realtimeReceivedRef.current = false
 
     // 1. Optimistic player message (DIN-64) — unchanged.
     const optimisticMsg: GameMessage = {
@@ -497,13 +481,18 @@ export function GameSessionView({
               }
               // 'event' and 'state_changes' consumed silently.
             } else if (event.type === 'done') {
-              // `done` is the authoritative signal from the backend that streaming
-              // has completed (either successfully or via error — it's always
-              // published in the finally block). Clear the streaming bubble and
-              // re-enable the input immediately. The persisted DM (or system error)
-              // message arrives separately via Realtime and appears in the chat log
-              // a moment later — if it's already arrived, this is a harmless no-op.
-              setStreamingSegments(null)
+              // `done` means the backend has finished streaming (success or error —
+              // it is always published in the finally block). Re-enable the chat
+              // input, but INTENTIONALLY keep `streamingSegments` in place so the
+              // user retains the content they already saw stream in.
+              //
+              // Reconciliation path: when the Supabase Realtime INSERT for the
+              // persisted DM message arrives, its handler clears `streamingSegments`
+              // and the real message is rendered from the `messages` array — no
+              // duplicate appears. If Realtime never arrives (WebSocket drop, RLS,
+              // auth drift), the streamed text stays on screen as a best-effort
+              // rendering, and the next `handleSubmit` resets `streamingSegments`
+              // to [] before the next action starts.
               setIsWaitingForDm(false)
             }
           }
