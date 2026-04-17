@@ -242,6 +242,242 @@ test.describe('DIN-66 — Chunk events render progressively', () => {
   })
 })
 
+test.describe('DIN-66 — SSE/Realtime race conditions', () => {
+  test('SSE done with no Realtime — streamed text stays visible as best-effort', async ({
+    page,
+  }) => {
+    await setupStreamMocks(page)
+    const streamedText = 'The forest path winds deeper into shadow.'
+
+    await mockStreamingFlow(page, [
+      { type: 'chunk', text: streamedText },
+      { type: 'done' },
+    ])
+
+    await gotoGame(page)
+
+    await page.getByTestId('chat-textarea').fill('I follow the path.')
+    await page.getByRole('button', { name: /Send/i }).click()
+
+    // After SSE `done`: isWaitingForDm cleared → input re-enabled
+    await expect(page.getByTestId('chat-textarea')).toBeEnabled({ timeout: 3000 })
+
+    // streamingSegments NOT cleared by SSE done — content persists as best-effort
+    await expect(page.getByText(streamedText)).toBeVisible()
+  })
+
+  test('Realtime INSERT before SSE done — streaming bubble clears on Realtime arrival', async ({
+    page,
+  }) => {
+    await setupStreamMocks(page)
+    const confirmedText = 'The drawbridge lowers with a thunderous crash.'
+
+    // SSE is delayed — Realtime fires in the window before SSE resolves.
+    // No chunks so no re-render after Realtime clears streamingSegments.
+    await mockStreamingFlow(page, [{ type: 'done' }], { eventsDelayMs: 1500 })
+
+    await gotoGame(page)
+    // Ensure event listeners are attached before dispatching custom events
+    await expect(page.locator('body[data-e2e-listeners-ready="true"]')).toBeAttached({
+      timeout: 5000,
+    })
+
+    await page.getByTestId('chat-textarea').fill('I lower the drawbridge.')
+    await page.getByRole('button', { name: /Send/i }).click()
+
+    // Empty streaming bubble (cursor) appears after POST 202, before SSE resolves
+    await expect(page.getByTestId('streaming-dm-message')).toBeVisible({ timeout: 2000 })
+
+    // Realtime fires while SSE is still in-flight
+    await page.evaluate(
+      ({ gameId, content }) => {
+        window.dispatchEvent(
+          new CustomEvent('dm-message', {
+            detail: {
+              id: 'msg-dm-early-realtime',
+              game_id: gameId,
+              profile_id: null,
+              role: 'dm',
+              content,
+              created_at: new Date().toISOString(),
+            },
+          })
+        )
+      },
+      { gameId: GAME_ID, content: confirmedText }
+    )
+
+    // Streaming bubble clears immediately on Realtime arrival (setStreamingSegments(null))
+    await expect(page.getByTestId('streaming-dm-message')).toHaveCount(0, { timeout: 2000 })
+
+    // Confirmed persisted message is visible
+    await expect(page.getByText(confirmedText)).toBeVisible()
+
+    // Input re-enabled (Realtime handler sets isWaitingForDm(false))
+    await expect(page.getByTestId('chat-textarea')).toBeEnabled()
+  })
+
+  test('SSE done before Realtime (consistent content) — single message, no duplicate', async ({
+    page,
+  }) => {
+    await setupStreamMocks(page)
+    const text = 'You find a locked chest hidden beneath the staircase.'
+
+    await mockStreamingFlow(page, [{ type: 'chunk', text }, { type: 'done' }])
+
+    await gotoGame(page)
+    await expect(page.locator('body[data-e2e-listeners-ready="true"]')).toBeAttached({
+      timeout: 5000,
+    })
+
+    await page.getByTestId('chat-textarea').fill('I search the room.')
+    await page.getByRole('button', { name: /Send/i }).click()
+
+    // After SSE done: input re-enabled, streamed text still visible in bubble
+    await expect(page.getByTestId('chat-textarea')).toBeEnabled({ timeout: 3000 })
+    const bubble = page.getByTestId('streaming-dm-message')
+    await expect(bubble).toContainText(text)
+
+    // Realtime fires with identical content (consistent — backend persisted same text)
+    await page.evaluate(
+      ({ gameId, content }) => {
+        window.dispatchEvent(
+          new CustomEvent('dm-message', {
+            detail: {
+              id: 'msg-dm-consistent-rt',
+              game_id: gameId,
+              profile_id: null,
+              role: 'dm',
+              content,
+              created_at: new Date().toISOString(),
+            },
+          })
+        )
+      },
+      { gameId: GAME_ID, content: text }
+    )
+
+    // Streaming bubble clears (setStreamingSegments(null))
+    await expect(bubble).toHaveCount(0, { timeout: 2000 })
+
+    // Confirmed message appears exactly once — no duplication
+    await expect(page.getByText(text)).toHaveCount(1, { timeout: 2000 })
+  })
+})
+
+test.describe('DIN-66 × DIN-25 — outcome badge in streaming bubble', () => {
+  test('d20 dice block with dc + success renders streaming-outcome-badge', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await setupStreamMocks(page)
+
+    const diceContent = JSON.stringify([
+      {
+        type: 'dice_roll',
+        die: 'd20',
+        count: 1,
+        result: 16,
+        modifier: 3,
+        total: 19,
+        label: 'Arcana Check',
+        dc: 14,
+        success: true,
+      },
+    ])
+
+    await mockStreamingFlow(page, [
+      { type: 'chunk', text: 'You sense the wards on the vault. ' },
+      { type: 'block', tag: 'dice_rolls', attributes: {}, content: diceContent },
+      { type: 'chunk', text: ' The magic yields its secrets.' },
+      { type: 'done' },
+    ])
+
+    await gotoGame(page)
+
+    await page.getByTestId('chat-textarea').fill('I examine the vault runes.')
+    await page.getByRole('button', { name: /Send/i }).click()
+
+    const bubble = page.getByTestId('streaming-dm-message')
+    await expect(bubble).toBeVisible({ timeout: 3000 })
+
+    // Dice component renders in the bubble
+    await expect(page.getByTestId('streaming-dice')).toBeVisible()
+
+    // Outcome badge appears (success, dc=14)
+    const badge = page.getByTestId('streaming-outcome-badge')
+    await expect(badge).toBeVisible({ timeout: 3000 })
+    await expect(badge).toContainText('Success')
+    await expect(badge).toContainText('14')
+  })
+
+  test('natural 20 in streaming bubble shows Critical Success badge', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await setupStreamMocks(page)
+
+    const diceContent = JSON.stringify([
+      {
+        type: 'dice_roll',
+        die: 'd20',
+        count: 1,
+        result: 20,
+        modifier: 2,
+        total: 22,
+        label: 'Persuasion Check',
+        dc: 10,
+        success: true,
+      },
+    ])
+
+    await mockStreamingFlow(page, [
+      { type: 'block', tag: 'dice_rolls', attributes: {}, content: diceContent },
+      { type: 'chunk', text: 'The guard steps aside.' },
+      { type: 'done' },
+    ])
+
+    await gotoGame(page)
+
+    await page.getByTestId('chat-textarea').fill('I persuade the guard.')
+    await page.getByRole('button', { name: /Send/i }).click()
+
+    await expect(page.getByTestId('streaming-dice')).toBeVisible({ timeout: 3000 })
+    await expect(page.getByTestId('streaming-outcome-badge')).toContainText(
+      '💥 Critical Success',
+      { timeout: 3000 }
+    )
+  })
+
+  test('no streaming-outcome-badge for a d20 roll without dc', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await setupStreamMocks(page)
+
+    const diceContent = JSON.stringify([
+      {
+        type: 'dice_roll',
+        die: 'd20',
+        count: 1,
+        result: 11,
+        modifier: 2,
+        total: 13,
+        label: 'Initiative',
+      },
+    ])
+
+    await mockStreamingFlow(page, [
+      { type: 'block', tag: 'dice_rolls', attributes: {}, content: diceContent },
+      { type: 'chunk', text: 'Combat begins.' },
+      { type: 'done' },
+    ])
+
+    await gotoGame(page)
+
+    await page.getByTestId('chat-textarea').fill('I ready my weapon.')
+    await page.getByRole('button', { name: /Send/i }).click()
+
+    await expect(page.getByTestId('streaming-dice')).toBeVisible({ timeout: 3000 })
+    // No dc field → no outcome badge
+    await expect(page.getByTestId('streaming-outcome-badge')).toHaveCount(0)
+  })
+})
+
 test.describe('DIN-66 — dice_rolls block renders as a complete component', () => {
   test('dice_rolls block pops in as DiceRoller, never as raw XML text', async ({ page }) => {
     await setupStreamMocks(page)
