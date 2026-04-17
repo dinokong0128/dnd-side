@@ -425,10 +425,11 @@ test.describe('DIN-66 — suggested_actions block enables cycle UI after reconci
     await page.getByTestId('chat-textarea').fill('I peer into the shadows.')
     await page.getByRole('button', { name: /Send/i }).click()
 
-    // Still disabled while isWaitingForDm is true (streaming active)
-    await expect(cycleBtn).toBeDisabled({ timeout: 1000 })
-
-    // Simulate Realtime DM INSERT — triggers reconciliation
+    // Simulate Realtime DM INSERT — triggers reconciliation. (Note: after
+    // DIN-66 fix 525eee7, the SSE `done` event already clears isWaitingForDm
+    // before Realtime arrives, so the cycle button may already be enabled
+    // at this point. The meaningful assertion is that it remains enabled and
+    // the streamed suggestions are usable after reconciliation.)
     await page.evaluate(
       ({ gameId }) => {
         window.dispatchEvent(

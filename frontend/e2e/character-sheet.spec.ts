@@ -163,6 +163,13 @@ async function gotoGame(page: Page) {
   await expect(page.getByText('The Lost Dungeon')).toBeVisible({ timeout: 5000 })
 }
 
+// ─── Helper: wait for CharacterSheetPanel's e2e-player-update listener ─────────
+async function waitForSheetListener(page: Page, playerId: string = PLAYER_ID) {
+  await expect(
+    page.locator(`body[data-e2e-player-listener-ready="${playerId}"]`)
+  ).toBeAttached({ timeout: 5000 })
+}
+
 // ─── DIN-15: In-game Character Sheet Panel ───────────────────────────────────
 test.describe('DIN-15 — In-game Character Sheet Panel', () => {
   test('sheet button is visible in active game when player has a character', async ({ page }) => {
@@ -334,7 +341,8 @@ test.describe('DIN-15 — In-game Character Sheet Panel', () => {
     await expect(sheet).toBeVisible({ timeout: 3000 })
 
     // Initial HP: 24/32 → verify it's shown
-    await expect(sheet.getByText('24')).toBeVisible()
+    await expect(sheet.getByTestId('hp-current-value')).toHaveText('24')
+    await waitForSheetListener(page)
 
     // Simulate a Realtime player UPDATE via custom E2E event (HP drops to 5)
     await page.evaluate((playerId) => {
@@ -346,7 +354,7 @@ test.describe('DIN-15 — In-game Character Sheet Panel', () => {
     }, PLAYER_ID)
 
     // HP display should now show 5 instead of 24
-    await expect(sheet.getByText('5')).toBeVisible({ timeout: 2000 })
+    await expect(sheet.getByTestId('hp-current-value')).toHaveText('5', { timeout: 2000 })
     // HP bar should now be low (5/32 = 15.6%)
     await expect(page.getByTestId('hp-bar').last()).toHaveAttribute('data-hp-state', 'low')
     // Unconscious label appears when HP = 0 (5 ≠ 0 so it should NOT appear)
@@ -488,6 +496,7 @@ test.describe('DIN-27 — Spell slot tracking and display', () => {
     const row1 = sheet.getByTestId('spell-slot-row-1')
     await expect(row1.getByTestId('pip-used')).toHaveCount(1)
     await expect(row1.getByTestId('pip-available')).toHaveCount(3)
+    await waitForSheetListener(page)
 
     // Simulate Realtime player UPDATE — spell_slot_use increments used to 2
     await page.evaluate((playerId) => {
@@ -540,6 +549,7 @@ test.describe('DIN-27 — Spell slot tracking and display', () => {
     // Initial: 3 used, 1 available for 1st level
     const row1 = sheet.getByTestId('spell-slot-row-1')
     await expect(row1.getByTestId('pip-used')).toHaveCount(3)
+    await waitForSheetListener(page)
 
     // Simulate long rest — all slots recharged (used=0)
     await page.evaluate((playerId) => {

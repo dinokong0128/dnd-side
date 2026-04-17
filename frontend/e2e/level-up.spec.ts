@@ -176,6 +176,11 @@ async function gotoGame(page: Page) {
 async function openSheet(page: Page) {
   await page.getByTestId('sheet-button').click()
   await expect(page.getByRole('dialog', { name: 'Character Sheet' })).toBeVisible({ timeout: 3000 })
+  // Wait for the CharacterSheetPanel's E2E listener useEffect to attach before
+  // dispatching any simulated Realtime events.
+  await expect(
+    page.locator(`body[data-e2e-player-listener-ready="${PLAYER_ID}"]`)
+  ).toBeAttached({ timeout: 5000 })
 }
 
 // ─── DIN-28: CharacterSheetPanel — level badge ───────────────────────────────

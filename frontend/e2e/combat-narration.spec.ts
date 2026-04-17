@@ -153,6 +153,12 @@ async function gotoGame(page: Page) {
   await expect(page.getByText('The Iron Mines')).toBeVisible({ timeout: 5000 })
 }
 
+async function waitForSheetListener(page: Page, playerId: string = PLAYER_ID) {
+  await expect(
+    page.locator(`body[data-e2e-player-listener-ready="${playerId}"]`)
+  ).toBeAttached({ timeout: 5000 })
+}
+
 // ─── DIN-26: Attack roll vs AC outcome display ───────────────────────────────
 
 test.describe('DIN-26 — Attack roll vs AC outcome', () => {
@@ -645,6 +651,7 @@ test.describe('DIN-26 — HP bar updates after combat damage', () => {
     await expect(sheet.getByTestId('hp-bar').last()).toHaveAttribute('data-hp-state', 'high', {
       timeout: 3000,
     })
+    await waitForSheetListener(page)
 
     // Combat damage: hp drops to 7 (below 25% threshold)
     await page.evaluate((playerId) => {
@@ -667,6 +674,7 @@ test.describe('DIN-26 — HP bar updates after combat damage', () => {
     await page.getByTestId('sheet-button').click()
     const sheet = page.getByRole('dialog', { name: 'Character Sheet' })
     await expect(sheet).toBeVisible({ timeout: 3000 })
+    await waitForSheetListener(page)
 
     // Character drops to 0 HP
     await page.evaluate((playerId) => {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { Fragment, useRef, useState } from 'react'
 import type { StreamSegment } from '@/lib/types/streaming'
 import type { DiceRollEvent } from '@/lib/types/message'
 import { DiceRoller } from '@/components/dice/DiceRoller'
@@ -45,6 +45,7 @@ function StreamingDiceBlock({ rolls }: { rolls: DiceRollEvent[] }) {
     <>
       {/* Dice rendered sequentially — same pattern as ChatMessage */}
       <div
+        data-testid="streaming-dice"
         style={{
           display: 'flex',
           flexWrap: 'wrap',
@@ -219,7 +220,6 @@ export function StreamingDmMessage({ segments }: StreamingDmMessageProps) {
         {segments.map((segment, idx) => {
           if (segment.kind === 'dice_rolls') {
             const rolls = parseDiceRolls(segment.content)
-            if (!rolls.length) return null
             return <StreamingDiceBlock key={`dice-${idx}`} rolls={rolls} />
           }
 
@@ -228,7 +228,7 @@ export function StreamingDmMessage({ segments }: StreamingDmMessageProps) {
           // spacing (~0.4em) rather than a full blank line from pre-wrap.
           const paragraphs = segment.content.split('\n\n').filter((p) => p.length > 0)
           return (
-            <>
+            <Fragment key={`text-${idx}`}>
               {paragraphs.map((para, pIdx) => {
                 const isVeryLast = isLastText && pIdx === paragraphs.length - 1
                 return (
@@ -254,7 +254,7 @@ export function StreamingDmMessage({ segments }: StreamingDmMessageProps) {
                   </p>
                 )
               })}
-            </>
+            </Fragment>
           )
         })}
 
