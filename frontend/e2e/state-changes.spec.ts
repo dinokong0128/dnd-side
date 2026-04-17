@@ -135,6 +135,15 @@ async function setupGameMocks(
 async function gotoGame(page: Page) {
   await page.goto(`/games/${GAME_ID}`)
   await expect(page.getByText('The Iron Mines')).toBeVisible({ timeout: 5000 })
+  // Wait for both the E2E listeners useEffect AND the initial data fetch to
+  // complete. Without the latter, initializeSession's setMessages(msgs) can
+  // run after a simulated event and overwrite it.
+  await expect(page.locator('body[data-e2e-listeners-ready="true"]')).toBeAttached({
+    timeout: 5000,
+  })
+  await expect(page.getByText('The mines stretch before you.')).toBeVisible({
+    timeout: 5000,
+  })
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────

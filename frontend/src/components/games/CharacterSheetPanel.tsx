@@ -116,7 +116,12 @@ export function CharacterSheetPanel({ playerId, onClose }: CharacterSheetPanelPr
     }
     const eventName = `e2e-player-update-${playerId}`
     window.addEventListener(eventName, handlePlayerUpdate)
-    return () => window.removeEventListener(eventName, handlePlayerUpdate)
+    // Marker so Playwright can wait for listener attach before dispatching.
+    document.body.dataset.e2ePlayerListenerReady = playerId
+    return () => {
+      window.removeEventListener(eventName, handlePlayerUpdate)
+      delete document.body.dataset.e2ePlayerListenerReady
+    }
   }, [playerId])
 
   // Sorted inventory alphabetically
@@ -411,6 +416,7 @@ export function CharacterSheetPanel({ playerId, onClose }: CharacterSheetPanelPr
                   }}
                 >
                   <span
+                    data-testid="hp-current-value"
                     style={{
                       fontFamily: "'Cinzel', serif",
                       fontSize: '1.4rem',

@@ -289,10 +289,13 @@ export function GameSessionView({
   useEffect(() => {
     if (process.env.NEXT_PUBLIC_E2E_TESTING !== 'true') return
 
+    let e2eMsgCounter = 0
     const addMessage = (event: Event) => {
       const detail = (event as CustomEvent).detail
       const msg: GameMessage = {
-        id: detail.id || `e2e-${Date.now()}`,
+        // Counter guarantees a unique React key even when multiple events
+        // are dispatched within the same millisecond.
+        id: detail.id || `e2e-${Date.now()}-${e2eMsgCounter++}`,
         game_id: detail.game_id || gameId,
         role: detail.role,
         profile_id: detail.profile_id ?? null,
@@ -342,6 +345,10 @@ export function GameSessionView({
     window.addEventListener('session-ended', handleSessionEnded)
     window.addEventListener('level-up-available', handleLevelUpAvailable)
 
+    // Marker so Playwright can wait for listeners to be attached before
+    // dispatching simulated events (avoids a hydration race).
+    document.body.dataset.e2eListenersReady = 'true'
+
     return () => {
       window.removeEventListener('player-message', addMessage)
       window.removeEventListener('dm-message', addMessage)
@@ -350,6 +357,7 @@ export function GameSessionView({
       window.removeEventListener('session-paused', handleSessionPaused)
       window.removeEventListener('session-ended', handleSessionEnded)
       window.removeEventListener('level-up-available', handleLevelUpAvailable)
+      delete document.body.dataset.e2eListenersReady
     }
   }, [gameId])
 
