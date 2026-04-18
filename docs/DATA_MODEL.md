@@ -236,7 +236,7 @@ No RLS select policy — only the service role can read.
 | `game_messages_game_id_idx` | `game_messages` | `game_id` | btree | FK lookup |
 | `game_events_game_id_idx` | `game_events` | `game_id` | btree | FK lookup |
 | `game_messages_game_id_created_at_idx` | `game_messages` | `(game_id, created_at)` | btree | Chronological message fetch (paginated chat, DIN-62) |
-| `game_events_embedding_hnsw_idx` | `game_events` | `embedding` | HNSW (`vector_cosine_ops`) | ANN similarity search (m=16, ef_construction=64) |
+| `game_events_embedding_idx` | `game_events` | `embedding` | HNSW (`vector_cosine_ops`) | ANN similarity search (m=16, ef_construction=64) |
 
 ---
 
