@@ -21,19 +21,14 @@ _BLOCK_PATTERNS = [
     r"<dice_rolls>.*?</dice_rolls>",
     r"<suggested_actions>.*?</suggested_actions>",
 ]
+_EVENT_PATTERN = r'<event\s+type=["\'][^"\']+["\']>(.*?)</event>'
 
 
 def _strip_structured_blocks(text: str) -> str:
     """Strip all XML structured blocks from DM response text."""
     for pattern in _BLOCK_PATTERNS:
         text = re.sub(pattern, "", text, flags=re.DOTALL)
-    # Replace event tags but keep inner text
-    text = re.sub(
-        r'<event\s+type=["\'][^"\']+["\']>(.*?)</event>',
-        r"\1",
-        text,
-        flags=re.DOTALL,
-    )
+    text = re.sub(_EVENT_PATTERN, r"\1", text, flags=re.DOTALL)
     return text.strip()
 
 

@@ -147,7 +147,7 @@ async def _run_scenario(
         _seed_scenario(scenario, scenario_game_id, fixture)
 
         prior_context = ""
-        current_state: dict = fixture
+        current_state: dict = dict(fixture)  # shallow copy — .update() must not mutate the fixture
 
         for i, turn in enumerate(scenario.turns):
             try:

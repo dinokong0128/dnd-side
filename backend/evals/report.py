@@ -51,6 +51,9 @@ def generate_report(
         flag = _regression_flag(current_val, baseline_val)
         baseline_str = _fmt_score(baseline_val) if baseline_val is not None else "—"
         lines.append(f"| {axis} | {_fmt_score(current_val)} | {baseline_str}{flag} |")
+    continuity_val = run_report.aggregate.get("continuity_mean")
+    if continuity_val is not None:
+        lines.append(f"| continuity | {_fmt_score(continuity_val)} | — |")
 
     adv_pass = run_report.aggregate.get("adversarial_gate_pass_count", 0)
     adv_fail = run_report.aggregate.get("adversarial_gate_fail_count", 0)

@@ -175,7 +175,7 @@ def _score_axis(
 ) -> tuple[float | None, list[int | str]]:
     """Run `sample_size` judge calls for one axis; return (mean, samples)."""
     axis_def = _AXIS_DEFS[axis]
-    truncated_context = prior_context[:500] if prior_context else ""
+    truncated_context = prior_context[-500:] if prior_context else ""
     truncated_action = action[:500]
     truncated_response = dm_response[:1000]
     truncated_state = json.dumps(state_snapshot, default=str)[:500]
