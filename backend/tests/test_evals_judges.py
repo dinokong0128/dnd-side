@@ -5,8 +5,8 @@ import pytest
 from unittest.mock import MagicMock, call, patch
 
 with patch("config.anthropic_client", MagicMock()):
-    from evals.judges import judge_turn, judge_continuity, AXES, _score_axis
-    from evals.schema import Scenario, Turn, TurnResult, DMResponse
+    from evals.judges import judge_turn, judge_continuity, _score_axis
+    from evals.schema import AXES, Scenario, Turn, TurnResult, DMResponse
 
 
 def _make_anthropic_mock(score: int | str = 4):
@@ -112,8 +112,8 @@ class TestJudgeTurn:
             )
         # After N/A retry, each slot should resolve to 4
         numeric = [s for s in samples if isinstance(s, int)]
-        if numeric:
-            assert mean == sum(numeric) / len(numeric)
+        assert len(numeric) > 0, "Retry should have resolved N/A to numeric scores"
+        assert abs(mean - sum(numeric) / len(numeric)) < 0.01
 
     def test_parse_retry_on_malformed_json(self):
         """On malformed JSON from judge, retries once; records N/A if both fail."""

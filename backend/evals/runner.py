@@ -198,7 +198,7 @@ async def _run_scenario(
                     except Exception as se:
                         fallback_states = scenario.fallback_states
                         if i < len(fallback_states):
-                            current_state = fallback_states[i]
+                            current_state = dict(fallback_states[i])
                             errors.append(
                                 f"Turn {i}: state parse failed; using fallback state. Error: {se}"
                             )
