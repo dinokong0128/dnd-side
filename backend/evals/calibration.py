@@ -103,4 +103,4 @@ if __name__ == "__main__":
     print(f"Per-axis bias: {result.per_axis_bias}")
     print(f"Passed: {result.passed}")
     if not result.passed:
-        exit(1)
+        raise SystemExit(1)

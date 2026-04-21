@@ -340,7 +340,7 @@ def update_baseline(run_report: RunReport, output_dir: Path, reason: str) -> Non
         logger.warning("[runner] Run file not found: %s", run_file)
         return
 
-    entry = f"\n| {run_id} | {reason} |\n"
+    entry = f"| {run_id} | {reason} |\n"
     if not history_file.exists():
         history_file.write_text(
             "# Baseline History\n\n| Run ID | Reason |\n|--------|--------|\n" + entry

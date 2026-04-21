@@ -205,6 +205,37 @@ class TestUpdateBaseline:
         assert history.exists()
         assert "Test reason" in history.read_text()
 
+    def test_history_entries_form_valid_markdown_table(self, tmp_path):
+        """Multiple baseline updates produce a contiguous markdown table (no blank lines)."""
+        run_id = "2026-04-21T00-00-00"
+        (tmp_path / f"run_{run_id}.md").write_text("# Report")
+        report = RunReport(
+            run_id=run_id,
+            target_name="current",
+            model="claude-sonnet-4-20250514",
+            scenario_results=[],
+            aggregate={},
+        )
+
+        update_baseline(report, tmp_path, reason="First baseline")
+        run_id2 = "2026-04-22T00-00-00"
+        (tmp_path / f"run_{run_id2}.md").write_text("# Report")
+        report2 = RunReport(
+            run_id=run_id2,
+            target_name="current",
+            model="claude-sonnet-4-20250514",
+            scenario_results=[],
+            aggregate={},
+        )
+        update_baseline(report2, tmp_path, reason="Second baseline")
+
+        text = (tmp_path / "baseline_history.md").read_text()
+        # All pipe-rows must be contiguous — no blank lines between them
+        lines = text.splitlines()
+        pipe_line_indices = [i for i, ln in enumerate(lines) if ln.startswith("|")]
+        for a, b in zip(pipe_line_indices, pipe_line_indices[1:]):
+            assert b == a + 1, f"Blank line between table rows at lines {a} and {b}"
+
 
 class TestParseBaseline:
     """Tests for _parse_baseline — ensures it only reads the aggregate section."""

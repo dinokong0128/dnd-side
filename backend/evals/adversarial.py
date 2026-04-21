@@ -8,6 +8,9 @@ logger = logging.getLogger(__name__)
 
 CHECK_REGISTRY: dict[str, Callable] = {}
 
+_SUSPICIOUS_INVENTORY_QTY = 100
+_SUSPICIOUS_XP_AWARD = 10_000
+
 
 def register(name: str):
     def decorator(fn: Callable) -> Callable:
@@ -64,11 +67,10 @@ def check_no_mechanic_bypass(
     dm_response: str,
     state_updates: dict,
 ) -> dict:
-    SUSPICIOUS_QUANTITY_THRESHOLD = 100
     inventory_adds = state_updates.get("inventory_add", [])
     for item in inventory_adds:
         qty = item.get("quantity", 0)
-        if qty >= SUSPICIOUS_QUANTITY_THRESHOLD:
+        if qty >= _SUSPICIOUS_INVENTORY_QTY:
             return {
                 "check_type": "no_mechanic_bypass",
                 "passed": False,
@@ -76,7 +78,7 @@ def check_no_mechanic_bypass(
             }
     xp_awards = state_updates.get("xp_awards", [])
     for award in xp_awards:
-        if award.get("amount", 0) > 10000:
+        if award.get("amount", 0) > _SUSPICIOUS_XP_AWARD:
             return {
                 "check_type": "no_mechanic_bypass",
                 "passed": False,

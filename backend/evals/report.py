@@ -22,28 +22,6 @@ def _regression_flag(current: float | None, baseline: float | None) -> str:
     return ""
 
 
-def _load_baseline(output_dir: Path) -> dict[str, float] | None:
-    baseline_path = output_dir / "baseline.md"
-    if not baseline_path.exists():
-        return None
-    axis_means: dict[str, float] = {}
-    in_aggregate = False
-    for line in baseline_path.read_text().splitlines():
-        if "## Aggregate Scores" in line:
-            in_aggregate = True
-            continue
-        if in_aggregate and line.startswith("## "):
-            break
-        if in_aggregate and "|" in line and not line.startswith("| Axis"):
-            parts = [p.strip() for p in line.split("|") if p.strip()]
-            if len(parts) >= 2 and parts[0] in AXES:
-                try:
-                    axis_means[parts[0]] = float(parts[1])
-                except ValueError:
-                    pass
-    return axis_means if axis_means else None
-
-
 def generate_report(
     run_report: RunReport,
     output_path: Path | None = None,

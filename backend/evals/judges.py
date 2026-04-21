@@ -2,6 +2,7 @@
 
 import json
 import logging
+from dataclasses import dataclass
 
 from config import anthropic_client
 from evals.schema import AXES, Scenario, TurnResult
@@ -11,11 +12,13 @@ logger = logging.getLogger(__name__)
 DEFAULT_JUDGE_MODEL = "claude-haiku-4-5-20251001"
 DEFAULT_SAMPLE_SIZE = 3
 
+_NO_EXTRA_RULES = "Apply the rubric anchors as written; no special overrides for this axis."
+
 # Axis definitions for the judge prompt
 _AXIS_DEFS = {
     "rule_compliance": {
         "one_liner": "Does the DM correctly apply 5e SRD rules?",
-        "warning": "",
+        "warning": _NO_EXTRA_RULES,
         "anchors": """| Score | Definition | Example |
 |-------|------------|---------|
 | 5 | Invoked the correct mechanic with correct DC, ability score, modifier, and situational rules | Lockpick → "DEX (Thieves' Tools) check DC 15" with correct PB |
@@ -41,7 +44,7 @@ N/A when: Never.""",
     },
     "state_correctness": {
         "one_liner": "Are HP, inventory, location, conditions, and other tracked state correctly reflected?",
-        "warning": "",
+        "warning": _NO_EXTRA_RULES,
         "anchors": """| Score | Definition | Example |
 |-------|------------|---------|
 | 5 | All state updates accurate; response correctly reflects current state | Fighter at 12 HP takes 5 → narration + state show 7 HP |
@@ -67,7 +70,7 @@ N/A when: Never.""",
     },
     "voice_consistency": {
         "one_liner": "Does the DM maintain consistent tone, pacing, and register?",
-        "warning": "",
+        "warning": _NO_EXTRA_RULES,
         "anchors": """| Score | Definition | Example |
 |-------|------------|---------|
 | 5 | Tone, pacing, register all consistent with spec and prior turns | Dark fantasy register maintained |
@@ -79,6 +82,11 @@ N/A when: Never.""",
 N/A when: Response is too short or mechanical to assess voice.""",
     },
 }
+
+assert set(_AXIS_DEFS.keys()) == set(AXES), (
+    f"_AXIS_DEFS and AXES are out of sync: "
+    f"extra={set(_AXIS_DEFS) - set(AXES)}, missing={set(AXES) - set(_AXIS_DEFS)}"
+)
 
 _JUDGE_PROMPT_TEMPLATE = """You are a D&D 5e response quality evaluator. You will score a single DM response on one axis.
 
@@ -199,10 +207,10 @@ def _score_axis(
     return mean_score, samples
 
 
+@dataclass
 class TurnScore:
-    def __init__(self, rubric_scores: dict[str, float | None], rubric_samples: dict[str, list]):
-        self.rubric_scores = rubric_scores
-        self.rubric_samples = rubric_samples
+    rubric_scores: dict[str, float | None]
+    rubric_samples: dict[str, list]
 
 
 def judge_turn(
@@ -254,6 +262,8 @@ def judge_continuity(
     )
 
     score = _call_judge(prompt, judge_model)
+    if score == "N/A":
+        score = _call_judge(prompt, judge_model)
     if isinstance(score, int):
         return float(score)
-    return 3.0  # neutral fallback on parse failure
+    return 3.0  # neutral fallback if both attempts return N/A or fail to parse
