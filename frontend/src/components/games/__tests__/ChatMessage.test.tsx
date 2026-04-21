@@ -73,6 +73,95 @@ describe('ChatMessage', () => {
   })
 })
 
+describe('paragraph rendering on reconcile', () => {
+  it('DM message with \\n\\n renders multiple <p> elements', () => {
+    const { container } = render(
+      <ChatMessage
+        role="dm"
+        content={'First paragraph.\n\nSecond paragraph.\n\nThird paragraph.'}
+      />
+    )
+    const paragraphs = container.querySelectorAll('p')
+    expect(paragraphs.length).toBe(3)
+    expect(paragraphs[0]).toHaveTextContent('First paragraph.')
+    expect(paragraphs[1]).toHaveTextContent('Second paragraph.')
+    expect(paragraphs[2]).toHaveTextContent('Third paragraph.')
+  })
+
+  it('DM message without newlines renders a single <p>', () => {
+    const { container } = render(
+      <ChatMessage role="dm" content="A single line of narration." />
+    )
+    const paragraphs = container.querySelectorAll('p')
+    expect(paragraphs.length).toBe(1)
+    expect(paragraphs[0]).toHaveTextContent('A single line of narration.')
+  })
+
+  it('player message with \\n\\n renders multiple <p> elements', () => {
+    const { container } = render(
+      <ChatMessage
+        role="player"
+        characterName="Elara"
+        content={'I approach the door.\n\nI listen for voices inside.'}
+      />
+    )
+    const paragraphs = container.querySelectorAll('p')
+    expect(paragraphs.length).toBe(2)
+    expect(paragraphs[0]).toHaveTextContent('I approach the door.')
+    expect(paragraphs[1]).toHaveTextContent('I listen for voices inside.')
+  })
+
+  it('player single-line still renders one <p>', () => {
+    const { container } = render(
+      <ChatMessage role="player" characterName="Elara" content="I cast Fireball." />
+    )
+    const paragraphs = container.querySelectorAll('p')
+    expect(paragraphs.length).toBe(1)
+    expect(paragraphs[0]).toHaveTextContent('I cast Fireball.')
+  })
+
+  it('DM with dice + multi-paragraph narration: narration hidden until dice settle, then multiple <p>', () => {
+    jest.useFakeTimers()
+    try {
+      const roll: DiceRollEvent = {
+        type: 'dice_roll',
+        die: 'd20',
+        count: 1,
+        result: 14,
+        modifier: 3,
+        total: 17,
+        label: 'Stealth Check',
+        dc: 15,
+        success: true,
+      }
+      const { container } = render(
+        <ChatMessage
+          role="dm"
+          content={'You slip past the guard.\n\nThe corridor stretches ahead.'}
+          diceRolls={[roll]}
+        />
+      )
+
+      // Narration wrapper is initially hidden via visibility.
+      const paraOne = screen.getByText('You slip past the guard.')
+      expect(paraOne).not.toBeVisible()
+
+      act(() => {
+        jest.runAllTimers()
+      })
+
+      expect(screen.getByText('You slip past the guard.')).toBeVisible()
+      expect(screen.getByText('The corridor stretches ahead.')).toBeVisible()
+
+      // Two paragraphs rendered inside the narration wrapper.
+      const paragraphs = container.querySelectorAll('p')
+      expect(paragraphs.length).toBe(2)
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+})
+
 describe('✏ edit/delete controls (DIN-61)', () => {
   it('shows edit and delete buttons when hovering the last owned player message', () => {
     render(
