@@ -41,6 +41,10 @@ _TAG_PATTERN = re.compile(
 
 _ATTR_RE = re.compile(r"""(\w+)\s*=\s*(?:"([^"]*)"|'([^']*)')""")
 
+_tag_names = "|".join(re.escape(t) for t in KNOWN_TAGS)
+_SELF_CLOSE_RE = re.compile(rf"^<({_tag_names})((?:\s[^>]*)?)/>")
+_OPEN_RE = re.compile(rf"^<({_tag_names})((?:\s[^>]*)?)>")
+
 
 class StreamParser:
     """Stateful parser that consumes Claude's text stream chunk-by-chunk."""
@@ -92,15 +96,20 @@ class StreamParser:
         if not remaining:
             return events
 
-        stripped = remaining.lstrip()
-        # If the entire remaining buffer starts with `<`, it's an incomplete
-        # tag fragment — discard it entirely.
-        if stripped.startswith("<"):
+        # Phase 1: if a recognized tag opener is present (e.g. "<dice_rolls>"
+        # or "<scene "), everything from that point is an incomplete block and
+        # must be dropped.  Emit only the plain text that precedes it.
+        m = _TAG_PATTERN.search(remaining)
+        if m is not None:
+            safe_text = remaining[: m.start()]
+            if safe_text:
+                events.append({"type": "chunk", "text": safe_text})
             return events
 
-        # Strip any trailing partial tag fragment (e.g. "text <scene" at stream
-        # end). If the last `<` has no matching `>` after it, the slice from
-        # that `<` is an incomplete tag and should not be emitted.
+        # Phase 2: handle bare partial fragments not matched by _TAG_PATTERN
+        # because the trailing character(s) haven't arrived yet (e.g. "<scene"
+        # with no following space or ">").  If the last "<" has no ">" after
+        # it, that slice is an incomplete tag start — drop it.
         last_lt = remaining.rfind("<")
         if last_lt != -1 and ">" not in remaining[last_lt:]:
             safe_text = remaining[:last_lt]
@@ -124,11 +133,8 @@ class StreamParser:
         Returns {"event": {...}, "consumed": int} or None if the block is
         incomplete (i.e. more data is needed).
         """
-        tag_names = "|".join(re.escape(t) for t in KNOWN_TAGS)
-
         # Try self-closing first: <tag attrs/>
-        self_close_re = re.compile(rf"^<({tag_names})((?:\s[^>]*)?)/>")
-        sc_m = self_close_re.match(text)
+        sc_m = _SELF_CLOSE_RE.match(text)
         if sc_m:
             tag_name = sc_m.group(1)
             attrs_str = sc_m.group(2).strip()
@@ -150,8 +156,7 @@ class StreamParser:
             }
 
         # Try paired tag: <tag attrs>content</tag>
-        open_re = re.compile(rf"^<({tag_names})((?:\s[^>]*)?)>")
-        open_m = open_re.match(text)
+        open_m = _OPEN_RE.match(text)
         if not open_m:
             return None
 

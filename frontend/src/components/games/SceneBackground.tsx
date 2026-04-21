@@ -28,6 +28,9 @@ export function SceneBackground({ sceneType, sceneMood, enabled, reduceMotion }:
   const [slotB, setSlotB] = useState<string | null>(null)
   // Track the last variant shown per scene type to avoid repeats
   const lastVariantRef = useRef<Record<string, number>>({})
+  // Mirrors activeSlot as a ref so the effect always reads the current slot
+  // without needing it as a dependency (which would re-trigger transitions).
+  const activeSlotRef = useRef<'a' | 'b'>('a')
 
   useEffect(() => {
     if (!sceneType || !enabled) return
@@ -37,14 +40,18 @@ export function SceneBackground({ sceneType, sceneMood, enabled, reduceMotion }:
     lastVariantRef.current[sceneType] = variant
     const src = `/scenes/${sceneType}/${variant}.webp`
 
-    if (activeSlot === 'a') {
+    // Updating image slots is this effect's entire purpose.
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (activeSlotRef.current === 'a') {
       setSlotB(src)
       setActiveSlot('b')
+      activeSlotRef.current = 'b'
     } else {
       setSlotA(src)
       setActiveSlot('a')
+      activeSlotRef.current = 'a'
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [sceneType, enabled])
 
   if (!enabled) return null

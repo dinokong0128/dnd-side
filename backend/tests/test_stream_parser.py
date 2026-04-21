@@ -166,6 +166,22 @@ class TestFlushBehavior:
         events = parser.flush()
         assert events == [{"type": "chunk", "text": "Small tail."}]
 
+    def test_flush_emits_text_containing_unknown_html_tag(self):
+        """Text like '<p>some text' must not be silently discarded on flush."""
+        parser = StreamParser()
+        # Feed a short string so it sits in the lookahead buffer
+        parser.feed("<p>some text")
+        events = parser.flush()
+        chunks = "".join(e["text"] for e in events if e["type"] == "chunk")
+        assert "<p>some text" in chunks
+
+    def test_flush_drops_incomplete_known_tag_at_start(self):
+        """A buffer that IS only an incomplete known-tag fragment must be dropped."""
+        parser = StreamParser()
+        parser.feed("<scene")
+        events = parser.flush()
+        assert events == []
+
 
 class TestKnownTags:
     def test_known_tags_set(self):

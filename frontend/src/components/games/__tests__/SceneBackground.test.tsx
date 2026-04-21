@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, act } from '@testing-library/react'
+import { render, act } from '@testing-library/react'
 import { SceneBackground } from '../SceneBackground'
 import type { SceneType, Mood } from '@/lib/scene'
 
