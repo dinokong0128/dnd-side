@@ -157,7 +157,11 @@ def _call_judge(prompt: str, judge_model: str) -> int | str:
         score = parsed.get("score", "N/A")
         if score == "N/A":
             return "N/A"
-        return int(score)
+        score_int = round(float(score))
+        if not (1 <= score_int <= 5):
+            logger.warning("[judges] Score %s out of 1-5 range; treating as N/A", score)
+            return "N/A"
+        return score_int
     except (json.JSONDecodeError, ValueError, TypeError):
         logger.warning("[judges] Failed to parse judge response: %s", raw[:200])
         return "N/A"
@@ -175,7 +179,7 @@ def _score_axis(
 ) -> tuple[float | None, list[int | str]]:
     """Run `sample_size` judge calls for one axis; return (mean, samples)."""
     axis_def = _AXIS_DEFS[axis]
-    truncated_context = prior_context[-500:] if prior_context else ""
+    truncated_context = prior_context[-500:]
     truncated_action = action[:500]
     truncated_response = dm_response[:1000]
     truncated_state = json.dumps(state_snapshot, default=str)[:500]
