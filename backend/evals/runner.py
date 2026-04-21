@@ -141,7 +141,7 @@ async def _run_scenario(
         _seed_scenario(scenario, scenario_game_id)
 
         prior_context = ""
-        current_state: dict = {}
+        current_state: dict = _load_fixture(scenario.seed_state_file)
 
         for i, turn in enumerate(scenario.turns):
             try:
@@ -167,7 +167,7 @@ async def _run_scenario(
                 # Run adversarial checks
                 adv_results = []
                 if scenario.adversarial_checks:
-                    after_state = dict(current_state)
+                    after_state = {**current_state, **dm_response.state_updates}
                     adv_results = run_checks(
                         scenario.adversarial_checks,
                         current_state,
@@ -303,8 +303,14 @@ async def run_eval(
 
 def _parse_baseline(baseline_path: Path) -> dict[str, float]:
     axis_means: dict[str, float] = {}
+    in_aggregate = False
     for line in baseline_path.read_text().splitlines():
-        if "|" in line:
+        if "## Aggregate Scores" in line:
+            in_aggregate = True
+            continue
+        if in_aggregate and line.startswith("## "):
+            break
+        if in_aggregate and "|" in line:
             parts = [p.strip() for p in line.split("|") if p.strip()]
             if len(parts) >= 2 and parts[0] in AXES:
                 try:

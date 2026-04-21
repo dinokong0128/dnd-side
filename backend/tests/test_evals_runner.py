@@ -19,7 +19,7 @@ with patch("config.supabase_client", MagicMock()), \
         RunReport,
         TurnResult,
     )
-    from evals.runner import load_scenarios, _compute_aggregate, update_baseline
+    from evals.runner import load_scenarios, _compute_aggregate, update_baseline, _parse_baseline
 
 
 class TestScenarioSchema:
@@ -204,3 +204,60 @@ class TestUpdateBaseline:
         history = tmp_path / "baseline_history.md"
         assert history.exists()
         assert "Test reason" in history.read_text()
+
+
+class TestParseBaseline:
+    """Tests for _parse_baseline — ensures it only reads the aggregate section."""
+
+    def _write_baseline(self, tmp_path, content: str) -> Path:
+        p = tmp_path / "baseline.md"
+        p.write_text(content)
+        return p
+
+    def test_reads_aggregate_axis_means(self, tmp_path):
+        """Parses axis scores from the aggregate table."""
+        md = (
+            "# Eval Run Report\n\n"
+            "## Aggregate Scores\n\n"
+            "| Axis | Mean Score | vs Baseline |\n"
+            "|------|-----------|-------------|\n"
+            "| rule_compliance | 4.50 | — |\n"
+            "| narrative_coherence | 3.80 | — |\n"
+            "| state_correctness | N/A | — |\n"
+            "| hallucination | 4.00 | — |\n"
+            "| voice_consistency | 4.20 | — |\n\n"
+            "## Per-Scenario Results\n\n"
+            "### skill_lockpick_basic\n\n"
+            "#### Turn 1\n\n"
+            "| Axis | Score | Samples |\n"
+            "|------|-------|---------- |\n"
+            "| rule_compliance | 5.00 | 5, 5, 5 |\n"
+            "| narrative_coherence | 2.00 | 2, 2, 2 |\n"
+        )
+        baseline_path = self._write_baseline(tmp_path, md)
+        result = _parse_baseline(baseline_path)
+        assert abs(result["rule_compliance"] - 4.50) < 0.01
+        assert abs(result["narrative_coherence"] - 3.80) < 0.01
+
+    def test_stops_at_per_scenario_section(self, tmp_path):
+        """Per-turn rows after ## Per-Scenario Results do NOT overwrite aggregate values."""
+        md = (
+            "## Aggregate Scores\n\n"
+            "| rule_compliance | 4.50 | — |\n"
+            "| narrative_coherence | 3.80 | — |\n\n"
+            "## Per-Scenario Results\n\n"
+            "| rule_compliance | 1.00 | 1, 1, 1 |\n"
+            "| narrative_coherence | 1.00 | 1, 1, 1 |\n"
+        )
+        baseline_path = self._write_baseline(tmp_path, md)
+        result = _parse_baseline(baseline_path)
+        # Must use aggregate values, not per-turn values
+        assert abs(result["rule_compliance"] - 4.50) < 0.01
+        assert abs(result["narrative_coherence"] - 3.80) < 0.01
+
+    def test_returns_empty_dict_if_no_aggregate_section(self, tmp_path):
+        """Returns empty dict when baseline has no aggregate section."""
+        md = "# Some Report\n\nNo tables here.\n"
+        baseline_path = self._write_baseline(tmp_path, md)
+        result = _parse_baseline(baseline_path)
+        assert result == {}
