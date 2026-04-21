@@ -3,6 +3,7 @@
 import React, { useState, useRef } from 'react'
 import type { DiceRollEvent } from '@/lib/types/message'
 import { DiceRoller } from '@/components/dice/DiceRoller'
+import { splitParagraphs } from '@/lib/utils/text'
 
 interface ChatMessageProps {
   role: 'player' | 'dm' | 'system'
@@ -261,15 +262,25 @@ export function ChatMessage({
             </div>
           )}
 
-          <p
-            className="font-serif italic"
+          <div
             style={{
-              color: 'var(--dnd-parchment)',
               visibility: narrationVisible ? 'visible' : 'hidden',
             }}
           >
-            {content}
-          </p>
+            {splitParagraphs(content).map((para, pIdx, arr) => (
+              <p
+                key={pIdx}
+                className="font-serif italic"
+                style={{
+                  color: 'var(--dnd-parchment)',
+                  margin: 0,
+                  marginBottom: pIdx < arr.length - 1 ? '0.4em' : 0,
+                }}
+              >
+                {para}
+              </p>
+            ))}
+          </div>
         </div>
       </div>
       <style jsx>{`
@@ -400,12 +411,21 @@ export function ChatMessage({
               </div>
             </div>
           ) : (
-            <p
-              className="font-serif"
-              style={{ color: 'var(--dnd-parchment)' }}
-            >
-              {content}
-            </p>
+            <div>
+              {splitParagraphs(content).map((para, pIdx, arr) => (
+                <p
+                  key={pIdx}
+                  className="font-serif"
+                  style={{
+                    color: 'var(--dnd-parchment)',
+                    margin: 0,
+                    marginBottom: pIdx < arr.length - 1 ? '0.4em' : 0,
+                  }}
+                >
+                  {para}
+                </p>
+              ))}
+            </div>
           )}
         </div>
       </div>

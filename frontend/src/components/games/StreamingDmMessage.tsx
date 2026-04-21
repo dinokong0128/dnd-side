@@ -4,10 +4,16 @@ import { Fragment, useRef, useState } from 'react'
 import type { StreamSegment } from '@/lib/types/streaming'
 import type { DiceRollEvent } from '@/lib/types/message'
 import { DiceRoller } from '@/components/dice/DiceRoller'
+import { useTypewriter } from '@/lib/hooks/useTypewriter'
+import { splitParagraphs } from '@/lib/utils/text'
 
 interface StreamingDmMessageProps {
   segments: StreamSegment[]
 }
+
+type PlanItem =
+  | { kind: 'text'; content: string; isCurrent: boolean }
+  | { kind: 'dice_rolls'; content: string }
 
 /** Parse the JSON content of a dice_rolls block. [] on any failure. */
 function parseDiceRolls(content: string): DiceRollEvent[] {
@@ -183,23 +189,65 @@ function StreamingDiceBlock({ rolls }: { rolls: DiceRollEvent[] }) {
 /**
  * Live DM response bubble rendered while a stream is in flight (DIN-66).
  *
- * Interleaves plain text with animated dice_rolls blocks. Dice animate
- * sequentially (same as ChatMessage) and the outcome badge appears once all
- * dice in a block settle. The last text segment gets a blinking cursor.
- * Unmounts as soon as the real Realtime DM INSERT arrives and the parent
- * clears `streamingSegments` to null.
+ * Interleaves plain text with animated dice_rolls blocks. A requestAnimationFrame-
+ * driven typewriter reveals text at ~100 cps (with a 1.5s catch-up clamp) so the
+ * reveal stays smooth even when the backend bursts large chunks. Dice blocks are
+ * gated behind any still-typing preceding text so they never animate ahead of
+ * their narration. The last rendered text segment gets a blinking cursor.
  */
 export function StreamingDmMessage({ segments }: StreamingDmMessageProps) {
-  // Find the last text segment so the cursor anchors to it.
-  let lastTextIdx = -1
-  for (let i = segments.length - 1; i >= 0; i--) {
-    if (segments[i].kind === 'text') {
-      lastTextIdx = i
-      break
+  const targetChars = segments.reduce(
+    (n, s) => n + (s.kind === 'text' ? s.content.length : 0),
+    0
+  )
+  const revealed = useTypewriter(targetChars, 100)
+
+  const plan: PlanItem[] = []
+  let budget = revealed
+  let halted = false
+  for (const seg of segments) {
+    if (halted) break
+    if (seg.kind === 'text') {
+      const take = Math.min(seg.content.length, Math.max(0, budget))
+      const isCurrent = take < seg.content.length
+      plan.push({
+        kind: 'text',
+        content: seg.content.slice(0, take),
+        isCurrent,
+      })
+      budget -= seg.content.length
+      if (isCurrent) halted = true
+    } else {
+      plan.push({ kind: 'dice_rolls', content: seg.content })
     }
   }
 
-  const showEmptyCursor = segments.length === 0
+  // Cursor anchors to the current (still-typing) text item if present,
+  // otherwise to the last rendered text item.
+  let cursorPlanIdx = -1
+  for (let i = plan.length - 1; i >= 0; i--) {
+    const item = plan[i]
+    if (item.kind === 'text' && item.isCurrent) {
+      cursorPlanIdx = i
+      break
+    }
+  }
+  if (cursorPlanIdx === -1) {
+    for (let i = plan.length - 1; i >= 0; i--) {
+      if (plan[i].kind === 'text') {
+        cursorPlanIdx = i
+        break
+      }
+    }
+  }
+
+  // Fall back to the empty-cursor paragraph when the plan has no renderable
+  // text yet (plan empty, dice-only, or the cursor host's slice is still empty).
+  const cursorHost = cursorPlanIdx >= 0 ? plan[cursorPlanIdx] : null
+  const showEmptyCursor =
+    !cursorHost ||
+    cursorHost.kind !== 'text' ||
+    cursorHost.content.length === 0
 
   return (
     <div className="mb-4 flex justify-start" data-testid="streaming-dm-message">
@@ -217,20 +265,19 @@ export function StreamingDmMessage({ segments }: StreamingDmMessageProps) {
           Dungeon Master
         </div>
 
-        {segments.map((segment, idx) => {
-          if (segment.kind === 'dice_rolls') {
-            const rolls = parseDiceRolls(segment.content)
+        {plan.map((item, idx) => {
+          if (item.kind === 'dice_rolls') {
+            const rolls = parseDiceRolls(item.content)
             return <StreamingDiceBlock key={`dice-${idx}`} rolls={rolls} />
           }
 
-          const isLastText = idx === lastTextIdx
-          // Split on double-newlines so paragraph breaks render as tight
-          // spacing (~0.4em) rather than a full blank line from pre-wrap.
-          const paragraphs = segment.content.split('\n\n').filter((p) => p.length > 0)
+          const isCursorHost = idx === cursorPlanIdx
+          const paragraphs = splitParagraphs(item.content)
           return (
             <Fragment key={`text-${idx}`}>
               {paragraphs.map((para, pIdx) => {
-                const isVeryLast = isLastText && pIdx === paragraphs.length - 1
+                const isLastPara = pIdx === paragraphs.length - 1
+                const isVeryLast = isCursorHost && isLastPara
                 return (
                   <p
                     key={`text-${idx}-p${pIdx}`}
@@ -238,7 +285,7 @@ export function StreamingDmMessage({ segments }: StreamingDmMessageProps) {
                     style={{
                       color: 'var(--dnd-parchment)',
                       margin: 0,
-                      marginBottom: pIdx < paragraphs.length - 1 ? '0.4em' : 0,
+                      marginBottom: isLastPara ? 0 : '0.4em',
                     }}
                   >
                     {para}
