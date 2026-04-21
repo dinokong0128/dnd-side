@@ -3,17 +3,9 @@
 import logging
 from pathlib import Path
 
-from evals.schema import RunReport
+from evals.schema import AXES, RunReport
 
 logger = logging.getLogger(__name__)
-
-AXES = [
-    "rule_compliance",
-    "narrative_coherence",
-    "state_correctness",
-    "hallucination",
-    "voice_consistency",
-]
 
 
 def _fmt_score(val: float | None) -> str:

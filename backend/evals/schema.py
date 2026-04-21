@@ -3,6 +3,14 @@
 from typing import Literal
 from pydantic import BaseModel, field_validator
 
+AXES = [
+    "rule_compliance",
+    "narrative_coherence",
+    "state_correctness",
+    "hallucination",
+    "voice_consistency",
+]
+
 
 class AdversarialCheck(BaseModel):
     type: Literal["state_unchanged", "no_mechanic_bypass"]

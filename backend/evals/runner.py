@@ -19,8 +19,9 @@ from evals.judges import (
     DEFAULT_JUDGE_MODEL,
     DEFAULT_SAMPLE_SIZE,
 )
-from evals.report import generate_report, AXES
+from evals.report import generate_report
 from evals.schema import (
+    AXES,
     DMResponse,
     RunReport,
     Scenario,

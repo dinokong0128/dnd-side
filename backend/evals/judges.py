@@ -4,17 +4,9 @@ import json
 import logging
 
 from config import anthropic_client
-from evals.schema import Scenario, TurnResult
+from evals.schema import AXES, Scenario, TurnResult
 
 logger = logging.getLogger(__name__)
-
-AXES = [
-    "rule_compliance",
-    "narrative_coherence",
-    "state_correctness",
-    "hallucination",
-    "voice_consistency",
-]
 
 DEFAULT_JUDGE_MODEL = "claude-haiku-4-5-20251001"
 DEFAULT_SAMPLE_SIZE = 3
