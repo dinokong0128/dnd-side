@@ -152,6 +152,16 @@ def _call_judge(prompt: str, judge_model: str) -> int | str:
         logger.warning("[judges] API call failed: %s", e)
         return "N/A"
     raw = response.content[0].text.strip()
+    # Haiku often wraps JSON in markdown code fences despite instructions.
+    # Strip ```json ... ``` or ``` ... ``` wrappers before parsing.
+    if raw.startswith("```"):
+        # Remove opening fence (with optional language tag) and closing fence
+        lines = raw.splitlines()
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        raw = "\n".join(lines).strip()
     try:
         parsed = json.loads(raw)
         score = parsed.get("score", "N/A")

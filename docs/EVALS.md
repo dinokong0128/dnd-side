@@ -6,6 +6,48 @@
 
 ---
 
+## One-Time DB Setup (Before First Run)
+
+The harness seeds isolated game/player rows per scenario. Because `games.created_by` and `players.profile_id` are NOT NULL FKs into `profiles(id)` → `auth.users(id)`, the harness uses a pool of four dedicated `eval_harness` profiles rather than random UUIDs or real users' profiles.
+
+These must exist in the target Supabase project before the first run. Run this once per environment (service role key required):
+
+```sql
+DO $$
+DECLARE
+    i int;
+    new_id uuid;
+BEGIN
+    FOR i IN 1..4 LOOP
+        new_id := ('00000000-0000-0000-0000-00000000000' || i::text)::uuid;
+
+        INSERT INTO auth.users (
+            id, email, encrypted_password, email_confirmed_at,
+            created_at, updated_at, aud, role,
+            raw_app_meta_data, raw_user_meta_data, is_sso_user
+        ) VALUES (
+            new_id,
+            'eval_harness_' || i::text || '@internal.test',
+            crypt('dummy-never-used-eval-only', gen_salt('bf')),
+            now(), now(), now(),
+            'authenticated', 'authenticated',
+            '{"provider":"email","providers":["email"]}'::jsonb,
+            '{}'::jsonb,
+            false
+        ) ON CONFLICT (id) DO NOTHING;
+
+        INSERT INTO profiles (id, username) VALUES (
+            new_id,
+            CASE WHEN i = 1 THEN 'eval_harness' ELSE 'eval_harness_' || i::text END
+        ) ON CONFLICT (id) DO NOTHING;
+    END LOOP;
+END $$;
+```
+
+The UUIDs are referenced in `backend/evals/runner.py::EVAL_PROFILE_POOL` and in every fixture's `games.created_by` field. **Do not delete these profiles** while the harness is in use.
+
+---
+
 ## How to Run
 
 ### Full Eval (All 25 Scenarios)

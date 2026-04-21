@@ -38,6 +38,17 @@ _EVALS_DIR = Path(__file__).parent
 _REPORTS_DIR = _EVALS_DIR / "reports"
 _SCENARIOS_FILE = _EVALS_DIR / "golden_scenarios.yaml"
 
+# Dedicated profile UUIDs for eval-seeded players. These rows must exist in
+# `auth.users` and `profiles` before the harness can run (see docs/EVALS.md
+# for one-time setup SQL). Four UUIDs are provided because fixtures may have
+# up to 4 players per game and (game_id, profile_id) is UNIQUE on `players`.
+EVAL_PROFILE_POOL: tuple[str, ...] = (
+    "00000000-0000-0000-0000-000000000001",
+    "00000000-0000-0000-0000-000000000002",
+    "00000000-0000-0000-0000-000000000003",
+    "00000000-0000-0000-0000-000000000004",
+)
+
 
 def load_scenarios(path: Path = _SCENARIOS_FILE) -> list[Scenario]:
     """Load and validate all scenarios from the YAML file."""
@@ -68,11 +79,16 @@ def _seed_scenario(scenario: Scenario, scenario_game_id: str, fixture: dict) -> 
     for idx, player_template in enumerate(fixture.get("players", [])):
         player_id = str(uuid.uuid4())
         player_id_map[idx] = player_id
+        # profile_id falls back to a pool of dedicated eval-harness profiles
+        # (auth.users + profiles pre-seeded) rather than a random UUID, which
+        # would violate the FK constraint on players.profile_id → profiles(id).
+        # Fixtures may override by specifying profile_id explicitly.
+        fallback_profile_id = EVAL_PROFILE_POOL[idx % len(EVAL_PROFILE_POOL)]
         player_row = {
             **player_template,
             "id": player_id,
             "game_id": scenario_game_id,
-            "profile_id": player_template.get("profile_id") or str(uuid.uuid4()),
+            "profile_id": player_template.get("profile_id") or fallback_profile_id,
         }
         supabase_client.table("players").insert(player_row).execute()
 
