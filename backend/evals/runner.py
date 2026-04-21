@@ -51,13 +51,12 @@ def _load_fixture(fixture_path: str) -> dict:
     return json.loads(full_path.read_text())
 
 
-def _seed_scenario(scenario: Scenario, scenario_game_id: str) -> None:
+def _seed_scenario(scenario: Scenario, scenario_game_id: str, fixture: dict) -> None:
     """
     Seed isolated DB state for a scenario run.
     Inserts game, players, player_inventory, and game_events rows.
     All IDs are generated fresh — fixture `id` fields are null/placeholders.
     """
-    fixture = _load_fixture(scenario.seed_state_file)
 
     # Insert game row
     game_row = {**fixture["game"], "id": scenario_game_id}
@@ -78,7 +77,7 @@ def _seed_scenario(scenario: Scenario, scenario_game_id: str) -> None:
         supabase_client.table("players").insert(player_row).execute()
 
     # Insert player_inventory
-    for idx, inv_item in enumerate(fixture.get("player_inventory", [])):
+    for inv_item in fixture.get("player_inventory", []):
         player_idx = inv_item.get("player_index", 0)
         player_id = player_id_map.get(player_idx, player_id_map.get(0))
         inv_row = {
@@ -144,22 +143,17 @@ async def _run_scenario(
     adversarial_gate_passed = True
 
     try:
-        _seed_scenario(scenario, scenario_game_id)
+        fixture = _load_fixture(scenario.seed_state_file)
+        _seed_scenario(scenario, scenario_game_id, fixture)
 
         prior_context = ""
-        current_state: dict = _load_fixture(scenario.seed_state_file)
+        current_state: dict = fixture
 
         for i, turn in enumerate(scenario.turns):
             try:
                 dm_response: DMResponse = await target.respond(scenario_game_id, turn.action)
 
-                # Build prior_context for judge (accumulate narration)
-                if prior_context:
-                    prior_context += f"\n\nPlayer: {turn.action}"
-                else:
-                    prior_context = f"Player: {turn.action}"
-
-                # Score this turn
+                # Score this turn — prior_context contains only completed turns
                 turn_score = judge_turn(
                     prior_context=prior_context,
                     action=turn.action,
@@ -193,8 +187,9 @@ async def _run_scenario(
                 )
                 turn_results.append(turn_result)
 
-                # Update context + state for next turn
-                prior_context += f"\nDM: {dm_response.narration}"
+                # Append this turn to context for subsequent turns
+                sep = "\n\n" if prior_context else ""
+                prior_context += f"{sep}Player: {turn.action}\nDM: {dm_response.narration}"
 
                 if len(scenario.turns) > 1 and dm_response.state_updates:
                     try:
@@ -282,7 +277,15 @@ async def run_eval(
 
     for scenario in scenarios:
         logger.info("[runner] Running scenario: %s", scenario.id)
-        result = await _run_scenario(scenario, target, judge_model, sample_size)
+        try:
+            result = await _run_scenario(scenario, target, judge_model, sample_size)
+        except Exception as e:
+            logger.error("[runner] Scenario %s aborted: %s", scenario.id, e)
+            result = ScenarioResult(
+                scenario_id=scenario.id,
+                errors=[f"Scenario aborted: {e}"],
+                adversarial_gate_passed=False,
+            )
         scenario_results.append(result)
 
     aggregate = _compute_aggregate(scenario_results)

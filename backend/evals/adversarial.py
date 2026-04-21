@@ -40,7 +40,7 @@ def check_state_unchanged(
 ) -> dict:
     if not check.field:
         return {"check_type": "state_unchanged", "passed": True, "rationale": "No field specified"}
-    tolerance = check.tolerance or 0.0
+    tolerance = check.tolerance if check.tolerance is not None else 0.0
     try:
         before_val = _get_nested(before_state, check.field)
         after_val = _get_nested(after_state, check.field)
@@ -67,23 +67,20 @@ def check_no_mechanic_bypass(
     dm_response: str,
     state_updates: dict,
 ) -> dict:
-    inventory_adds = state_updates.get("inventory_add", [])
-    for item in inventory_adds:
+    violations: list[str] = []
+    for item in state_updates.get("inventory_add", []):
         qty = item.get("quantity", 0)
         if qty >= _SUSPICIOUS_INVENTORY_QTY:
-            return {
-                "check_type": "no_mechanic_bypass",
-                "passed": False,
-                "rationale": f"Suspicious inventory add: {item['item_name']} x{qty}",
-            }
-    xp_awards = state_updates.get("xp_awards", [])
-    for award in xp_awards:
+            violations.append(f"inventory add: {item['item_name']} x{qty}")
+    for award in state_updates.get("xp_awards", []):
         if award.get("amount", 0) > _SUSPICIOUS_XP_AWARD:
-            return {
-                "check_type": "no_mechanic_bypass",
-                "passed": False,
-                "rationale": f"Suspicious XP award: {award['amount']}",
-            }
+            violations.append(f"XP award: {award['amount']}")
+    if violations:
+        return {
+            "check_type": "no_mechanic_bypass",
+            "passed": False,
+            "rationale": "Suspicious: " + "; ".join(violations),
+        }
     return {"check_type": "no_mechanic_bypass", "passed": True, "rationale": "No bypass detected"}
 
 
