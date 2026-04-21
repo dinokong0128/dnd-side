@@ -2,18 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { SceneType, Mood } from '@/lib/scene'
+import { pickVariantFor } from '@/lib/scene-variants'
 
-const SCENE_VARIANT_COUNT = 3
 const FALLBACK_SRC = '/scenes/rest/default.webp'
-
-function pickVariant(sceneType: SceneType, lastVariant: number): number {
-  if (SCENE_VARIANT_COUNT <= 1) return 1
-  let next: number
-  do {
-    next = Math.floor(Math.random() * SCENE_VARIANT_COUNT) + 1
-  } while (next === lastVariant && SCENE_VARIANT_COUNT > 1)
-  return next
-}
 
 interface Props {
   sceneType: SceneType | null
@@ -26,7 +17,8 @@ export function SceneBackground({ sceneType, sceneMood, enabled, reduceMotion }:
   const [activeSlot, setActiveSlot] = useState<'a' | 'b'>('a')
   const [slotA, setSlotA] = useState<string | null>(null)
   const [slotB, setSlotB] = useState<string | null>(null)
-  // Track the last variant shown per scene type to avoid repeats
+  // Track the last variant shown per scene type so the picker can avoid
+  // immediate repeats (e.g. mood unchanged across two turns).
   const lastVariantRef = useRef<Record<string, number>>({})
   // Mirrors activeSlot as a ref so the effect always reads the current slot
   // without needing it as a dependency (which would re-trigger transitions).
@@ -36,7 +28,7 @@ export function SceneBackground({ sceneType, sceneMood, enabled, reduceMotion }:
     if (!sceneType || !enabled) return
 
     const last = lastVariantRef.current[sceneType] ?? 0
-    const variant = pickVariant(sceneType, last)
+    const variant = pickVariantFor(sceneType, sceneMood, last)
     lastVariantRef.current[sceneType] = variant
     const src = `/scenes/${sceneType}/${variant}.webp`
 
@@ -52,7 +44,7 @@ export function SceneBackground({ sceneType, sceneMood, enabled, reduceMotion }:
       activeSlotRef.current = 'a'
     }
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [sceneType, enabled])
+  }, [sceneType, sceneMood, enabled])
 
   if (!enabled) return null
 
