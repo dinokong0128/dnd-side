@@ -22,10 +22,6 @@ _BLOCK_PATTERNS = [
     r"<suggested_actions>.*?</suggested_actions>",
 ]
 
-_EVENT_PATTERN = re.compile(
-    r'<event\s+type=["\'][^"\']+["\']>(.*?)</event>', re.DOTALL
-)
-
 
 def _strip_structured_blocks(text: str) -> str:
     """Strip all XML structured blocks from DM response text."""

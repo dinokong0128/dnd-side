@@ -4,6 +4,8 @@ max-line-length = 120
 extend-ignore = E402
 # Test files use long Supabase mock chains and may import pytest for fixtures
 # tasks/dm_tasks.py contains inherently long multi-line f-string system prompts
+# evals/judges.py contains inherently long markdown-table rubric anchors inside an embedded prompt
 per-file-ignores =
     tests/*.py: E501,F401
     tasks/dm_tasks.py: E501
+    evals/judges.py: E501

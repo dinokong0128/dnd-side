@@ -13,7 +13,12 @@ import yaml
 
 from config import supabase_client
 from evals.adversarial import run_checks
-from evals.judges import judge_turn, judge_continuity, DEFAULT_JUDGE_MODEL
+from evals.judges import (
+    judge_turn,
+    judge_continuity,
+    DEFAULT_JUDGE_MODEL,
+    DEFAULT_SAMPLE_SIZE,
+)
 from evals.report import generate_report, AXES
 from evals.schema import (
     DMResponse,
@@ -268,7 +273,7 @@ async def run_eval(
     scenarios: list[Scenario],
     output_dir: Path,
     judge_model: str = DEFAULT_JUDGE_MODEL,
-    sample_size: int = 3,
+    sample_size: int = DEFAULT_SAMPLE_SIZE,
 ) -> RunReport:
     """Run all scenarios and produce a RunReport."""
     run_id = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
@@ -350,7 +355,7 @@ def main() -> None:
     parser.add_argument("--model", default="claude-sonnet-4-20250514")
     parser.add_argument("--output", type=Path, default=_REPORTS_DIR)
     parser.add_argument("--scenario", help="Run only a single scenario by ID")
-    parser.add_argument("--sample-size", type=int, default=3)
+    parser.add_argument("--sample-size", type=int, default=DEFAULT_SAMPLE_SIZE)
     parser.add_argument("--judge-model", default=DEFAULT_JUDGE_MODEL)
     parser.add_argument("--update-baseline", action="store_true")
     parser.add_argument("--reason", default="", help="Reason for baseline update")
