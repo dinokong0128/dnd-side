@@ -1,11 +1,11 @@
 'use client'
 
-import { Fragment, useRef, useState } from 'react'
+import { Fragment, useMemo, useRef, useState } from 'react'
 import type { StreamSegment } from '@/lib/types/streaming'
 import type { DiceRollEvent } from '@/lib/types/message'
 import { DiceRoller } from '@/components/dice/DiceRoller'
 import { useTypewriter } from '@/lib/hooks/useTypewriter'
-import { splitParagraphs } from '@/lib/utils/text'
+import { graphemesOf, splitParagraphs } from '@/lib/utils/text'
 
 interface StreamingDmMessageProps {
   segments: StreamSegment[]
@@ -13,6 +13,10 @@ interface StreamingDmMessageProps {
 
 type PlanItem =
   | { kind: 'text'; content: string; isCurrent: boolean }
+  | { kind: 'dice_rolls'; content: string }
+
+type SegmentedItem =
+  | { kind: 'text'; graphemes: string[] }
   | { kind: 'dice_rolls'; content: string }
 
 /** Parse the JSON content of a dice_rolls block. [] on any failure. */
@@ -196,8 +200,22 @@ function StreamingDiceBlock({ rolls }: { rolls: DiceRollEvent[] }) {
  * their narration. The last rendered text segment gets a blinking cursor.
  */
 export function StreamingDmMessage({ segments }: StreamingDmMessageProps) {
-  const targetChars = segments.reduce(
-    (n, s) => n + (s.kind === 'text' ? s.content.length : 0),
+  // Pre-segment text into grapheme clusters so the typewriter reveal never
+  // slices through an emoji / combining mark mid-character. Memoized on the
+  // segments array identity — the rAF loop re-renders on every frame, so
+  // re-segmenting each tick would be wasted work.
+  const segmented = useMemo<SegmentedItem[]>(
+    () =>
+      segments.map((seg) =>
+        seg.kind === 'text'
+          ? { kind: 'text', graphemes: graphemesOf(seg.content) }
+          : { kind: 'dice_rolls', content: seg.content }
+      ),
+    [segments]
+  )
+
+  const targetChars = segmented.reduce(
+    (n, s) => n + (s.kind === 'text' ? s.graphemes.length : 0),
     0
   )
   const revealed = useTypewriter(targetChars, 100)
@@ -205,17 +223,17 @@ export function StreamingDmMessage({ segments }: StreamingDmMessageProps) {
   const plan: PlanItem[] = []
   let budget = revealed
   let halted = false
-  for (const seg of segments) {
+  for (const seg of segmented) {
     if (halted) break
     if (seg.kind === 'text') {
-      const take = Math.min(seg.content.length, Math.max(0, budget))
-      const isCurrent = take < seg.content.length
+      const take = Math.min(seg.graphemes.length, Math.max(0, budget))
+      const isCurrent = take < seg.graphemes.length
       plan.push({
         kind: 'text',
-        content: seg.content.slice(0, take),
+        content: seg.graphemes.slice(0, take).join(''),
         isCurrent,
       })
-      budget -= seg.content.length
+      budget -= seg.graphemes.length
       if (isCurrent) halted = true
     } else {
       plan.push({ kind: 'dice_rolls', content: seg.content })

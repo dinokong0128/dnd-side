@@ -165,6 +165,23 @@ describe('StreamingDmMessage', () => {
     expect(paragraphs[1].textContent).toContain('Paragraph two.')
   })
 
+  it('never slices an emoji mid-character during the typewriter reveal', () => {
+    // Mix ASCII + multi-code-unit glyphs. A naive UTF-16 slice would
+    // produce a lone surrogate (rendered as U+FFFD) at certain frames;
+    // grapheme-safe slicing guarantees every intermediate string is valid.
+    const content = 'a🐉b🦄c'
+    const segments: StreamSegment[] = [{ kind: 'text', content }]
+    const { container } = render(<StreamingDmMessage segments={segments} />)
+
+    // Sample the DOM text at several intermediate frames — no replacement
+    // character should ever appear.
+    for (let i = 0; i < 40; i++) {
+      flush(16)
+      const bubble = container.querySelector('[data-testid="streaming-dm-message"]')
+      expect(bubble?.textContent ?? '').not.toContain('�')
+    }
+  })
+
   it('keeps the cursor on the final paragraph once the stream fully reveals', () => {
     const segments: StreamSegment[] = [
       { kind: 'text', content: 'Alpha.\n\nBeta.' },
