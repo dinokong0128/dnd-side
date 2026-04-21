@@ -7,6 +7,7 @@ Claude emits narrative text interleaved with structured XML tags:
     <suggested_actions>...</suggested_actions>
     <state_changes>...</state_changes>
     <dice_rolls>...</dice_rolls>
+    <scene type="..." mood="..."/>   ← self-closing (DIN-73)
 
 This parser wraps the token stream and emits SSE-ready dicts:
     {"type": "chunk", "text": "..."}                           — plain narrative text
@@ -26,7 +27,7 @@ from typing import Any
 
 
 KNOWN_TAGS: frozenset[str] = frozenset(
-    {"event", "suggested_actions", "state_changes", "dice_rolls"}
+    {"event", "suggested_actions", "state_changes", "dice_rolls", "scene"}
 )
 
 # Characters held back in the buffer before emitting a chunk event. Must exceed
@@ -92,21 +93,63 @@ class StreamParser:
             return events
 
         stripped = remaining.lstrip()
-        # If remaining content starts with a `<`, assume it's an incomplete
-        # tag fragment and discard it — it's not narration-safe.
-        if stripped and not stripped.startswith("<"):
-            events.append({"type": "chunk", "text": remaining})
+        # If the entire remaining buffer starts with `<`, it's an incomplete
+        # tag fragment — discard it entirely.
+        if stripped.startswith("<"):
+            return events
+
+        # Strip any trailing partial tag fragment (e.g. "text <scene" at stream
+        # end). If the last `<` has no matching `>` after it, the slice from
+        # that `<` is an incomplete tag and should not be emitted.
+        last_lt = remaining.rfind("<")
+        if last_lt != -1 and ">" not in remaining[last_lt:]:
+            safe_text = remaining[:last_lt]
+            if safe_text:
+                events.append({"type": "chunk", "text": safe_text})
+            return events
+
+        events.append({"type": "chunk", "text": remaining})
         return events
 
     # ---- internals ---------------------------------------------------- #
 
     def _extract_block(self, text: str) -> dict[str, Any] | None:
         """
-        Try to parse a complete `<tag [attrs]>content</tag>` at the start of
-        `text`. Returns {"event": {...}, "consumed": int} or None if the
-        block is incomplete.
+        Try to parse a complete block at the start of `text`.
+
+        Handles two forms:
+        - Self-closing:  `<tag [attrs]/>`      (e.g. <scene type="..."/>)
+        - Paired:        `<tag [attrs]>content</tag>`
+
+        Returns {"event": {...}, "consumed": int} or None if the block is
+        incomplete (i.e. more data is needed).
         """
         tag_names = "|".join(re.escape(t) for t in KNOWN_TAGS)
+
+        # Try self-closing first: <tag attrs/>
+        self_close_re = re.compile(rf"^<({tag_names})((?:\s[^>]*)?)/>")
+        sc_m = self_close_re.match(text)
+        if sc_m:
+            tag_name = sc_m.group(1)
+            attrs_str = sc_m.group(2).strip()
+            attributes: dict[str, str] = {}
+            for attr_m in _ATTR_RE.finditer(attrs_str):
+                name = attr_m.group(1)
+                value = (
+                    attr_m.group(2) if attr_m.group(2) is not None else attr_m.group(3)
+                )
+                attributes[name] = value
+            return {
+                "event": {
+                    "type": "block",
+                    "tag": tag_name,
+                    "attributes": attributes,
+                    "content": "",
+                },
+                "consumed": sc_m.end(),
+            }
+
+        # Try paired tag: <tag attrs>content</tag>
         open_re = re.compile(rf"^<({tag_names})((?:\s[^>]*)?)>")
         open_m = open_re.match(text)
         if not open_m:
@@ -123,7 +166,7 @@ class StreamParser:
         content = text[open_m.end() : close_m.start()]
         consumed = close_m.end()
 
-        attributes: dict[str, str] = {}
+        attributes = {}
         for attr_m in _ATTR_RE.finditer(attrs_str):
             name = attr_m.group(1)
             value = (

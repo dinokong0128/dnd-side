@@ -174,4 +174,67 @@ class TestKnownTags:
             "suggested_actions",
             "state_changes",
             "dice_rolls",
+            "scene",
         }
+
+
+class TestSceneBlock:
+    def test_scene_tag_type_only(self):
+        parser = StreamParser()
+        raw = 'You enter the forest. <scene type="forest"/> Birds sing.'
+        events = _feed_all(parser, [raw])
+        blocks = [e for e in events if e["type"] == "block"]
+        assert len(blocks) == 1
+        assert blocks[0]["tag"] == "scene"
+        assert blocks[0]["attributes"] == {"type": "forest"}
+        assert blocks[0]["content"] == ""
+
+    def test_scene_tag_with_mood(self):
+        parser = StreamParser()
+        raw = '<scene type="dungeon" mood="combat"/>'
+        events = _feed_all(parser, [raw])
+        blocks = [e for e in events if e["type"] == "block"]
+        assert len(blocks) == 1
+        assert blocks[0]["attributes"] == {"type": "dungeon", "mood": "combat"}
+
+    def test_scene_tag_mood_before_type(self):
+        parser = StreamParser()
+        raw = '<scene mood="tense" type="tavern"/>'
+        events = _feed_all(parser, [raw])
+        blocks = [e for e in events if e["type"] == "block"]
+        assert len(blocks) == 1
+        assert blocks[0]["attributes"]["type"] == "tavern"
+        assert blocks[0]["attributes"]["mood"] == "tense"
+
+    def test_scene_tag_stripped_from_narrative_chunks(self):
+        parser = StreamParser()
+        raw = 'You enter the forest. <scene type="forest"/> Birds sing.'
+        events = _feed_all(parser, [raw])
+        chunks = "".join(e["text"] for e in events if e["type"] == "chunk")
+        assert "<scene" not in chunks
+        assert "You enter the forest." in chunks
+        assert "Birds sing." in chunks
+
+    def test_scene_tag_split_across_chunks(self):
+        parser = StreamParser()
+        chunks = [
+            "Entering the cave. <scene",
+            ' type="cave"',
+            " mood=\"mystery\"/>",
+            " Darkness swallows you.",
+        ]
+        events = _feed_all(parser, chunks)
+        blocks = [e for e in events if e["type"] == "block"]
+        assert len(blocks) == 1
+        assert blocks[0]["tag"] == "scene"
+        assert blocks[0]["attributes"]["type"] == "cave"
+        assert blocks[0]["attributes"]["mood"] == "mystery"
+
+    def test_malformed_scene_tag_not_leaked(self):
+        """An incomplete scene tag at stream end should not appear in narrative."""
+        parser = StreamParser()
+        parser.feed("Entering the cave. <scene")
+        events = parser.flush()
+        for e in events:
+            if e["type"] == "chunk":
+                assert "<scene" not in e["text"]

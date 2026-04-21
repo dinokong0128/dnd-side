@@ -98,6 +98,8 @@ export function makeMessage(overrides: Partial<GameMessage> = {}): GameMessage {
     profile_id: null,
     content: 'You stand before the gates of doom.',
     created_at: '2026-03-22T00:00:00Z',
+    scene_type: null,
+    scene_mood: null,
     ...overrides,
   }
 }

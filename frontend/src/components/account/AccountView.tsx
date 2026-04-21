@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
 import { getInitials } from '@/lib/utils/profile'
@@ -30,6 +30,43 @@ export function AccountView({ initialUsername, email }: AccountViewProps) {
   const [saving, setSaving] = useState(false)
   const [sendingReset, setSendingReset] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
+  const [dynamicBackgrounds, setDynamicBackgrounds] = useState(true)
+  const [reduceMotion, setReduceMotion] = useState(false)
+
+  useEffect(() => {
+    const storedBg = localStorage.getItem('realmAndRuin.dynamicBackgrounds')
+    const storedMotion = localStorage.getItem('realmAndRuin.reduceMotion')
+    if (storedBg !== null) setDynamicBackgrounds(storedBg !== 'false')
+    if (storedMotion !== null) {
+      setReduceMotion(storedMotion === 'true')
+    } else {
+      const prefersReduced =
+        typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+          ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+          : false
+      setReduceMotion(prefersReduced)
+    }
+  }, [])
+
+  function handleToggleDynamicBackgrounds(enabled: boolean) {
+    setDynamicBackgrounds(enabled)
+    localStorage.setItem('realmAndRuin.dynamicBackgrounds', String(enabled))
+    window.dispatchEvent(
+      new CustomEvent('realm-prefs-changed', {
+        detail: { enabled, reduceMotion },
+      })
+    )
+  }
+
+  function handleToggleReduceMotion(reduce: boolean) {
+    setReduceMotion(reduce)
+    localStorage.setItem('realmAndRuin.reduceMotion', String(reduce))
+    window.dispatchEvent(
+      new CustomEvent('realm-prefs-changed', {
+        detail: { enabled: dynamicBackgrounds, reduceMotion: reduce },
+      })
+    )
+  }
 
   async function handleSaveDisplayName(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -158,6 +195,45 @@ export function AccountView({ initialUsername, email }: AccountViewProps) {
             {passwordResetState}
           </p>
         )}
+      </div>
+
+      <div className="mb-6 border-t pt-6" style={{ borderColor: 'var(--dnd-brown)' }}>
+        <h2 className="dnd-heading mb-3 text-sm font-semibold">Preferences</h2>
+        <div className="space-y-4">
+          <label className="dnd-toggle flex items-center justify-between cursor-pointer">
+            <div>
+              <span className="block text-sm" style={{ color: 'var(--dnd-parchment)' }}>
+                Dynamic Backgrounds
+              </span>
+              <span className="block text-xs" style={{ color: 'var(--muted)' }}>
+                Show scene art behind the game chat
+              </span>
+            </div>
+            <input
+              type="checkbox"
+              checked={dynamicBackgrounds}
+              onChange={(e) => handleToggleDynamicBackgrounds(e.target.checked)}
+              aria-label="Dynamic backgrounds"
+            />
+          </label>
+
+          <label className="dnd-toggle flex items-center justify-between cursor-pointer">
+            <div>
+              <span className="block text-sm" style={{ color: 'var(--dnd-parchment)' }}>
+                Reduce Motion
+              </span>
+              <span className="block text-xs" style={{ color: 'var(--muted)' }}>
+                Disable Ken Burns animation and crossfades
+              </span>
+            </div>
+            <input
+              type="checkbox"
+              checked={reduceMotion}
+              onChange={(e) => handleToggleReduceMotion(e.target.checked)}
+              aria-label="Reduce motion"
+            />
+          </label>
+        </div>
       </div>
 
       <div className="border-t pt-6" style={{ borderColor: 'var(--dnd-brown)' }}>

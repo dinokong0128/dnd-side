@@ -263,6 +263,20 @@ RULES:
    Award XP to all players present.
    Format: "xp_awards": [{{"character_id": "<ID>", "amount": 100, "reason": "Defeated goblin"}}]
    Typical values: Goblin 50 XP, Bandit 100 XP, Orc 100 XP, completing a minor quest 150–300 XP.
+13. SCENE TAG: At the END of every response, emit exactly one self-closing <scene> tag that
+   describes the current location and optional mood. Place it on its own line after all
+   narrative text, dice rolls, state changes, and suggested actions.
+   Format: <scene type="SCENE_TYPE" mood="MOOD"/>
+   - mood is optional — omit the mood attribute entirely if none applies.
+   - SCENE_TYPE must be exactly one of:
+     tavern, town_square, throne_room, temple, forest, mountain, swamp, desert,
+     coast, dungeon, cave, crypt, rest
+   - MOOD (optional) must be exactly one of:
+     combat, tense, victory, stealth, somber, mystery
+   Examples:
+     <scene type="tavern"/>
+     <scene type="dungeon" mood="combat"/>
+     <scene type="forest" mood="mystery"/>
 
 The acting player's action:
 "{action_text}"
