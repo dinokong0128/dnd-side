@@ -11,7 +11,6 @@ from services.dm_service import (
     build_dm_system_prompt,
     search_rag,
     extract_state_changes,
-    extract_events_from_response,
 )
 from services.embedding_service import embed_text
 
@@ -112,17 +111,22 @@ class CurrentTarget:
         )
 
         # Step 3: Call Claude (temperature=0 for reproducibility)
-        response = anthropic_client.messages.create(
-            model=self.model,
-            max_tokens=1024,
-            temperature=0,
-            system=system_prompt,
-            messages=[{"role": "user", "content": action}],
-        )
+        try:
+            response = anthropic_client.messages.create(
+                model=self.model,
+                max_tokens=1024,
+                temperature=0,
+                system=system_prompt,
+                messages=[{"role": "user", "content": action}],
+            )
+        except Exception as e:
+            logger.error("[CurrentTarget] Claude API call failed for game=%s: %s", game_id, e)
+            raise
 
         raw_response = response.content[0].text
         latency_ms = int((time.monotonic() - t0) * 1000)
         tokens_used = response.usage.input_tokens + response.usage.output_tokens
+        logger.info("[CurrentTarget] game=%s tokens=%d latency_ms=%d", game_id, tokens_used, latency_ms)
 
         # Step 4: Extract state changes
         state_updates = extract_state_changes(raw_response)

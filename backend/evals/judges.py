@@ -2,11 +2,9 @@
 
 import json
 import logging
-import time
-from typing import Literal
 
 from config import anthropic_client
-from evals.schema import Scenario, TurnResult, DMResponse
+from evals.schema import Scenario, TurnResult
 
 logger = logging.getLogger(__name__)
 
@@ -144,11 +142,15 @@ OUTPUT FORMAT (strict JSON, no prose outside the JSON):
 
 def _call_judge(prompt: str, judge_model: str) -> int | str:
     """Call Claude Haiku for a single judge score; return int or 'N/A'."""
-    response = anthropic_client.messages.create(
-        model=judge_model,
-        max_tokens=64,
-        messages=[{"role": "user", "content": prompt}],
-    )
+    try:
+        response = anthropic_client.messages.create(
+            model=judge_model,
+            max_tokens=64,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except Exception as e:
+        logger.warning("[judges] API call failed: %s", e)
+        return "N/A"
     raw = response.content[0].text.strip()
     try:
         parsed = json.loads(raw)
@@ -173,16 +175,23 @@ def _score_axis(
 ) -> tuple[float | None, list[int | str]]:
     """Run `sample_size` judge calls for one axis; return (mean, samples)."""
     axis_def = _AXIS_DEFS[axis]
+    truncated_context = prior_context[:500] if prior_context else ""
+    truncated_action = action[:500]
+    truncated_response = dm_response[:1000]
+    truncated_state = json.dumps(state_snapshot, default=str)[:500]
+    if len(prior_context) > 500 or len(dm_response) > 1000:
+        logger.debug("[judges] Prompt inputs truncated for axis %s (context=%d, response=%d)",
+                     axis, len(prior_context), len(dm_response))
     prompt = _JUDGE_PROMPT_TEMPLATE.format(
         axis_name=axis,
         axis_one_liner=axis_def["one_liner"],
         anchors_for_this_axis=axis_def["anchors"],
         axis_specific_warning=axis_def["warning"],
-        prior_context=prior_context[:500] if prior_context else "",
-        action=action[:500],
-        dm_response=dm_response[:1000],
+        prior_context=truncated_context,
+        action=truncated_action,
+        dm_response=truncated_response,
         expected_capabilities=", ".join(expected_capabilities),
-        state_snapshot=json.dumps(state_snapshot, default=str)[:500],
+        state_snapshot=truncated_state,
     )
 
     samples: list[int | str] = []

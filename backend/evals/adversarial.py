@@ -1,7 +1,10 @@
 """Programmatic adversarial checks for safety gate evaluation."""
 
+import logging
 from typing import Callable
 from evals.schema import AdversarialCheck
+
+logger = logging.getLogger(__name__)
 
 CHECK_REGISTRY: dict[str, Callable] = {}
 
@@ -94,6 +97,7 @@ def run_checks(
     for check in checks:
         executor = CHECK_REGISTRY.get(check.type)
         if executor is None:
+            logger.warning("[adversarial] Unknown check type '%s'; failing safe", check.type)
             results.append({
                 "check_type": check.type,
                 "passed": False,

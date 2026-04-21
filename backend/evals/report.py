@@ -3,7 +3,7 @@
 import logging
 from pathlib import Path
 
-from evals.schema import RunReport, ScenarioResult
+from evals.schema import RunReport
 
 logger = logging.getLogger(__name__)
 
@@ -59,19 +59,19 @@ def generate_report(
     lines: list[str] = []
 
     # Header
-    lines.append(f"# Eval Run Report")
-    lines.append(f"")
+    lines.append("# Eval Run Report")
+    lines.append("")
     lines.append(f"**Run ID:** {run_report.run_id}")
     lines.append(f"**Target:** {run_report.target_name}")
     lines.append(f"**Model:** {run_report.model}")
     lines.append(f"**Scenarios:** {len(run_report.scenario_results)}")
-    lines.append(f"")
+    lines.append("")
 
     # Aggregate table
-    lines.append(f"## Aggregate Scores")
-    lines.append(f"")
-    lines.append(f"| Axis | Mean Score | vs Baseline |")
-    lines.append(f"|------|-----------|-------------|")
+    lines.append("## Aggregate Scores")
+    lines.append("")
+    lines.append("| Axis | Mean Score | vs Baseline |")
+    lines.append("|------|-----------|-------------|")
     for axis in AXES:
         key = f"{axis}_mean"
         current_val = run_report.aggregate.get(key)
@@ -82,53 +82,53 @@ def generate_report(
 
     adv_pass = run_report.aggregate.get("adversarial_gate_pass_count", 0)
     adv_fail = run_report.aggregate.get("adversarial_gate_fail_count", 0)
-    lines.append(f"")
+    lines.append("")
     lines.append(f"**Adversarial gate:** {adv_pass} passed / {adv_fail} failed")
-    lines.append(f"")
+    lines.append("")
 
     # Per-scenario detail
-    lines.append(f"## Per-Scenario Results")
-    lines.append(f"")
+    lines.append("## Per-Scenario Results")
+    lines.append("")
 
     for sr in run_report.scenario_results:
         lines.append(f"### {sr.scenario_id}")
-        lines.append(f"")
+        lines.append("")
         lines.append(f"- **Adversarial gate:** {'✅ passed' if sr.adversarial_gate_passed else '❌ failed'}")
         if sr.continuity_score is not None:
             lines.append(f"- **Continuity score:** {sr.continuity_score:.2f}")
-        lines.append(f"")
+        lines.append("")
 
         for i, tr in enumerate(sr.turn_results):
             lines.append(f"#### Turn {i + 1}")
-            lines.append(f"")
-            lines.append(f"**Rubric scores:**")
-            lines.append(f"")
-            lines.append(f"| Axis | Score | Samples |")
-            lines.append(f"|------|-------|---------|")
+            lines.append("")
+            lines.append("**Rubric scores:**")
+            lines.append("")
+            lines.append("| Axis | Score | Samples |")
+            lines.append("|------|-------|---------|")
             for axis in AXES:
                 score = _fmt_score(tr.rubric_scores.get(axis))
                 samples = tr.rubric_samples.get(axis, [])
                 samples_str = ", ".join(str(s) for s in samples)
                 lines.append(f"| {axis} | {score} | {samples_str} |")
-            lines.append(f"")
+            lines.append("")
             excerpt = tr.dm_response.narration[:200].replace("\n", " ")
             lines.append(f"**DM response excerpt:** {excerpt}")
-            lines.append(f"")
+            lines.append("")
 
             if tr.adversarial_results:
-                lines.append(f"**Adversarial checks:**")
+                lines.append("**Adversarial checks:**")
                 for check_result in tr.adversarial_results:
                     status = "✅" if check_result.get("passed") else "❌"
                     lines.append(
                         f"- {status} `{check_result.get('check_type')}`: {check_result.get('rationale', '')}"
                     )
-                lines.append(f"")
+                lines.append("")
 
         if sr.errors:
-            lines.append(f"**Errors:**")
+            lines.append("**Errors:**")
             for err in sr.errors:
                 lines.append(f"- {err}")
-            lines.append(f"")
+            lines.append("")
 
     # Errors section
     all_errors = [
@@ -137,11 +137,11 @@ def generate_report(
         for err in sr.errors
     ]
     if all_errors:
-        lines.append(f"## Errors")
-        lines.append(f"")
+        lines.append("## Errors")
+        lines.append("")
         for scenario_id, err in all_errors:
             lines.append(f"- **{scenario_id}:** {err}")
-        lines.append(f"")
+        lines.append("")
 
     md = "\n".join(lines)
 

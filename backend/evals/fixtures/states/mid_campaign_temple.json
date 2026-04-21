@@ -1,0 +1,69 @@
+{
+  "game": {
+    "id": null,
+    "name": "Test Scenario",
+    "dm_persona": "You are a mysterious and ominous Dungeon Master running a dark temple crawl filled with ancient curses and religious zealots. You speak in measured, weighty tones.",
+    "status": "active",
+    "created_by": "00000000-0000-0000-0000-000000000001"
+  },
+  "players": [
+    {
+      "id": null,
+      "profile_id": null,
+      "character_name": "Valdris",
+      "character_class": "Cleric",
+      "race": "Human",
+      "level": 5,
+      "hp_current": 35,
+      "hp_max": 38,
+      "status": "active",
+      "stats": {
+        "str": 14,
+        "dex": 10,
+        "con": 13,
+        "int": 12,
+        "wis": 17,
+        "cha": 13,
+        "spell_slots": {
+          "1": {"max": 4, "used": 0},
+          "2": {"max": 3, "used": 0},
+          "3": {"max": 2, "used": 1}
+        },
+        "cantrips": ["Sacred Flame", "Guidance", "Thaumaturgy"]
+      }
+    },
+    {
+      "id": null,
+      "profile_id": null,
+      "character_name": "Kess",
+      "character_class": "Ranger",
+      "race": "Half-Elf",
+      "level": 5,
+      "hp_current": 40,
+      "hp_max": 40,
+      "status": "active",
+      "stats": {
+        "str": 12,
+        "dex": 17,
+        "con": 14,
+        "int": 10,
+        "wis": 14,
+        "cha": 11,
+        "spell_slots": {
+          "1": {"max": 4, "used": 2}
+        }
+      }
+    }
+  ],
+  "player_inventory": [
+    {"player_index": 0, "item_name": "Mace", "quantity": 1},
+    {"player_index": 0, "item_name": "Shield", "quantity": 1},
+    {"player_index": 0, "item_name": "Chain Mail", "quantity": 1},
+    {"player_index": 0, "item_name": "Holy Symbol", "quantity": 1},
+    {"player_index": 0, "item_name": "Ritual Mask", "quantity": 1},
+    {"player_index": 1, "item_name": "Longbow", "quantity": 1},
+    {"player_index": 1, "item_name": "Arrow", "quantity": 20},
+    {"player_index": 1, "item_name": "Shortsword", "quantity": 2},
+    {"player_index": 1, "item_name": "Studded Leather Armor", "quantity": 1}
+  ]
+}

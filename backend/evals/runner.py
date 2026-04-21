@@ -4,9 +4,7 @@ import argparse
 import asyncio
 import json
 import logging
-import os
 import shutil
-import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -101,15 +99,22 @@ def _seed_scenario(scenario: Scenario, scenario_game_id: str) -> None:
 
 def _teardown_scenario(scenario_game_id: str) -> None:
     """Delete all rows for this scenario game_id in FK-safe order."""
+    # Fetch player IDs first so we can delete inventory without a subquery
     try:
-        supabase_client.table("player_inventory").delete().eq(
-            "player_id",
+        player_rows = (
             supabase_client.table("players")
             .select("id")
-            .eq("game_id", scenario_game_id),
-        ).execute()
-    except Exception:
-        pass
+            .eq("game_id", scenario_game_id)
+            .execute()
+        )
+        player_ids = [r["id"] for r in (player_rows.data or [])]
+        if player_ids:
+            supabase_client.table("player_inventory").delete().in_(
+                "player_id", player_ids
+            ).execute()
+    except Exception as e:
+        logger.warning("[runner] Teardown warning for player_inventory: %s", e)
+
     for table in ("game_messages", "game_events", "players"):
         try:
             supabase_client.table(table).delete().eq("game_id", scenario_game_id).execute()

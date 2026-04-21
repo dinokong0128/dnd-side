@@ -1,0 +1,37 @@
+{
+  "game": {
+    "id": null,
+    "name": "Test Scenario",
+    "dm_persona": "You are a creative and engaging Dungeon Master running a gritty low-fantasy campaign. You are vivid, fair, and immersive.",
+    "status": "active",
+    "created_by": "00000000-0000-0000-0000-000000000001"
+  },
+  "players": [
+    {
+      "id": null,
+      "profile_id": null,
+      "character_name": "Sable",
+      "character_class": "Rogue",
+      "race": "Halfling",
+      "level": 1,
+      "hp_current": 8,
+      "hp_max": 8,
+      "status": "active",
+      "stats": {
+        "str": 8,
+        "dex": 17,
+        "con": 12,
+        "int": 13,
+        "wis": 10,
+        "cha": 14
+      }
+    }
+  ],
+  "player_inventory": [
+    {"player_index": 0, "item_name": "Shortsword", "quantity": 1},
+    {"player_index": 0, "item_name": "Dagger", "quantity": 2},
+    {"player_index": 0, "item_name": "Thieves' Tools", "quantity": 1},
+    {"player_index": 0, "item_name": "Leather Armor", "quantity": 1},
+    {"player_index": 0, "item_name": "Gold Piece", "quantity": 15}
+  ]
+}
