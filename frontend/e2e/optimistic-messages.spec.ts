@@ -15,6 +15,11 @@ import { test, expect, Page } from '@playwright/test'
 // The E2E custom-event layer (NEXT_PUBLIC_E2E_TESTING) has been updated in
 // this PR to mirror the Realtime INSERT reconciliation logic, so tests that
 // dispatch 'player-message' events can assert on deduplication behaviour.
+//
+// PR #79 (client-minted UUID):
+//  4. The client mints one UUID per submit, sends it as `client_id` in the
+//     POST body, and stamps the same UUID on the DOM as `data-message-id`.
+//     Reconciliation dedupes by id — no prefix, no remount, no reorder.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const GAME_ID = 'test-game-optimistic'
@@ -195,9 +200,10 @@ test.describe('DIN-64 — Optimistic player messages', () => {
     await expect(page.getByText(ACTION_TEXT)).toBeVisible({ timeout: 3000 })
 
     // Read the id the client minted so Realtime can dedupe by the same id.
+    // Filter by the action text so we get the player bubble, not the DM init message.
     const optimisticId = await page
       .locator('[data-message-id]')
-      .first()
+      .filter({ hasText: ACTION_TEXT })
       .getAttribute('data-message-id')
 
     // Simulate Supabase Realtime INSERT for the same player message (real DB row)
@@ -398,5 +404,59 @@ test.describe('DIN-64 — Optimistic player messages', () => {
     ).toBeVisible({ timeout: 5000 })
     await expect(page.getByText(/The Dungeon Master is writing/i)).not.toBeVisible()
     await expect(textarea).toBeEnabled()
+  })
+})
+
+// ─── PR #79 — Client-minted UUID: data-message-id matches POST client_id ─────
+
+test.describe('PR #79 — client-minted UUID round-trip', () => {
+  test('data-message-id on optimistic bubble matches client_id sent in POST body', async ({
+    page,
+  }) => {
+    let capturedClientId: string | null = null
+
+    await setupGameMocks(page)
+
+    // Intercept the actions POST and capture the client_id from the request body
+    await page.route(`**/api/games/${GAME_ID}/actions`, async (route) => {
+      if (route.request().method() === 'POST') {
+        const body = route.request().postDataJSON() as Record<string, string>
+        capturedClientId = body.client_id ?? null
+        await route.fulfill({
+          status: 202,
+          contentType: 'application/json',
+          body: JSON.stringify({ status: 'queued', message_id: capturedClientId ?? 'msg-1' }),
+        })
+      } else {
+        await route.continue()
+      }
+    })
+
+    await gotoGame(page)
+
+    const textarea = page.getByTestId('chat-textarea')
+    await textarea.fill(ACTION_TEXT)
+    await page.getByRole('button', { name: /Send/i }).click()
+
+    // Wait for the optimistic bubble to appear
+    await expect(page.getByText(ACTION_TEXT)).toBeVisible({ timeout: 3000 })
+
+    // Read the id the component stamped on the DOM
+    const domId = await page
+      .locator('[data-message-id]')
+      .filter({ hasText: ACTION_TEXT })
+      .getAttribute('data-message-id')
+
+    expect(capturedClientId).not.toBeNull()
+    expect(domId).not.toBeNull()
+
+    // The client must send the same UUID it renders on the DOM — this is the
+    // core invariant of the client-minted UUID change (PR #79).
+    expect(domId).toBe(capturedClientId)
+
+    // The id must be a valid UUID (not an 'optimistic-' prefix string)
+    expect(domId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    )
   })
 })

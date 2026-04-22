@@ -64,7 +64,8 @@ export function SceneBackground({ sceneType, sceneMood, enabled, reduceMotion }:
   return (
     <div
       aria-hidden="true"
-      style={{ position: 'fixed', inset: 0, zIndex: 0, overflow: 'hidden' }}
+      data-testid="scene-background"
+      style={{ position: 'fixed', inset: 0, zIndex: 0, overflow: 'hidden', pointerEvents: 'none' }}
     >
       {/* Inactive slot (fading out) */}
       {inactiveSrc && (
