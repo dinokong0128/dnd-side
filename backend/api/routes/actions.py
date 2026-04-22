@@ -59,17 +59,39 @@ _STRIP_EVENT_BLOCKS = re.compile(
     r"<event\s+type=[\"'][^\"']+[\"']>(.*?)</event>",
     re.DOTALL,
 )
+_STRIP_SCENE_TAG = re.compile(r"<scene(?:\s[^>]*)?\/>")
+
+_SCENE_TYPE_RE = re.compile(r'type=["\']([^"\']+)["\']')
+_SCENE_MOOD_RE = re.compile(r'mood=["\']([^"\']+)["\']')
+_SCENE_TAG_RE = re.compile(r"<scene(\s[^>]*)?\/>")
 
 
 def _strip_all_known_tags(text: str) -> str:
     """Remove structured blocks from a raw Claude response for display.
 
     Preserves inner text of <event> wrappers; fully removes dice_rolls,
-    state_changes, and suggested_actions blocks.
+    state_changes, suggested_actions, and scene blocks.
     """
     text = _STRIP_TAG_BLOCKS.sub("", text)
     text = _STRIP_EVENT_BLOCKS.sub(r"\1", text)
+    text = _STRIP_SCENE_TAG.sub("", text)
     return text.strip()
+
+
+def _extract_scene_from_raw(raw: str) -> tuple[str | None, str | None]:
+    """Extract scene_type and scene_mood from a raw Claude response.
+
+    Returns (scene_type, scene_mood) where either may be None.
+    """
+    m = _SCENE_TAG_RE.search(raw)
+    if not m:
+        return None, None
+    attrs_str = m.group(1) or ""
+    type_m = _SCENE_TYPE_RE.search(attrs_str)
+    mood_m = _SCENE_MOOD_RE.search(attrs_str)
+    scene_type = type_m.group(1) if type_m else None
+    scene_mood = mood_m.group(1) if mood_m else None
+    return scene_type, scene_mood
 
 
 def _extract_dice_rolls_for_row(raw_response: str) -> list[dict] | None:
@@ -121,18 +143,23 @@ async def _stream_to_redis(
         raw = "".join(full_parts)
         clean = _strip_all_known_tags(raw)
         dice_rolls = _extract_dice_rolls_for_row(raw)
+        scene_type, scene_mood = _extract_scene_from_raw(raw)
+
+        msg_row: dict[str, Any] = {
+            "game_id": game_id,
+            "role": MESSAGE_ROLE_DM,
+            "profile_id": None,
+            "content": clean,
+            "dice_rolls": dice_rolls,
+        }
+        if scene_type is not None:
+            msg_row["scene_type"] = scene_type
+        if scene_mood is not None:
+            msg_row["scene_mood"] = scene_mood
 
         await asyncio.to_thread(
             lambda: supabase_client.table("game_messages")
-            .insert(
-                {
-                    "game_id": game_id,
-                    "role": MESSAGE_ROLE_DM,
-                    "profile_id": None,
-                    "content": clean,
-                    "dice_rolls": dice_rolls,
-                }
-            )
+            .insert(msg_row)
             .execute()
         )
 

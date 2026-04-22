@@ -646,6 +646,22 @@ Write 2–3 paragraphs."""
         raise
 
 
+_SCENE_TAG_RE = re.compile(r"<scene(\s[^>]*)?\/>")
+_SCENE_TYPE_ATTR_RE = re.compile(r'type=["\']([^"\']+)["\']')
+_SCENE_MOOD_ATTR_RE = re.compile(r'mood=["\']([^"\']+)["\']')
+
+
+def _extract_scene_from_response(dm_response: str) -> tuple[str | None, str | None]:
+    """Extract scene_type and scene_mood from a raw DM response string."""
+    m = _SCENE_TAG_RE.search(dm_response)
+    if not m:
+        return None, None
+    attrs = m.group(1) or ""
+    type_m = _SCENE_TYPE_ATTR_RE.search(attrs)
+    mood_m = _SCENE_MOOD_ATTR_RE.search(attrs)
+    return (type_m.group(1) if type_m else None), (mood_m.group(1) if mood_m else None)
+
+
 @dramatiq.actor(max_retries=DM_TASK_MAX_RETRIES, min_backoff=1000)
 def dm_bookkeeping_task(game_id: str, dm_response: str) -> None:
     """
@@ -656,11 +672,10 @@ def dm_bookkeeping_task(game_id: str, dm_response: str) -> None:
     Handles work that doesn't need to block the player's first token:
 
     1. Extract <event> blocks → embed each → insert to game_events (RAG)
+       Each game_events row is decorated with scene_type/scene_mood from the
+       turn's <scene> tag (DIN-73). Rows with no scene tag get NULL columns.
     2. Extract <suggested_actions> → update games.suggested_actions
     3. Update games.updated_at
-
-    state_changes handling is intentionally deferred to Epic-7 — the
-    streaming path consumes those blocks silently for now.
 
     Failures re-raise so Dramatiq retries the task. Because the DM message
     is already persisted before this task runs, retries never risk a
@@ -672,18 +687,21 @@ def dm_bookkeeping_task(game_id: str, dm_response: str) -> None:
         events = extract_events_from_response(dm_response)
         logger.info(f"[dm_bookkeeping_task] Extracted {len(events)} events")
 
+        scene_type, scene_mood = _extract_scene_from_response(dm_response)
+
         event_rows = []
         for event in events:
             embedding = embed_text(event["description"])
-            event_rows.append(
-                {
-                    "game_id": game_id,
-                    "event_type": event["type"],
-                    "summary": event["description"],
-                    "embedding": embedding,
-                    "source": EVENT_SOURCE_CLAUDE,
-                }
-            )
+            row: dict = {
+                "game_id": game_id,
+                "event_type": event["type"],
+                "summary": event["description"],
+                "embedding": embedding,
+                "source": EVENT_SOURCE_CLAUDE,
+                "scene_type": scene_type,
+                "scene_mood": scene_mood,
+            }
+            event_rows.append(row)
         if event_rows:
             supabase_client.table("game_events").insert(event_rows).execute()
             logger.info(f"[dm_bookkeeping_task] Inserted {len(event_rows)} events")

@@ -21,4 +21,6 @@ export type GameMessage = {
   content: string
   created_at: string
   dice_rolls?: DiceRollEvent[] | null
+  scene_type: string | null
+  scene_mood: string | null
 }

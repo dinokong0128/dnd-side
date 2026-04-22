@@ -25,6 +25,8 @@ interface ChatLogProps {
    * once the real Realtime DM INSERT reconciles (DIN-66).
    */
   streamingSegments?: StreamSegment[] | null
+  /** When true, apply translucent background + backdrop-blur (DIN-73). */
+  backgroundsEnabled?: boolean
 }
 
 export function ChatLog({
@@ -40,6 +42,7 @@ export function ChatLog({
   onDeleteMessage,
   onEditMessage,
   streamingSegments,
+  backgroundsEnabled,
 }: ChatLogProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const topSentinelRef = useRef<HTMLDivElement>(null)
@@ -170,8 +173,12 @@ export function ChatLog({
     <div
       ref={scrollContainerRef}
       onScroll={handleScroll}
-      className="relative flex flex-1 flex-col overflow-y-auto px-6 py-4"
-      style={{ background: 'var(--dnd-black)' }}
+      className="dnd-chat-log relative flex flex-1 flex-col overflow-y-auto px-6 py-4"
+      style={
+        backgroundsEnabled
+          ? { background: 'rgba(13, 11, 9, 0.55)', backdropFilter: 'blur(2px)' }
+          : { background: 'var(--dnd-black)' }
+      }
     >
       <div className="max-w-3xl space-y-4">
         <div ref={topSentinelRef} data-testid="top-sentinel" />

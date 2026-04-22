@@ -2081,3 +2081,92 @@ class TestDmBookkeepingTask:
             mock_embed.return_value = [0.1] * 1536
             with pytest.raises(RuntimeError):
                 dm_bookkeeping_task.fn("game-1", raw_response)
+
+    def test_scene_type_and_mood_denormalized_onto_game_events_rows(self):
+        """Each game_events row gets scene_type/scene_mood from the DM turn's <scene> tag."""
+        raw_response = (
+            'The goblin falls. <event type="combat">Goblin slain</event> '
+            '<scene type="dungeon" mood="combat"/>'
+        )
+        captured_rows: list[list] = []
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "games":
+                mock.update.return_value.match.return_value.execute.return_value = MagicMock()
+            elif name == "game_events":
+                def capture_insert(rows):
+                    captured_rows.append(rows)
+                    return MagicMock(execute=MagicMock(return_value=MagicMock()))
+                mock.insert.side_effect = capture_insert
+            return mock
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.embed_text"
+        ) as mock_embed:
+            mock_sb.table.side_effect = table_side_effect
+            mock_embed.return_value = [0.1] * 1536
+            dm_bookkeeping_task.fn("game-1", raw_response)
+
+        assert len(captured_rows) == 1
+        rows = captured_rows[0]
+        assert len(rows) == 1
+        assert rows[0]["scene_type"] == "dungeon"
+        assert rows[0]["scene_mood"] == "combat"
+
+    def test_scene_type_only_no_mood(self):
+        """When mood is absent, scene_mood on game_events rows is None."""
+        raw_response = (
+            'You enter the forest. <event type="discovery">Found a ruin</event> '
+            '<scene type="forest"/>'
+        )
+        captured_rows: list[list] = []
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "games":
+                mock.update.return_value.match.return_value.execute.return_value = MagicMock()
+            elif name == "game_events":
+                def capture_insert(rows):
+                    captured_rows.append(rows)
+                    return MagicMock(execute=MagicMock(return_value=MagicMock()))
+                mock.insert.side_effect = capture_insert
+            return mock
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.embed_text"
+        ) as mock_embed:
+            mock_sb.table.side_effect = table_side_effect
+            mock_embed.return_value = [0.1] * 1536
+            dm_bookkeeping_task.fn("game-1", raw_response)
+
+        assert captured_rows[0][0]["scene_type"] == "forest"
+        assert captured_rows[0][0]["scene_mood"] is None
+
+    def test_no_scene_tag_results_in_null_scene_columns(self):
+        """When the DM response has no <scene> tag, game_events rows have NULL for both columns."""
+        raw_response = (
+            'The goblin attacks. <event type="combat">Battle started</event>'
+        )
+        captured_rows: list[list] = []
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "games":
+                mock.update.return_value.match.return_value.execute.return_value = MagicMock()
+            elif name == "game_events":
+                def capture_insert(rows):
+                    captured_rows.append(rows)
+                    return MagicMock(execute=MagicMock(return_value=MagicMock()))
+                mock.insert.side_effect = capture_insert
+            return mock
+
+        with patch("tasks.dm_tasks.supabase_client") as mock_sb, patch(
+            "tasks.dm_tasks.embed_text"
+        ) as mock_embed:
+            mock_sb.table.side_effect = table_side_effect
+            mock_embed.return_value = [0.1] * 1536
+            dm_bookkeeping_task.fn("game-1", raw_response)
+
+        assert captured_rows[0][0]["scene_type"] is None
+        assert captured_rows[0][0]["scene_mood"] is None

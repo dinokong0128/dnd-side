@@ -18,8 +18,11 @@ import { SessionStatusBanner } from './SessionStatusBanner'
 import { CharacterSheetPanel } from './CharacterSheetPanel'
 import { LevelUpModal } from './LevelUpModal'
 import type { LevelUpPayload } from './LevelUpModal'
+import { SceneBackground } from './SceneBackground'
 import type { PlayerRow } from '@/lib/types/player'
 import { CHAT_PAGE_SIZE } from '@/lib/constants/game'
+import { parseSceneTag } from '@/lib/scene'
+import type { SceneType, Mood } from '@/lib/scene'
 
 interface GameSessionViewProps {
   gameId: string
@@ -60,7 +63,39 @@ export function GameSessionView({
     useState<StreamSegment[] | null>(null)
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // DIN-73 scene state — derived from most recent DM message with scene_type set.
+  const [currentSceneType, setCurrentSceneType] = useState<SceneType | null>(null)
+  const [currentSceneMood, setCurrentSceneMood] = useState<Mood | null>(null)
+
+  // DIN-73 user preferences — persisted in localStorage.
+  const [bgEnabled, setBgEnabled] = useState(true)
+  const [bgReduceMotion, setBgReduceMotion] = useState(false)
+
   const isHost = game.created_by === userId
+
+  // Load preferences from localStorage on mount; listen for changes from AccountView.
+  useEffect(() => {
+    const storedEnabled = localStorage.getItem('realmAndRuin.dynamicBackgrounds')
+    const storedMotion = localStorage.getItem('realmAndRuin.reduceMotion')
+    if (storedEnabled !== null) setBgEnabled(storedEnabled !== 'false')
+    if (storedMotion !== null) {
+      setBgReduceMotion(storedMotion === 'true')
+    } else {
+      const prefersReduced =
+        typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+          ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+          : false
+      setBgReduceMotion(prefersReduced)
+    }
+
+    const handler = (e: Event) => {
+      const { enabled, reduceMotion } = (e as CustomEvent<{ enabled: boolean; reduceMotion: boolean }>).detail
+      setBgEnabled(enabled)
+      setBgReduceMotion(reduceMotion)
+    }
+    window.addEventListener('realm-prefs-changed', handler)
+    return () => window.removeEventListener('realm-prefs-changed', handler)
+  }, [])
 
   // Initialize: fetch messages and players, set up subscriptions
   useEffect(() => {
@@ -302,6 +337,8 @@ export function GameSessionView({
         content: detail.content,
         created_at: detail.created_at || new Date().toISOString(),
         dice_rolls: detail.dice_rolls ?? null,
+        scene_type: detail.scene_type ?? null,
+        scene_mood: detail.scene_mood ?? null,
       }
       if (msg.role === 'player') {
         // Reconcile: mirror the Realtime INSERT handler — remove any optimistic
@@ -376,6 +413,21 @@ export function GameSessionView({
     if (last) setLastPlayerAction(last.content)
   }, [messages, userId])
 
+  // Derive current scene from the most recent DM message with scene_type set.
+  useEffect(() => {
+    if (gameStatus !== 'active') return
+    const recent = [...messages].reverse().find(
+      (m) => m.role === 'dm' && m.scene_type != null
+    )
+    if (recent) {
+      const parsed = parseSceneTag(`<scene type="${recent.scene_type}"${recent.scene_mood ? ` mood="${recent.scene_mood}"` : ''}/>`)
+      if (parsed) {
+        setCurrentSceneType(parsed.type)
+        setCurrentSceneMood(parsed.mood ?? null)
+      }
+    }
+  }, [messages, gameStatus])
+
   // Start/clear 45s timeout when waiting state changes — only during active sessions.
   // Paused/lobby states should never surface a retry CTA since /actions would 500.
   useEffect(() => {
@@ -402,6 +454,8 @@ export function GameSessionView({
       profile_id: userId,
       content: actionText,
       created_at: new Date().toISOString(),
+      scene_type: null,
+      scene_mood: null,
     }
     setMessages((prev) => [...prev, optimisticMsg])
     setIsWaitingForDm(true)
@@ -493,6 +547,15 @@ export function GameSessionView({
                   .map((line) => line.trim())
                   .filter(Boolean)
                 setSuggestedActions(lines)
+              } else if (event.tag === 'scene') {
+                // Update scene background immediately during streaming.
+                const sceneResult = parseSceneTag(
+                  `<scene type="${event.attributes?.type ?? ''}"${event.attributes?.mood ? ` mood="${event.attributes.mood}"` : ''}/>`
+                )
+                if (sceneResult) {
+                  setCurrentSceneType(sceneResult.type)
+                  setCurrentSceneMood(sceneResult.mood ?? null)
+                }
               }
               // 'event' and 'state_changes' consumed silently.
             } else if (event.type === 'done') {
@@ -617,7 +680,19 @@ export function GameSessionView({
   }
 
   return (
-    <div className="dnd-page-bg flex flex-col h-screen" data-player-id={currentPlayerId ?? ''}>
+    <div
+      className={`dnd-page-bg flex flex-col h-screen${bgEnabled && gameStatus === 'active' ? ' scene-bg-active' : ''}`}
+      data-player-id={currentPlayerId ?? ''}
+    >
+      {/* DIN-73: Dynamic scene background — only in active game sessions */}
+      {gameStatus === 'active' && (
+        <SceneBackground
+          sceneType={currentSceneType}
+          sceneMood={currentSceneMood}
+          enabled={bgEnabled}
+          reduceMotion={bgReduceMotion}
+        />
+      )}
       <GameHeader
         gameName={game.name}
         gameStatus={gameStatus}
@@ -643,6 +718,7 @@ export function GameSessionView({
             onDeleteMessage={handleDeleteMessage}
             onEditMessage={handleEditMessage}
             streamingSegments={streamingSegments}
+            backgroundsEnabled={bgEnabled && gameStatus === 'active'}
           />
           {isWaitingForDm &&
             gameStatus === 'active' &&
