@@ -20,6 +20,12 @@ jest.mock('../ChatLog', () => ({
       <div data-testid="has-more">{hasMoreMessages ? 'true' : 'false'}</div>
       <div data-testid="is-loading-more">{isLoadingMore ? 'true' : 'false'}</div>
       <div data-testid="messages-count">{messages ? messages.length : 0}</div>
+      <div data-testid="first-message-created-at">
+        {messages && messages[0] ? messages[0].created_at : ''}
+      </div>
+      <div data-testid="first-message-content">
+        {messages && messages[0] ? messages[0].content : ''}
+      </div>
       <div data-testid="chat-log-user-id">{userId || ''}</div>
       <div data-testid="streaming-active">{streamingSegments === null || streamingSegments === undefined ? 'false' : 'true'}</div>
       <div data-testid="streaming-segments-count">{streamingSegments ? streamingSegments.length : 0}</div>
@@ -617,6 +623,8 @@ describe('GameSessionView', () => {
       act(() => { fireEvent.click(screen.getByTestId('submit-action')) })
       await waitFor(() => expect(screen.getByTestId('messages-count')).toHaveTextContent('1'))
 
+      const serverCreatedAt = '2099-01-01T00:00:00.000Z'
+      const serverContent = 'I attack the dragon (server-normalized)'
       act(() => {
         handlers.INSERT?.({
           new: {
@@ -624,14 +632,22 @@ describe('GameSessionView', () => {
             game_id: 'game-1',
             role: 'player',
             profile_id: 'user-1',
-            content: 'I attack the dragon',
-            created_at: new Date().toISOString(),
+            content: serverContent,
+            created_at: serverCreatedAt,
           },
         })
       })
 
+      // Same row — count stays at 1, id stays stable (no remount), but the
+      // server-canonical fields replace the optimistic placeholders.
       await waitFor(() => {
         expect(screen.getByTestId('messages-count')).toHaveTextContent('1')
+        expect(screen.getByTestId('first-message-created-at')).toHaveTextContent(
+          serverCreatedAt
+        )
+        expect(screen.getByTestId('first-message-content')).toHaveTextContent(
+          serverContent
+        )
       })
 
       randomUUIDSpy.mockRestore()

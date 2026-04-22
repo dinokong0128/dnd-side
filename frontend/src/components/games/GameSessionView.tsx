@@ -159,8 +159,15 @@ export function GameSessionView({
 
           if (newMsg.role === 'player') {
             setMessages((prev) => {
-              if (prev.some((m) => m.id === newMsg.id)) return prev
-              return [...prev, newMsg].sort((a, b) =>
+              // Replace (not skip) on id-match so the optimistic row picks up
+              // the server's canonical fields — `created_at` (DB-generated,
+              // authoritative for ordering) and any server-normalized content.
+              // React key stays stable, so no remount.
+              const idx = prev.findIndex((m) => m.id === newMsg.id)
+              const next = idx >= 0
+                ? prev.map((m, i) => (i === idx ? newMsg : m))
+                : [...prev, newMsg]
+              return next.sort((a, b) =>
                 a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0
               )
             })
@@ -304,8 +311,11 @@ export function GameSessionView({
       }
       if (msg.role === 'player') {
         setMessages((prev) => {
-          if (prev.some((m) => m.id === msg.id)) return prev
-          return [...prev, msg].sort((a, b) =>
+          const idx = prev.findIndex((m) => m.id === msg.id)
+          const next = idx >= 0
+            ? prev.map((m, i) => (i === idx ? msg : m))
+            : [...prev, msg]
+          return next.sort((a, b) =>
             a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0
           )
         })
