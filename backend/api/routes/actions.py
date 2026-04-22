@@ -25,7 +25,6 @@ import json
 import logging
 import re
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -105,17 +104,25 @@ def _extract_dice_rolls_for_row(raw_response: str) -> list[dict] | None:
 async def _stream_to_redis(
     game_id: str,
     action_text: str,
-    system_prompt: str,
+    profile_id: str,
 ) -> None:
     """
-    Background coroutine: call Claude and publish SSE events to Redis pub/sub.
+    Background coroutine: build the prompt, call Claude, publish SSE events.
 
     Runs concurrently via `asyncio.create_task` so the POST /actions handler
-    can return 202 immediately. All subscribers on `stream:{game_id}` receive
-    the events — native N-subscriber fan-out with no extra plumbing. A final
-    `{"type": "done"}` is always published (even on errors) so subscribers
-    can close their connections cleanly.
+    can return 202 immediately after persisting the player row. All preamble
+    (DB fetches for game/party/history/inventory, OpenAI embedding, pgvector
+    RAG, system-prompt construction) now happens here — moved off the 202
+    hot path to minimize the gap between Send-click and "DM is writing".
+
+    All subscribers on `stream:{game_id}` receive the events — native
+    N-subscriber fan-out with no extra plumbing. A final `{"type": "done"}`
+    is always published (even on errors) so subscribers can close cleanly.
+
+    `profile_id` is accepted for parity with the handler and future per-player
+    RAG; it is currently unused by the prompt builder.
     """
+    del profile_id  # currently unused; see docstring
     channel = f"{STREAM_CHANNEL_PREFIX}:{game_id}"
     parser = StreamParser()
     full_parts: list[str] = []
@@ -124,6 +131,79 @@ async def _stream_to_redis(
         await redis_async_client.publish(channel, json.dumps(event))
 
     try:
+        # ---- Fetch game + party + recent messages in parallel ---- #
+        def _fetch_game():
+            return (
+                supabase_client.table("games")
+                .select("*")
+                .match({"id": game_id})
+                .single()
+                .execute()
+            )
+
+        def _fetch_players():
+            return (
+                supabase_client.table("players")
+                .select("*")
+                .match({"game_id": game_id})
+                .execute()
+            )
+
+        def _fetch_recent_messages():
+            return (
+                supabase_client.table("game_messages")
+                .select("role, profile_id, content")
+                .eq("game_id", game_id)
+                .order("created_at", desc=True)
+                .limit(20)
+                .execute()
+            )
+
+        loop = asyncio.get_event_loop()
+        game_result, players_result, recent_messages_result = await asyncio.gather(
+            loop.run_in_executor(None, _fetch_game),
+            loop.run_in_executor(None, _fetch_players),
+            loop.run_in_executor(None, _fetch_recent_messages),
+        )
+
+        # ---- Fetch inventory (depends on players) ---- #
+        player_ids = [p["id"] for p in (players_result.data or [])]
+        inv_by_player: dict[str, list[dict]] = {}
+        if player_ids:
+            try:
+                all_inv = await asyncio.to_thread(
+                    lambda: supabase_client.table("player_inventory")
+                    .select("player_id, item_name, quantity")
+                    .in_("player_id", player_ids)
+                    .execute()
+                )
+                for item in all_inv.data or []:
+                    inv_by_player.setdefault(item["player_id"], []).append(item)
+            except Exception as e:
+                logger.warning(
+                    f"[_stream_to_redis] inventory fetch failed (non-fatal): {e}"
+                )
+
+        # ---- Embed + RAG (non-fatal) ---- #
+        try:
+            action_embedding = embed_text(action_text)
+            rag_context = search_rag(game_id, action_embedding, top_k=5)
+        except Exception as e:
+            logger.warning(
+                f"[_stream_to_redis] RAG search failed (fallback to empty): {e}"
+            )
+            rag_context = []
+
+        # ---- Build system prompt ---- #
+        system_prompt = build_dm_system_prompt(
+            game=game_result.data,
+            players=players_result.data or [],
+            inv_by_player=inv_by_player,
+            recent_messages=recent_messages_result.data or [],
+            rag_context=rag_context,
+            action_text=action_text,
+        )
+
         async with anthropic_async_client.messages.stream(
             model="claude-sonnet-4-20250514",
             max_tokens=1024,
@@ -208,11 +288,12 @@ async def create_action(
     Synchronous preamble (runs before 202 response):
         1. Verify player is in this game & game is active
         2. Insert the player message to game_messages (fires Realtime)
-        3. Embed action + RAG search
-        4. Fetch party, messages, inventory in parallel
-        5. Build Claude system prompt
 
     Then spawns `_stream_to_redis` via asyncio.create_task and returns 202.
+    All DB fetches beyond player/game, the OpenAI embedding, pgvector RAG,
+    and prompt construction happen inside the coroutine — off the 202 hot
+    path so the "DM is writing" bubble opens within ~50–100ms of Send.
+
     The acting player's browser opens GET /events to subscribe to the stream.
     """
     try:
@@ -251,72 +332,11 @@ async def create_action(
             }
         ).execute()
 
-        # ---- Embed + RAG (non-fatal) ---- #
-        try:
-            action_embedding = embed_text(action.action_text)
-            rag_context = search_rag(gameId, action_embedding, top_k=5)
-        except Exception as e:
-            logger.warning(
-                f"[create_action] RAG search failed (fallback to empty): {e}"
-            )
-            rag_context = []
-
-        # ---- Fetch party + messages + inventory ---- #
-        def _fetch_players():
-            return (
-                supabase_client.table("players")
-                .select("*")
-                .match({"game_id": gameId})
-                .execute()
-            )
-
-        def _fetch_recent_messages():
-            return (
-                supabase_client.table("game_messages")
-                .select("role, profile_id, content")
-                .eq("game_id", gameId)
-                .order("created_at", desc=True)
-                .limit(20)
-                .execute()
-            )
-
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            f_players = executor.submit(_fetch_players)
-            f_messages = executor.submit(_fetch_recent_messages)
-            players_result = f_players.result()
-            recent_messages_result = f_messages.result()
-
-        player_ids = [p["id"] for p in (players_result.data or [])]
-        inv_by_player: dict[str, list[dict]] = {}
-        if player_ids:
-            try:
-                all_inv = (
-                    supabase_client.table("player_inventory")
-                    .select("player_id, item_name, quantity")
-                    .in_("player_id", player_ids)
-                    .execute()
-                )
-                for item in all_inv.data or []:
-                    inv_by_player.setdefault(item["player_id"], []).append(item)
-            except Exception as e:
-                logger.warning(
-                    f"[create_action] inventory fetch failed (non-fatal): {e}"
-                )
-
-        system_prompt = build_dm_system_prompt(
-            game=game.data,
-            players=players_result.data or [],
-            inv_by_player=inv_by_player,
-            recent_messages=recent_messages_result.data or [],
-            rag_context=rag_context,
-            action_text=action.action_text,
-        )
-
-        # Fire-and-forget: the coroutine owns inserting the DM message on
-        # completion and enqueuing bookkeeping. Subscribers on /events see
-        # tokens in real time.
+        # Fire-and-forget: the coroutine builds the prompt, owns inserting
+        # the DM message on completion, and enqueues bookkeeping. Subscribers
+        # on /events see tokens in real time.
         asyncio.create_task(
-            _stream_to_redis(gameId, action.action_text, system_prompt)
+            _stream_to_redis(gameId, action.action_text, current_user)
         )
 
         return ActionResponse(

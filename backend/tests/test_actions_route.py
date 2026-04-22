@@ -1,6 +1,7 @@
 """Tests for the actions API route (DIN-66: fire-and-forget → Redis pub/sub)."""
 
-from unittest.mock import MagicMock, patch
+import json
+from unittest.mock import AsyncMock, MagicMock, patch
 from tests.conftest import SAMPLE_GAME, SAMPLE_PLAYER
 
 
@@ -60,12 +61,8 @@ class TestCreateAction:
 
         with patch("api.routes.actions.supabase_client") as mock_sb, patch(
             "api.routes.actions.asyncio.create_task", side_effect=fake_create_task
-        ), patch("api.routes.actions.embed_text") as mock_embed, patch(
-            "api.routes.actions.search_rag"
-        ) as mock_rag:
+        ):
             mock_sb.table.side_effect = _build_supabase_mock()
-            mock_embed.return_value = [0.0] * 1536
-            mock_rag.return_value = []
 
             response = client.post(
                 "/games/game-uuid-1/actions",
@@ -90,12 +87,8 @@ class TestCreateAction:
 
         with patch("api.routes.actions.supabase_client") as mock_sb, patch(
             "api.routes.actions.asyncio.create_task", side_effect=_close
-        ), patch("api.routes.actions.embed_text") as mock_embed, patch(
-            "api.routes.actions.search_rag"
-        ) as mock_rag:
+        ):
             mock_sb.table.side_effect = _build_supabase_mock()
-            mock_embed.return_value = [0.0] * 1536
-            mock_rag.return_value = []
 
             # If actions.py accidentally imported dm_response_task, any .send
             # invocation would show up as a call on this patched symbol.
@@ -114,18 +107,12 @@ class TestCreateAction:
 
         mock_player_result = MagicMock(data=SAMPLE_PLAYER)
         mock_game_result = MagicMock(data=SAMPLE_GAME)
-        mock_messages_result = MagicMock(data=[])
-        mock_players_result = MagicMock(data=[SAMPLE_PLAYER])
-        mock_inventory_result = MagicMock(data=[])
 
         def table_side_effect(name):
             mock = MagicMock()
             if name == "players":
                 mock.select.return_value.match.return_value.single.return_value.execute.return_value = (
                     mock_player_result
-                )
-                mock.select.return_value.match.return_value.execute.return_value = (
-                    mock_players_result
                 )
             elif name == "games":
                 mock.select.return_value.match.return_value.single.return_value.execute.return_value = (
@@ -138,13 +125,6 @@ class TestCreateAction:
                     return MagicMock(execute=MagicMock(return_value=MagicMock()))
 
                 mock.insert.side_effect = capture_insert
-                mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = (
-                    mock_messages_result
-                )
-            elif name == "player_inventory":
-                mock.select.return_value.in_.return_value.execute.return_value = (
-                    mock_inventory_result
-                )
             return mock
 
         def _close(coro):
@@ -153,12 +133,8 @@ class TestCreateAction:
 
         with patch("api.routes.actions.supabase_client") as mock_sb, patch(
             "api.routes.actions.asyncio.create_task", side_effect=_close
-        ), patch("api.routes.actions.embed_text") as mock_embed, patch(
-            "api.routes.actions.search_rag"
-        ) as mock_rag:
+        ):
             mock_sb.table.side_effect = table_side_effect
-            mock_embed.return_value = [0.0] * 1536
-            mock_rag.return_value = []
 
             response = client.post(
                 "/games/game-uuid-1/actions",
@@ -183,12 +159,8 @@ class TestCreateAction:
 
         with patch("api.routes.actions.supabase_client") as mock_sb, patch(
             "api.routes.actions.asyncio.create_task", side_effect=fake_create_task
-        ), patch("api.routes.actions.embed_text") as mock_embed, patch(
-            "api.routes.actions.search_rag"
-        ) as mock_rag:
+        ):
             mock_sb.table.side_effect = _build_supabase_mock()
-            mock_embed.return_value = [0.0] * 1536
-            mock_rag.return_value = []
 
             response = client.post(
                 "/games/game-uuid-1/actions",
@@ -197,6 +169,71 @@ class TestCreateAction:
 
         assert response.status_code == 202
         assert len(captured_coros) == 1
+
+    def test_create_action_returns_202_without_calling_openai(self, client):
+        """DIN-64 latency: embedding + RAG must NOT run on the 202 hot path.
+
+        The spawned coroutine is closed unevaluated — if embed_text or
+        search_rag were still called from the sync handler they'd show up
+        on these mocks.
+        """
+        captured_inserts: list[dict] = []
+
+        mock_player_result = MagicMock(data=SAMPLE_PLAYER)
+        mock_game_result = MagicMock(data=SAMPLE_GAME)
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "players":
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = (
+                    mock_player_result
+                )
+            elif name == "games":
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = (
+                    mock_game_result
+                )
+            elif name == "game_messages":
+
+                def capture_insert(row):
+                    captured_inserts.append(row)
+                    return MagicMock(execute=MagicMock(return_value=MagicMock()))
+
+                mock.insert.side_effect = capture_insert
+            return mock
+
+        def _close(coro):
+            coro.close()
+            return MagicMock()
+
+        with patch("api.routes.actions.supabase_client") as mock_sb, patch(
+            "api.routes.actions.asyncio.create_task", side_effect=_close
+        ), patch("api.routes.actions.embed_text") as mock_embed, patch(
+            "api.routes.actions.search_rag"
+        ) as mock_rag, patch(
+            "api.routes.actions.build_dm_system_prompt"
+        ) as mock_prompt:
+            mock_sb.table.side_effect = table_side_effect
+
+            response = client.post(
+                "/games/game-uuid-1/actions",
+                json={"action_text": "I attack!"},
+            )
+
+        assert response.status_code == 202
+        body = response.json()
+        assert body["status"] == "queued"
+        assert body["game_id"] == "game-uuid-1"
+        assert "message_id" in body
+
+        # The whole point: these never run on the 202 hot path.
+        mock_embed.assert_not_called()
+        mock_rag.assert_not_called()
+        mock_prompt.assert_not_called()
+
+        # But the player row was still persisted (fires Realtime).
+        player_inserts = [r for r in captured_inserts if r.get("role") == "player"]
+        assert len(player_inserts) == 1
+        assert player_inserts[0]["content"] == "I attack!"
 
     def test_create_action_player_not_in_game(self, client):
         """403 if the player is not in the game."""
@@ -256,3 +293,146 @@ class TestCreateAction:
 
         assert response.status_code == 422
         assert "not active" in response.json()["detail"]
+
+
+class TestStreamToRedis:
+    """Tests for the _stream_to_redis coroutine error paths.
+
+    Covers the widened try/except: a failure during the moved preamble
+    (prompt build, DB fetch) must still publish {"type": "done"} and
+    surface a system error message so the frontend clears its streaming
+    bubble and the user has a retry affordance.
+    """
+
+    async def test_publishes_done_on_prompt_build_error(self):
+        """build_dm_system_prompt raising still closes the SSE stream cleanly."""
+        from api.routes.actions import _stream_to_redis
+
+        published_events: list[tuple[str, str]] = []
+
+        async def fake_publish(channel, payload):
+            published_events.append((channel, payload))
+
+        mock_redis = MagicMock()
+        mock_redis.publish = AsyncMock(side_effect=fake_publish)
+
+        captured_inserts: list[dict] = []
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "games":
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = MagicMock(
+                    data=SAMPLE_GAME
+                )
+            elif name == "players":
+                mock.select.return_value.match.return_value.execute.return_value = MagicMock(
+                    data=[SAMPLE_PLAYER]
+                )
+            elif name == "game_messages":
+                mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(
+                    data=[]
+                )
+
+                def capture_insert(row):
+                    captured_inserts.append(row)
+                    return MagicMock(execute=MagicMock(return_value=MagicMock()))
+
+                mock.insert.side_effect = capture_insert
+            elif name == "player_inventory":
+                mock.select.return_value.in_.return_value.execute.return_value = MagicMock(
+                    data=[]
+                )
+            return mock
+
+        with patch("api.routes.actions.supabase_client") as mock_sb, patch(
+            "api.routes.actions.redis_async_client", mock_redis
+        ), patch("api.routes.actions.embed_text", return_value=[0.0] * 1536), patch(
+            "api.routes.actions.search_rag", return_value=[]
+        ), patch(
+            "api.routes.actions.build_dm_system_prompt",
+            side_effect=RuntimeError("boom"),
+        ):
+            mock_sb.table.side_effect = table_side_effect
+
+            await _stream_to_redis(
+                "game-uuid-1", "I attack!", "test-user-uuid-1234"
+            )
+
+        # Done event was published on channel stream:game-uuid-1.
+        done_events = [
+            (ch, json.loads(payload))
+            for ch, payload in published_events
+            if json.loads(payload).get("type") == "done"
+        ]
+        assert len(done_events) == 1
+        assert done_events[0][0] == "stream:game-uuid-1"
+
+        # System error message row inserted for the retry affordance.
+        system_inserts = [r for r in captured_inserts if r.get("role") == "system"]
+        assert len(system_inserts) == 1
+        assert system_inserts[0]["game_id"] == "game-uuid-1"
+        assert (
+            system_inserts[0]["content"]
+            == "The Dungeon Master encountered an error. Please try your action again."
+        )
+
+    async def test_publishes_done_on_db_fetch_error(self):
+        """A DB failure in the preamble still closes the SSE stream cleanly."""
+        from api.routes.actions import _stream_to_redis
+
+        published_events: list[tuple[str, str]] = []
+
+        async def fake_publish(channel, payload):
+            published_events.append((channel, payload))
+
+        mock_redis = MagicMock()
+        mock_redis.publish = AsyncMock(side_effect=fake_publish)
+
+        captured_inserts: list[dict] = []
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "games":
+                # Simulate a DB blowup on the games fetch inside the coroutine.
+                mock.select.return_value.match.return_value.single.return_value.execute.side_effect = RuntimeError(
+                    "db down"
+                )
+            elif name == "players":
+                mock.select.return_value.match.return_value.execute.return_value = MagicMock(
+                    data=[SAMPLE_PLAYER]
+                )
+            elif name == "game_messages":
+                mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(
+                    data=[]
+                )
+
+                def capture_insert(row):
+                    captured_inserts.append(row)
+                    return MagicMock(execute=MagicMock(return_value=MagicMock()))
+
+                mock.insert.side_effect = capture_insert
+            elif name == "player_inventory":
+                mock.select.return_value.in_.return_value.execute.return_value = MagicMock(
+                    data=[]
+                )
+            return mock
+
+        with patch("api.routes.actions.supabase_client") as mock_sb, patch(
+            "api.routes.actions.redis_async_client", mock_redis
+        ):
+            mock_sb.table.side_effect = table_side_effect
+
+            await _stream_to_redis(
+                "game-uuid-1", "I attack!", "test-user-uuid-1234"
+            )
+
+        done_events = [
+            (ch, json.loads(payload))
+            for ch, payload in published_events
+            if json.loads(payload).get("type") == "done"
+        ]
+        assert len(done_events) == 1
+        assert done_events[0][0] == "stream:game-uuid-1"
+
+        system_inserts = [r for r in captured_inserts if r.get("role") == "system"]
+        assert len(system_inserts) == 1
