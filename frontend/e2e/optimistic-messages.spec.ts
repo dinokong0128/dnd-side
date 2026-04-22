@@ -194,13 +194,19 @@ test.describe('DIN-64 — Optimistic player messages', () => {
     // Optimistic message appears
     await expect(page.getByText(ACTION_TEXT)).toBeVisible({ timeout: 3000 })
 
+    // Read the id the client minted so Realtime can dedupe by the same id.
+    const optimisticId = await page
+      .locator('[data-message-id]')
+      .first()
+      .getAttribute('data-message-id')
+
     // Simulate Supabase Realtime INSERT for the same player message (real DB row)
     await page.evaluate(
-      ({ gameId, userId, content }) => {
+      ({ gameId, userId, content, id }) => {
         window.dispatchEvent(
           new CustomEvent('player-message', {
             detail: {
-              id: 'msg-player-real-1',
+              id,
               game_id: gameId,
               profile_id: userId,
               role: 'player',
@@ -210,7 +216,7 @@ test.describe('DIN-64 — Optimistic player messages', () => {
           })
         )
       },
-      { gameId: GAME_ID, userId: USER_ID, content: ACTION_TEXT }
+      { gameId: GAME_ID, userId: USER_ID, content: ACTION_TEXT, id: optimisticId }
     )
 
     // Wait a tick for reconciliation to complete

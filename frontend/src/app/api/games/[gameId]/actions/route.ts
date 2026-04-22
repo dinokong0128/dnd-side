@@ -34,7 +34,7 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { action_text } = await request.json()
+    const { action_text, client_id } = await request.json()
 
     if (!action_text || typeof action_text !== 'string' || !action_text.trim()) {
       return NextResponse.json(
@@ -52,6 +52,11 @@ export async function POST(
 
     const { gameId } = await params
 
+    const forwardBody: { action_text: string; client_id?: string } = {
+      action_text: action_text.trim(),
+    }
+    if (typeof client_id === 'string') forwardBody.client_id = client_id
+
     const backendUrl =
       process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
     const response = await fetch(`${backendUrl}/games/${gameId}/actions`, {
@@ -60,7 +65,7 @@ export async function POST(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ action_text: action_text.trim() }),
+      body: JSON.stringify(forwardBody),
     })
 
     if (!response.ok) {

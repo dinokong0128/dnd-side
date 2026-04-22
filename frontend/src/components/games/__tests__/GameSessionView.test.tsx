@@ -20,6 +20,12 @@ jest.mock('../ChatLog', () => ({
       <div data-testid="has-more">{hasMoreMessages ? 'true' : 'false'}</div>
       <div data-testid="is-loading-more">{isLoadingMore ? 'true' : 'false'}</div>
       <div data-testid="messages-count">{messages ? messages.length : 0}</div>
+      <div data-testid="first-message-created-at">
+        {messages && messages[0] ? messages[0].created_at : ''}
+      </div>
+      <div data-testid="first-message-content">
+        {messages && messages[0] ? messages[0].content : ''}
+      </div>
       <div data-testid="chat-log-user-id">{userId || ''}</div>
       <div data-testid="streaming-active">{streamingSegments === null || streamingSegments === undefined ? 'false' : 'true'}</div>
       <div data-testid="streaming-segments-count">{streamingSegments ? streamingSegments.length : 0}</div>
@@ -558,14 +564,16 @@ describe('GameSessionView', () => {
       fireEvent.click(retryButton)
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith(
-          '/api/games/game-1/actions',
-          expect.objectContaining({
-            method: 'POST',
-            body: JSON.stringify({ action_text: 'I attack the dragon!' }),
-          })
-        )
+        expect(global.fetch).toHaveBeenCalled()
       })
+      const [url, init] = (global.fetch as jest.Mock).mock.calls.find(
+        ([u]) => u === '/api/games/game-1/actions'
+      )
+      expect(url).toBe('/api/games/game-1/actions')
+      expect(init.method).toBe('POST')
+      const body = JSON.parse(init.body)
+      expect(body.action_text).toBe('I attack the dragon!')
+      expect(typeof body.client_id).toBe('string')
     })
   })
 
@@ -590,12 +598,16 @@ describe('GameSessionView', () => {
       })
     })
 
-    it('optimistic message is replaced (not duplicated) when Realtime INSERT fires with matching content', async () => {
-      let realtimeInsertCallback: ((payload: any) => void) | null = null
+    it('optimistic message is deduped (not duplicated) when Realtime INSERT fires with the same client-minted id', async () => {
+      const fixedId = '11111111-2222-3333-4444-555555555555'
+      const randomUUIDSpy = jest
+        .spyOn(crypto, 'randomUUID')
+        .mockReturnValue(fixedId)
 
+      const handlers: Record<string, (payload: any) => void> = {}
       const channelObj: any = {
-        on: jest.fn().mockImplementation((_event: any, _filter: any, cb: any) => {
-          realtimeInsertCallback = cb
+        on: jest.fn().mockImplementation((_event: any, filter: any, cb: any) => {
+          handlers[filter.event] = cb
           return channelObj
         }),
         subscribe: jest.fn().mockReturnValue({ unsubscribe: jest.fn() }),
@@ -608,28 +620,37 @@ describe('GameSessionView', () => {
       render(<GameSessionView gameId="game-1" game={mockGame} userId="user-1" />)
       await waitFor(() => expect(screen.getByTestId('chat-input')).toBeInTheDocument())
 
-      // Push optimistic message
       act(() => { fireEvent.click(screen.getByTestId('submit-action')) })
       await waitFor(() => expect(screen.getByTestId('messages-count')).toHaveTextContent('1'))
 
-      // Realtime fires the real message
+      const serverCreatedAt = '2099-01-01T00:00:00.000Z'
+      const serverContent = 'I attack the dragon (server-normalized)'
       act(() => {
-        realtimeInsertCallback?.({
+        handlers.INSERT?.({
           new: {
-            id: 'real-msg-1',
+            id: fixedId,
             game_id: 'game-1',
             role: 'player',
             profile_id: 'user-1',
-            content: 'I attack the dragon',
-            created_at: new Date().toISOString(),
+            content: serverContent,
+            created_at: serverCreatedAt,
           },
         })
       })
 
-      // Still exactly 1 message — optimistic replaced, not duplicated
+      // Same row — count stays at 1, id stays stable (no remount), but the
+      // server-canonical fields replace the optimistic placeholders.
       await waitFor(() => {
         expect(screen.getByTestId('messages-count')).toHaveTextContent('1')
+        expect(screen.getByTestId('first-message-created-at')).toHaveTextContent(
+          serverCreatedAt
+        )
+        expect(screen.getByTestId('first-message-content')).toHaveTextContent(
+          serverContent
+        )
       })
+
+      randomUUIDSpy.mockRestore()
     })
 
     it('optimistic message is removed and isWaiting becomes false on fetch error', async () => {

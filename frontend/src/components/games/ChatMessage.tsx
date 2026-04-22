@@ -7,6 +7,7 @@ import { splitParagraphs } from '@/lib/utils/text'
 
 interface ChatMessageProps {
   role: 'player' | 'dm' | 'system'
+  messageId?: string
   characterName?: string
   content: string
   profileId?: string | null
@@ -22,6 +23,7 @@ interface ChatMessageProps {
 
 export function ChatMessage({
   role,
+  messageId,
   characterName,
   content,
   profileId,
@@ -79,7 +81,7 @@ export function ChatMessage({
   if (role === 'dm') {
     return (
       <>
-      <div className="mb-4 flex justify-start">
+      <div className="mb-4 flex justify-start" data-message-id={messageId}>
         <div
           className="max-w-2xl rounded-lg border px-5 py-4"
           style={{
@@ -295,7 +297,7 @@ export function ChatMessage({
 
   if (role === 'player') {
     return (
-      <div className="mb-4 flex justify-end">
+      <div className="mb-4 flex justify-end" data-message-id={messageId}>
         <div
           className="relative max-w-2xl rounded-lg border px-5 py-4"
           style={{
@@ -434,7 +436,7 @@ export function ChatMessage({
 
   // System message
   return (
-    <div className="mb-4 flex justify-center">
+    <div className="mb-4 flex justify-center" data-message-id={messageId}>
       <div
         className="max-w-2xl rounded-lg border px-5 py-4 text-center text-sm"
         style={{

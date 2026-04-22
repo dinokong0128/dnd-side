@@ -322,9 +322,18 @@ async def create_action(
             raise HTTPException(status_code=422, detail=str(e))
 
         # ---- Insert player message (fires Realtime) ---- #
-        message_id = str(uuid.uuid4())
+        if action.client_id is not None:
+            try:
+                message_id = str(uuid.UUID(action.client_id))
+            except ValueError:
+                raise HTTPException(
+                    status_code=400, detail="client_id must be a valid UUID"
+                )
+        else:
+            message_id = str(uuid.uuid4())
         supabase_client.table("game_messages").insert(
             {
+                "id": message_id,
                 "game_id": gameId,
                 "profile_id": current_user,
                 "role": MESSAGE_ROLE_PLAYER,

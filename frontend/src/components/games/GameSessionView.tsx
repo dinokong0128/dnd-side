@@ -193,17 +193,18 @@ export function GameSessionView({
           const newMsg = payload.new as GameMessage
 
           if (newMsg.role === 'player') {
-            // Reconcile: replace any optimistic message matching this player+content
             setMessages((prev) => {
-              const filtered = prev.filter(
-                (m) =>
-                  !(
-                    m.id.startsWith('optimistic-') &&
-                    m.profile_id === newMsg.profile_id &&
-                    m.content === newMsg.content
-                  )
+              // Replace (not skip) on id-match so the optimistic row picks up
+              // the server's canonical fields — `created_at` (DB-generated,
+              // authoritative for ordering) and any server-normalized content.
+              // React key stays stable, so no remount.
+              const idx = prev.findIndex((m) => m.id === newMsg.id)
+              const next = idx >= 0
+                ? prev.map((m, i) => (i === idx ? newMsg : m))
+                : [...prev, newMsg]
+              return next.sort((a, b) =>
+                a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0
               )
-              return [...filtered, newMsg]
             })
             // Only flip to waiting if a DIFFERENT user submitted. For our own
             // action, handleSubmit already set isWaitingForDm(true); re-setting
@@ -213,7 +214,12 @@ export function GameSessionView({
               setIsWaitingForDm(true)
             }
           } else {
-            setMessages((prev) => [...prev, newMsg])
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === newMsg.id)) return prev
+              return [...prev, newMsg].sort((a, b) =>
+                a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0
+              )
+            })
             // If DM or system (error) responded, we're no longer waiting
             if (newMsg.role === 'dm' || newMsg.role === 'system') {
               setIsWaitingForDm(false)
@@ -341,22 +347,23 @@ export function GameSessionView({
         scene_mood: detail.scene_mood ?? null,
       }
       if (msg.role === 'player') {
-        // Reconcile: mirror the Realtime INSERT handler — remove any optimistic
-        // message with a matching profile_id + content before adding the real one.
         setMessages((prev) => {
-          const filtered = prev.filter(
-            (m) =>
-              !(
-                m.id.startsWith('optimistic-') &&
-                m.profile_id === msg.profile_id &&
-                m.content === msg.content
-              )
+          const idx = prev.findIndex((m) => m.id === msg.id)
+          const next = idx >= 0
+            ? prev.map((m, i) => (i === idx ? msg : m))
+            : [...prev, msg]
+          return next.sort((a, b) =>
+            a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0
           )
-          return [...filtered, msg]
         })
         setIsWaitingForDm(true)
       } else {
-        setMessages((prev) => [...prev, msg])
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === msg.id)) return prev
+          return [...prev, msg].sort((a, b) =>
+            a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0
+          )
+        })
         if (msg.role === 'dm' || msg.role === 'system') {
           setIsWaitingForDm(false)
           setStreamingSegments(null)
@@ -446,9 +453,12 @@ export function GameSessionView({
   const handleSubmit = async (actionText: string) => {
     setShowRetryTimeout(false)
 
-    // 1. Optimistic player message (DIN-64) — unchanged.
+    // Client mints the message UUID so the optimistic row and the persisted
+    // row share the same id — Realtime INSERT then dedupes by id instead of
+    // remounting the bubble on reconciliation.
+    const clientMessageId = crypto.randomUUID()
     const optimisticMsg: GameMessage = {
-      id: `optimistic-${crypto.randomUUID()}`,
+      id: clientMessageId,
       game_id: gameId,
       role: 'player',
       profile_id: userId,
@@ -467,7 +477,7 @@ export function GameSessionView({
       actionResponse = await fetch(`/api/games/${gameId}/actions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action_text: actionText }),
+        body: JSON.stringify({ action_text: actionText, client_id: clientMessageId }),
       })
     } catch {
       setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id))
