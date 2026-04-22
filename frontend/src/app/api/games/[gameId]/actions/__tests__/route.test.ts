@@ -145,6 +145,47 @@ describe('POST /api/games/[gameId]/actions', () => {
     })
   })
 
+  it('forwards client_id when supplied', async () => {
+    mockAuthed()
+    ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      status: 202,
+      json: async () => ({ message_id: 'msg-1', status: 'queued' }),
+    })
+
+    await POST(
+      makeRequest({
+        action_text: 'Attack',
+        client_id: '11111111-2222-3333-4444-555555555555',
+      }),
+      { params: Promise.resolve({ gameId: 'game-1' }) }
+    )
+
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0]
+    const parsed = JSON.parse(init.body)
+    expect(parsed).toEqual({
+      action_text: 'Attack',
+      client_id: '11111111-2222-3333-4444-555555555555',
+    })
+  })
+
+  it('omits client_id when absent', async () => {
+    mockAuthed()
+    ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      status: 202,
+      json: async () => ({ message_id: 'msg-1', status: 'queued' }),
+    })
+
+    await POST(makeRequest({ action_text: 'Attack' }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    })
+
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0]
+    const parsed = JSON.parse(init.body)
+    expect('client_id' in parsed).toBe(false)
+  })
+
   it('forwards backend error status and detail', async () => {
     mockAuthed()
     ;(global.fetch as jest.Mock).mockResolvedValueOnce({

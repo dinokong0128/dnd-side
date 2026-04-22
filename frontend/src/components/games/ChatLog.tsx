@@ -229,6 +229,7 @@ export function ChatLog({
           return messages.map((msg) => (
             <ChatMessage
               key={msg.id}
+              messageId={msg.id}
               role={msg.role}
               characterName={
                 msg.role === 'player'

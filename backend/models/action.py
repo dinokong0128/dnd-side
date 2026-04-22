@@ -7,6 +7,7 @@ class ActionInput(BaseModel):
     """Player action submitted to the DM."""
 
     action_text: str
+    client_id: str | None = None
 
 
 class ActionResponse(BaseModel):

@@ -227,6 +227,84 @@ class TestCreateAction:
         )
         assert response.status_code == 401
 
+    def test_create_action_uses_provided_client_id(self, client):
+        """Supplied client_id UUID is used as the inserted row's id and returned."""
+        captured_inserts: list[dict] = []
+
+        mock_player_result = MagicMock(data=SAMPLE_PLAYER)
+        mock_game_result = MagicMock(data=SAMPLE_GAME)
+        mock_messages_result = MagicMock(data=[])
+        mock_players_result = MagicMock(data=[SAMPLE_PLAYER])
+        mock_inventory_result = MagicMock(data=[])
+
+        def table_side_effect(name):
+            mock = MagicMock()
+            if name == "players":
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = (
+                    mock_player_result
+                )
+                mock.select.return_value.match.return_value.execute.return_value = (
+                    mock_players_result
+                )
+            elif name == "games":
+                mock.select.return_value.match.return_value.single.return_value.execute.return_value = (
+                    mock_game_result
+                )
+            elif name == "game_messages":
+
+                def capture_insert(row):
+                    captured_inserts.append(row)
+                    return MagicMock(execute=MagicMock(return_value=MagicMock()))
+
+                mock.insert.side_effect = capture_insert
+                mock.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = (
+                    mock_messages_result
+                )
+            elif name == "player_inventory":
+                mock.select.return_value.in_.return_value.execute.return_value = (
+                    mock_inventory_result
+                )
+            return mock
+
+        def _close(coro):
+            coro.close()
+            return MagicMock()
+
+        client_id = "11111111-2222-3333-4444-555555555555"
+
+        with patch("api.routes.actions.supabase_client") as mock_sb, patch(
+            "api.routes.actions.asyncio.create_task", side_effect=_close
+        ), patch("api.routes.actions.embed_text") as mock_embed, patch(
+            "api.routes.actions.search_rag"
+        ) as mock_rag:
+            mock_sb.table.side_effect = table_side_effect
+            mock_embed.return_value = [0.0] * 1536
+            mock_rag.return_value = []
+
+            response = client.post(
+                "/games/game-uuid-1/actions",
+                json={"action_text": "I attack!", "client_id": client_id},
+            )
+
+        assert response.status_code == 202
+        player_inserts = [r for r in captured_inserts if r.get("role") == "player"]
+        assert len(player_inserts) == 1
+        assert player_inserts[0]["id"] == client_id
+        assert response.json()["message_id"] == client_id
+
+    def test_create_action_rejects_invalid_client_id(self, client):
+        """Malformed client_id returns 400 with a UUID-mentioning detail."""
+        with patch("api.routes.actions.supabase_client") as mock_sb:
+            mock_sb.table.side_effect = _build_supabase_mock()
+
+            response = client.post(
+                "/games/game-uuid-1/actions",
+                json={"action_text": "I attack!", "client_id": "not-a-uuid"},
+            )
+
+        assert response.status_code == 400
+        assert "UUID" in response.json()["detail"]
+
     def test_create_action_invalid_game_state_returns_422(self, client):
         """When the game is not active, validate_action raises and returns 422."""
         mock_player_result = MagicMock()
