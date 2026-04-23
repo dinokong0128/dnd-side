@@ -303,5 +303,48 @@ describe('ChatLog', () => {
       // a new onLoadMore identity must NOT recreate the observer.
       expect(onLoadMore).toHaveBeenCalledTimes(1)
     })
+
+    it('attaches observer after isLoading flips from true to false', () => {
+      // Regression: the observer effect had `[]` deps and so ran exactly
+      // once on mount. When the component first rendered with
+      // `isLoading={true}` it returned a spinner (no sentinel in the DOM),
+      // the effect ran, couldn't find the sentinel, and bailed. When
+      // isLoading later flipped to false, the effect never re-ran because
+      // of the empty deps — so the observer was never attached and
+      // scrolling to the top did nothing.
+      //
+      // Fix: include `isLoading` in the observer effect's deps so it
+      // re-runs when the real render tree (with the sentinel) appears.
+      const messages = [makeMessage({ id: '1', role: 'dm', content: 'older' })]
+      const onLoadMore = jest.fn()
+
+      const { rerender } = render(
+        <ChatLog
+          messages={messages}
+          playerMap={new Map()}
+          isLoading={true}
+          hasMoreMessages={true}
+          isLoadingMore={false}
+          onLoadMore={onLoadMore}
+        />
+      )
+      // Effect ran while isLoading=true; no sentinel, so no observer fired.
+      expect(onLoadMore).not.toHaveBeenCalled()
+
+      rerender(
+        <ChatLog
+          messages={messages}
+          playerMap={new Map()}
+          isLoading={false}
+          hasMoreMessages={true}
+          isLoadingMore={false}
+          onLoadMore={onLoadMore}
+        />
+      )
+
+      // Now the sentinel is in the DOM and the mocked IntersectionObserver
+      // fires immediately on observe(), so onLoadMore must have been called.
+      expect(onLoadMore).toHaveBeenCalledTimes(1)
+    })
   })
 })

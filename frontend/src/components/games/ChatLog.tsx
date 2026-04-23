@@ -115,11 +115,14 @@ export function ChatLog({
 
     observer.observe(sentinel)
     return () => observer.disconnect()
-    // Intentionally empty deps: the observer is created once when refs are
-    // available and is torn down only on unmount. All changing values are
-    // read through refs inside the callback.
+    // `isLoading` is the only dep: while isLoading is true the component
+    // renders a spinner (no sentinel/container in the DOM), and the effect
+    // can't attach. Once isLoading flips to false the real render tree
+    // appears and the effect re-runs, attaching the observer. All changing
+    // callback values are still read through refs so parent re-renders do
+    // not churn the observer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [isLoading])
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
