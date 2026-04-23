@@ -501,6 +501,17 @@ body {
     radial-gradient(ellipse at bottom right, rgba(20,60,150,0.40) 0%, transparent 55%);
 }
 
+/* DIN-73 hotfix: when dynamic backgrounds are active, .dnd-page-bg owns the
+   stacking context. `position: relative` makes it a positioning parent for
+   SceneBackground (z-index:-1) so the overlay sits behind in-flow siblings
+   (header, chat, input) rather than escaping to the viewport root and
+   painting on top of them. `isolation: isolate` is a belt-and-suspenders
+   guard that pins the context even if a future child uses z-index > 0. */
+.scene-bg-active {
+  position: relative;
+  isolation: isolate;
+}
+
 /* Chat log translucency when dynamic backgrounds are on */
 .scene-bg-active .dnd-chat-log {
   background: rgba(13, 11, 9, 0.55) !important;

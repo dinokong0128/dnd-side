@@ -77,11 +77,18 @@ export function SceneBackground({ sceneType, sceneMood, enabled, reduceMotion }:
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 0,
+        // z-index:-1 keeps the overlay strictly behind the page's in-flow,
+        // non-positioned content (header, chat, input). Combined with
+        // `.scene-bg-active { position: relative; isolation: isolate; }` in
+        // globals.css, the overlay sits inside .dnd-page-bg's own stacking
+        // context so its fixed positioning does not escape to the viewport
+        // root. Without that parent isolation + this negative z-index, the
+        // fixed overlay painted on top of the UI.
+        zIndex: -1,
         overflow: 'hidden',
-        // Critical: the scene bg is purely visual. Without this, the fixed
-        // root intercepts every click/scroll event for the entire viewport
-        // (children have pointer-events:none but the root itself does not).
+        // Purely visual: belt-and-suspenders so the root cannot swallow
+        // pointer events even if a sibling's stacking rules somehow put it
+        // over interactive content.
         pointerEvents: 'none',
       }}
     >

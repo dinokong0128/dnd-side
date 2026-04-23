@@ -208,6 +208,19 @@ describe('SceneBackground', () => {
       expect(root.style.pointerEvents).toBe('none')
     })
 
+    it('root container sits at z-index:-1 so it stays behind in-flow siblings', () => {
+      // Regression guard: z-index:0 on a position:fixed element stacks above
+      // static (non-positioned) siblings. That made the dim overlay paint
+      // over the header and chat. The overlay must sit at z-index:-1 so
+      // that within .scene-bg-active's stacking context (position:relative +
+      // isolation:isolate in globals.css) it always renders behind content.
+      const { getByTestId } = render(
+        <SceneBackground sceneType="tavern" sceneMood={null} enabled={true} reduceMotion={false} />
+      )
+      const root = getByTestId('scene-background-root')
+      expect(root.style.zIndex).toBe('-1')
+    })
+
     it('renders sibling interactive content that receives clicks', () => {
       // Simulate the production layout: SceneBackground + a sibling button.
       // The click must reach the button, not the fixed overlay.
