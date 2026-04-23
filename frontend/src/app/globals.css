@@ -506,10 +506,22 @@ body {
    SceneBackground (z-index:-1) so the overlay sits behind in-flow siblings
    (header, chat, input) rather than escaping to the viewport root and
    painting on top of them. `isolation: isolate` is a belt-and-suspenders
-   guard that pins the context even if a future child uses z-index > 0. */
+   guard that pins the context even if a future child uses z-index > 0.
+   Explicit `height: 100vh` + `overflow: hidden` clamps the container to the
+   viewport so the flex height chain (chat scroll container → scroll) works
+   correctly. Without the clamp the base class's `min-height: 100vh` (which
+   only guarantees a lower bound) lets the container grow to fit all its
+   children's intrinsic content, breaking overflow: auto on the chat log. */
 .scene-bg-active {
   position: relative;
   isolation: isolate;
+  /* Override .dnd-page-bg's min-height: 100vh — we want EXACT viewport
+     height so flex children with overflow: auto become real scroll
+     containers. min-height: 100vh lets the element grow past 100vh to fit
+     intrinsic content, which breaks the chat scroll. */
+  min-height: 0;
+  height: 100vh;
+  overflow: hidden;
 }
 
 /* Chat log translucency when dynamic backgrounds are on */
