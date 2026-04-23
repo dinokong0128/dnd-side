@@ -491,3 +491,33 @@ describe('ChatInput', () => {
     })
   })
 })
+
+  describe('DIN-74 resize after handleCycle', () => {
+    it('calls resize after handleCycle populates the textarea', () => {
+      const rafSpy = jest.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+        cb(0)
+        return 0
+      })
+
+      const suggestions = [
+        '"Let me examine these runes," I say, crouching down and lowering my wizard\'s eye to the stone.',
+      ]
+      render(
+        <ChatInput
+          gameStatus="active"
+          isWaitingForDm={false}
+          hasCharacter={true}
+          suggestedActions={suggestions}
+        />
+      )
+      const textarea = screen.getByTestId('chat-textarea') as HTMLTextAreaElement
+      const heightSpy = jest.spyOn(textarea.style, 'height', 'set')
+
+      fireEvent.click(screen.getByTestId('cycle-suggestion-btn'))
+
+      expect(textarea.value).toBe(suggestions[0])
+      expect(heightSpy).toHaveBeenCalled()
+
+      rafSpy.mockRestore()
+    })
+  })

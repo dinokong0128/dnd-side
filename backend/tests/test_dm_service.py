@@ -13,6 +13,7 @@ with patch("config.supabase_client", MagicMock()):
         extract_state_changes,
         apply_state_changes,
         extract_dice_rolls,
+        build_dm_system_prompt,
     )
 
 
@@ -626,3 +627,169 @@ class TestApplyStateChangesSpellSlots:
         apply_state_changes({
             "spell_slot_use": [{"character_id": "player-1", "slot_level": 1, "spell_name": "Fireball"}]
         })
+
+
+# ---------------------------------------------------------------------------
+# Helpers shared by the new DIN-74 test classes
+# ---------------------------------------------------------------------------
+
+def _make_game(name: str = "Test Game", dm_persona: str = "A stern DM") -> dict:
+    return {"name": name, "dm_persona": dm_persona}
+
+
+def _make_player(
+    pid: str = "p1",
+    character_name: str = "Thorin",
+    character_class: str = "Fighter",
+    hp_current: int = 10,
+    hp_max: int = 10,
+    level: int = 1,
+    race: str = "Dwarf",
+    stats: dict | None = None,
+) -> dict:
+    return {
+        "id": pid,
+        "profile_id": f"profile-{pid}",
+        "character_name": character_name,
+        "character_class": character_class,
+        "hp_current": hp_current,
+        "hp_max": hp_max,
+        "level": level,
+        "race": race,
+        "stats": stats or {},
+    }
+
+
+# ---------------------------------------------------------------------------
+# DIN-74 Part A — CURRENT SCENE block injection
+# ---------------------------------------------------------------------------
+
+class TestBuildDmSystemPromptSceneContinuity:
+    """DIN-74 Part A: CURRENT SCENE block injection in build_dm_system_prompt."""
+
+    def test_injects_current_scene_block_from_dm_message(self):
+        """CURRENT SCENE block renders when most recent DM message has a scene."""
+        game = _make_game()
+        players = [_make_player()]
+        recent = [
+            {
+                "role": "dm",
+                "profile_id": None,
+                "content": "The throne room looms.",
+                "scene_type": "throne_room",
+                "scene_mood": "tense",
+            },
+            {
+                "role": "player",
+                "profile_id": "profile-p1",
+                "content": "I bow.",
+                "scene_type": None,
+                "scene_mood": None,
+            },
+        ]
+        prompt = build_dm_system_prompt(game, players, {}, recent, [], "I step forward")
+        assert "CURRENT SCENE:" in prompt
+        assert "throne_room" in prompt
+        assert "tense" in prompt
+
+    def test_omits_current_scene_when_no_prior_messages(self):
+        """CURRENT SCENE block is omitted when there are no DM messages with scene."""
+        game = _make_game()
+        players = [_make_player()]
+        prompt = build_dm_system_prompt(game, players, {}, [], [], "I look around")
+        assert "CURRENT SCENE:" not in prompt
+
+    def test_uses_most_recent_scene_only(self):
+        """When multiple DM messages have scenes, newest-first wins."""
+        game = _make_game()
+        players = [_make_player()]
+        recent = [
+            {
+                "role": "dm",
+                "profile_id": None,
+                "content": "Cave walls close in.",
+                "scene_type": "cave",
+                "scene_mood": "tense",
+            },
+            {
+                "role": "dm",
+                "profile_id": None,
+                "content": "You leave the tavern.",
+                "scene_type": "tavern",
+                "scene_mood": None,
+            },
+        ]
+        prompt = build_dm_system_prompt(game, players, {}, recent, [], "I continue")
+        assert "cave" in prompt
+        scene_section = prompt.split("CURRENT SCENE:")[1].split("\n\n")[0]
+        assert "tavern" not in scene_section
+
+    def test_handles_scene_type_without_mood(self):
+        """Mood is optional — omit from output when mood is None."""
+        game = _make_game()
+        players = [_make_player()]
+        recent = [
+            {
+                "role": "dm",
+                "profile_id": None,
+                "content": "Tavern bustle.",
+                "scene_type": "tavern",
+                "scene_mood": None,
+            },
+        ]
+        prompt = build_dm_system_prompt(game, players, {}, recent, [], "I order ale")
+        scene_section = prompt.split("CURRENT SCENE:")[1].split("\n\n")[0]
+        assert "tavern" in scene_section
+        assert "mood:" not in scene_section.lower()
+
+    def test_skips_player_messages_without_scene(self):
+        """Player messages with no scene_type should not contribute to CURRENT SCENE."""
+        game = _make_game()
+        players = [_make_player()]
+        recent = [
+            {
+                "role": "player",
+                "profile_id": "profile-p1",
+                "content": "I attack.",
+                "scene_type": None,
+                "scene_mood": None,
+            },
+        ]
+        prompt = build_dm_system_prompt(game, players, {}, recent, [], "I dodge")
+        assert "CURRENT SCENE:" not in prompt
+
+
+# ---------------------------------------------------------------------------
+# DIN-74 Part B — acting_player param + Rule 9 dual blocks
+# ---------------------------------------------------------------------------
+
+class TestBuildDmSystemPromptActingPlayer:
+    """DIN-74 Part B: acting_player threading in build_dm_system_prompt."""
+
+    def test_references_acting_player_name_and_id_in_prompt(self):
+        """Rule 9 must reference the acting player so Claude knows who to tailor for."""
+        game = _make_game()
+        acting = _make_player(pid="p1", character_name="Elara")
+        prompt = build_dm_system_prompt(
+            game, [acting], {}, [], [], "I cast light", acting_player=acting
+        )
+        assert "Elara" in prompt
+        assert "p1" in prompt
+
+    def test_rule_9_mentions_both_block_types(self):
+        """Rule 9 text must describe both tailored and generic blocks."""
+        game = _make_game()
+        acting = _make_player(pid="p1", character_name="T")
+        prompt = build_dm_system_prompt(
+            game, [acting], {}, [], [], "I attack", acting_player=acting
+        )
+        assert "character_id=" in prompt
+        assert 'generic="true"' in prompt
+
+    def test_build_prompt_works_without_acting_player(self):
+        """Backward compat: acting_player=None should not break prompt building."""
+        game = _make_game()
+        players = [_make_player()]
+        prompt = build_dm_system_prompt(game, players, {}, [], [], "I look around")
+        assert "You are" in prompt
+        assert "RULES:" in prompt

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { GameMessage } from '@/lib/types/message'
 import {
@@ -8,7 +8,7 @@ import {
   type SseEvent,
   appendTextChunk,
 } from '@/lib/types/streaming'
-import { Game } from '@/lib/supabase/games'
+import { Game, SuggestedActionsBundle } from '@/lib/supabase/games'
 import { GameHeader } from './GameHeader'
 import { ChatLog } from './ChatLog'
 import { ChatInput } from './ChatInput'
@@ -47,8 +47,9 @@ export function GameSessionView({
   const [isActionLoading, setIsActionLoading] = useState(false)
   const [showRetryTimeout, setShowRetryTimeout] = useState(false)
   const [lastPlayerAction, setLastPlayerAction] = useState<string | null>(null)
-  const [suggestedActions, setSuggestedActions] = useState<string[]>(
-    game.suggested_actions ?? []
+  const _emptyBundle: SuggestedActionsBundle = { acting_player_id: null, tailored: [], generic: [] }
+  const [suggestedBundle, setSuggestedBundle] = useState<SuggestedActionsBundle>(
+    game.suggested_actions ?? _emptyBundle
   )
   const [hasMoreMessages, setHasMoreMessages] = useState(true)
   const [oldestCreatedAt, setOldestCreatedAt] = useState<string | null>(null)
@@ -57,6 +58,16 @@ export function GameSessionView({
   const [levelUpPayload, setLevelUpPayload] = useState<LevelUpPayload | null>(null)
   const [showLevelUpModal, setShowLevelUpModal] = useState(false)
   const [currentPlayerRow, setCurrentPlayerRow] = useState<PlayerRow | null>(null)
+
+  // DIN-74: derive which suggestions this user sees.
+  // Acting player → tailored (first-person POV); others → generic observer prompts.
+  const visibleSuggestions = useMemo(() => {
+    const isActing =
+      currentPlayerRow?.id != null &&
+      currentPlayerRow.id === suggestedBundle.acting_player_id
+    return isActing ? suggestedBundle.tailored : suggestedBundle.generic
+  }, [suggestedBundle, currentPlayerRow?.id])
+
   // DIN-66 live DM bubble. null = no active stream; non-null = bubble rendered
   // below the chat list until Realtime DM INSERT reconciles (clears to null).
   const [streamingSegments, setStreamingSegments] =
@@ -276,7 +287,7 @@ export function GameSessionView({
         (payload) => {
           const updatedGame = payload.new as Game
           setGameStatus(updatedGame.status)
-          setSuggestedActions(updatedGame.suggested_actions ?? [])
+          setSuggestedBundle(updatedGame.suggested_actions ?? _emptyBundle)
         }
       )
       .subscribe()
@@ -556,7 +567,18 @@ export function GameSessionView({
                   .split('\n')
                   .map((line) => line.trim())
                   .filter(Boolean)
-                setSuggestedActions(lines)
+                const charId = event.attributes?.character_id
+                const isGeneric = event.attributes?.generic === 'true'
+                setSuggestedBundle((prev) => {
+                  if (charId) {
+                    return { ...prev, acting_player_id: charId, tailored: lines }
+                  }
+                  if (isGeneric) {
+                    return { ...prev, generic: lines }
+                  }
+                  // Legacy fallback: no attributes → generic bucket
+                  return { ...prev, generic: lines }
+                })
               } else if (event.tag === 'scene') {
                 // Update scene background immediately during streaming.
                 const sceneResult = parseSceneTag(
@@ -796,7 +818,7 @@ export function GameSessionView({
             isWaitingForDm={isWaitingForDm}
             hasCharacter={hasCharacter}
             onSubmit={handleSubmit}
-            suggestedActions={suggestedActions}
+            suggestedActions={visibleSuggestions}
           />
         </div>
 

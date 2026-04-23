@@ -122,7 +122,7 @@ async def _stream_to_redis(
     `profile_id` is accepted for parity with the handler and future per-player
     RAG; it is currently unused by the prompt builder.
     """
-    del profile_id  # currently unused; see docstring
+    # profile_id used below to identify the acting player for DIN-74 Part B
     channel = f"{STREAM_CHANNEL_PREFIX}:{game_id}"
     parser = StreamParser()
     full_parts: list[str] = []
@@ -152,7 +152,7 @@ async def _stream_to_redis(
         def _fetch_recent_messages():
             return (
                 supabase_client.table("game_messages")
-                .select("role, profile_id, content")
+                .select("role, profile_id, content, scene_type, scene_mood")
                 .eq("game_id", game_id)
                 .order("created_at", desc=True)
                 .limit(20)
@@ -195,13 +195,18 @@ async def _stream_to_redis(
             rag_context = []
 
         # ---- Build system prompt ---- #
+        all_players = players_result.data or []
+        acting_player = next(
+            (p for p in all_players if p.get("profile_id") == profile_id), None
+        )
         system_prompt = build_dm_system_prompt(
             game=game_result.data,
-            players=players_result.data or [],
+            players=all_players,
             inv_by_player=inv_by_player,
             recent_messages=recent_messages_result.data or [],
             rag_context=rag_context,
             action_text=action_text,
+            acting_player=acting_player,
         )
 
         async with anthropic_async_client.messages.stream(
