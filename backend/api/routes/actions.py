@@ -51,7 +51,7 @@ STREAM_CHANNEL_PREFIX = "stream"
 
 
 _STRIP_TAG_BLOCKS = re.compile(
-    r"<(?:suggested_actions|state_changes|dice_rolls)>.*?</(?:suggested_actions|state_changes|dice_rolls)>",
+    r"<(?:suggested_actions|state_changes|dice_rolls)(?:\s[^>]*)?>.*?</(?:suggested_actions|state_changes|dice_rolls)>",
     re.DOTALL,
 )
 _STRIP_EVENT_BLOCKS = re.compile(
