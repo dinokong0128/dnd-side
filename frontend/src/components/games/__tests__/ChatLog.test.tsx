@@ -256,4 +256,52 @@ describe('ChatLog', () => {
     fireEvent.click(screen.getByRole('button', { name: /retry last action/i }))
     expect(onRetry).toHaveBeenCalledTimes(1)
   })
+
+  describe('DIN-73 hotfix — infinite pagination guard', () => {
+    // Regression: the observer effect used to list `onLoadMore` in its deps,
+    // so each parent re-render (fresh handleLoadMore closure) recreated the
+    // observer and re-fired `onLoadMore` while the top sentinel was still in
+    // view. Result: the whole chat history loaded back to the first message.
+    //
+    // The fix moves `onLoadMore`, `hasMoreMessages`, and `isLoadingMore` into
+    // refs so the observer is created exactly once for the component's life.
+    it('does not re-call onLoadMore when parent passes a new function each render', () => {
+      const messages = [
+        makeMessage({ id: '1', role: 'dm', content: 'older' }),
+        makeMessage({ id: '2', role: 'dm', content: 'newer' }),
+      ]
+
+      // Parent-simulating wrapper that re-renders with a fresh onLoadMore
+      // reference on every render — the exact shape of the original bug.
+      const onLoadMore = jest.fn()
+      const { rerender } = render(
+        <ChatLog
+          messages={messages}
+          playerMap={new Map()}
+          isLoading={false}
+          hasMoreMessages={true}
+          isLoadingMore={false}
+          onLoadMore={() => onLoadMore()}
+        />
+      )
+
+      // Force three consecutive re-renders with a fresh handler each time.
+      for (let i = 0; i < 3; i++) {
+        rerender(
+          <ChatLog
+            messages={messages}
+            playerMap={new Map()}
+            isLoading={false}
+            hasMoreMessages={true}
+            isLoadingMore={false}
+            onLoadMore={() => onLoadMore()}
+          />
+        )
+      }
+
+      // Observer should have fired exactly once (on mount). Re-renders with
+      // a new onLoadMore identity must NOT recreate the observer.
+      expect(onLoadMore).toHaveBeenCalledTimes(1)
+    })
+  })
 })

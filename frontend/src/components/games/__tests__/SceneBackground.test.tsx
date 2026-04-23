@@ -18,6 +18,20 @@ describe('SceneBackground', () => {
       ).not.toThrow()
     })
 
+    it('shows the neutral rest/default.webp fallback when sceneType is null', () => {
+      // Regression: previously the effect early-returned when sceneType was
+      // null and no image ever loaded. Players with pre-DIN-73 game histories
+      // (or brand-new games before the DM's first <scene> tag) saw pure
+      // black. The fallback image keeps the viewport populated until the DM
+      // emits a real scene.
+      const { container } = render(
+        <SceneBackground sceneType={null} sceneMood={null} enabled={true} reduceMotion={false} />
+      )
+      const activeImg = container.querySelector('img.scene-img-active') as HTMLImageElement | null
+      expect(activeImg).not.toBeNull()
+      expect(activeImg!.getAttribute('src')).toBe('/scenes/rest/default.webp')
+    })
+
     ALL_SCENE_TYPES.forEach((sceneType) => {
       it(`renders with sceneType=${sceneType} and no mood`, () => {
         expect(() =>

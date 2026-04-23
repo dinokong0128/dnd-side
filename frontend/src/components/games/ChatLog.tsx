@@ -67,6 +67,26 @@ export function ChatLog({
     prevScrollHeightRef.current = 0
   }, [messages])
 
+  // Refs mirror the latest props so the IntersectionObserver callback below
+  // always reads fresh values without needing to recreate the observer on
+  // every parent render. Without this, `handleLoadMore` (a new function
+  // identity each parent render) churned the effect and caused an infinite
+  // pagination loop when the top sentinel was in view — the recreated
+  // observer immediately re-fired `onLoadMore`, which triggered a parent
+  // re-render, which recreated the observer, which fired again, etc.
+  const hasMoreMessagesRef = useRef(hasMoreMessages)
+  const isLoadingMoreRef = useRef(isLoadingMore)
+  const onLoadMoreRef = useRef(onLoadMore)
+  useEffect(() => {
+    hasMoreMessagesRef.current = hasMoreMessages
+  }, [hasMoreMessages])
+  useEffect(() => {
+    isLoadingMoreRef.current = isLoadingMore
+  }, [isLoadingMore])
+  useEffect(() => {
+    onLoadMoreRef.current = onLoadMore
+  }, [onLoadMore])
+
   useEffect(() => {
     const sentinel = topSentinelRef.current
     const root = scrollContainerRef.current
@@ -75,11 +95,15 @@ export function ChatLog({
     const observer = new IntersectionObserver(
       (entries) => {
         const entry = entries[0]
-        if (entry.isIntersecting && hasMoreMessages && !isLoadingMore) {
+        if (
+          entry.isIntersecting &&
+          hasMoreMessagesRef.current &&
+          !isLoadingMoreRef.current
+        ) {
           if (scrollContainerRef.current) {
             prevScrollHeightRef.current = scrollContainerRef.current.scrollHeight
           }
-          onLoadMore()
+          onLoadMoreRef.current()
         }
       },
       {
@@ -91,7 +115,11 @@ export function ChatLog({
 
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [hasMoreMessages, isLoadingMore, onLoadMore])
+    // Intentionally empty deps: the observer is created once when refs are
+    // available and is torn down only on unmount. All changing values are
+    // read through refs inside the callback.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {

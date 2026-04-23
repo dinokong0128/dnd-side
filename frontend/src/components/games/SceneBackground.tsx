@@ -25,12 +25,21 @@ export function SceneBackground({ sceneType, sceneMood, enabled, reduceMotion }:
   const activeSlotRef = useRef<'a' | 'b'>('a')
 
   useEffect(() => {
-    if (!sceneType || !enabled) return
+    if (!enabled) return
 
-    const last = lastVariantRef.current[sceneType] ?? 0
-    const variant = pickVariantFor(sceneType, sceneMood, last)
-    lastVariantRef.current[sceneType] = variant
-    const src = `/scenes/${sceneType}/${variant}.webp`
+    // When the DM hasn't emitted a <scene> tag yet (brand-new game, or a
+    // game whose messages pre-date DIN-73), fall back to the neutral
+    // campfire image so the player isn't staring at black. Any later
+    // scene_type value from the DM will crossfade in normally.
+    let src: string
+    if (sceneType) {
+      const last = lastVariantRef.current[sceneType] ?? 0
+      const variant = pickVariantFor(sceneType, sceneMood, last)
+      lastVariantRef.current[sceneType] = variant
+      src = `/scenes/${sceneType}/${variant}.webp`
+    } else {
+      src = FALLBACK_SRC
+    }
 
     // Updating image slots is this effect's entire purpose.
     /* eslint-disable react-hooks/set-state-in-effect */
