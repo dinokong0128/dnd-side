@@ -347,4 +347,53 @@ describe('ChatLog', () => {
       expect(onLoadMore).toHaveBeenCalledTimes(1)
     })
   })
+
+  describe('DIN-73 hotfix — scroll-to-bottom button visibility', () => {
+    // Regression: previously the button was gated on `hasNewMessages` only,
+    // so users who simply scrolled up (no new message arriving) had no way
+    // back to the latest message. Button now renders whenever `!isAtBottom`.
+    //
+    // Additionally: the button is rendered through a React portal to
+    // document.body so that its `position: fixed` anchors to the viewport
+    // (the chat log's `backdrop-filter` creates a containing block that
+    // would otherwise trap the button and scroll it offscreen).
+    it('renders the scroll-to-bottom button when user scrolls up', () => {
+      const messages = [
+        makeMessage({ id: '1', role: 'dm', content: 'first' }),
+        makeMessage({ id: '2', role: 'dm', content: 'second' }),
+        makeMessage({ id: '3', role: 'dm', content: 'third' }),
+      ]
+      const { container } = render(
+        <ChatLog
+          messages={messages}
+          playerMap={new Map()}
+          isLoading={false}
+          hasMoreMessages={false}
+          isLoadingMore={false}
+          onLoadMore={jest.fn()}
+        />
+      )
+
+      // Initial state: isAtBottom=true, button not present.
+      expect(
+        screen.queryByRole('button', { name: /latest message|new message/i }),
+      ).not.toBeInTheDocument()
+
+      // Fire a scroll event on the chat container with scrollTop such that
+      // scrollHeight - scrollTop - clientHeight >= 100 → atBottom becomes
+      // false → setIsAtBottom(false) → button renders.
+      const scrollContainer = container.querySelector('.dnd-chat-log') as HTMLDivElement
+      expect(scrollContainer).not.toBeNull()
+      Object.defineProperty(scrollContainer, 'scrollHeight', { configurable: true, value: 2000 })
+      Object.defineProperty(scrollContainer, 'scrollTop', { configurable: true, value: 500 })
+      Object.defineProperty(scrollContainer, 'clientHeight', { configurable: true, value: 400 })
+
+      fireEvent.scroll(scrollContainer)
+
+      // Button should now be in the document (rendered via portal to body).
+      // `screen` queries the whole document, so the portal is reachable.
+      const button = screen.getByRole('button', { name: /latest message/i })
+      expect(button).toBeInTheDocument()
+    })
+  })
 })

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { GameMessage } from '@/lib/types/message'
 import type { StreamSegment } from '@/lib/types/streaming'
 import { ChatMessage } from './ChatMessage'
@@ -63,6 +64,13 @@ export function ChatLog({
   const [isAtBottom, setIsAtBottom] = useState(true)
   const isAtBottomRef = useRef(true)
   const [hasNewMessages, setHasNewMessages] = useState(false)
+  // Guards the scroll-to-bottom button's portal render: `createPortal` calls
+  // `document.body` which is undefined during SSR. Flipping to true in a
+  // useEffect ensures the portal only mounts client-side.
+  const [isMounted, setIsMounted] = useState(false)
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   useLayoutEffect(() => {
     if (!scrollContainerRef.current) return
@@ -325,8 +333,18 @@ export function ChatLog({
         new-message notification. Label swaps to "↓ New message" when a DM
         reply arrived while the user was scrolled up, otherwise shows the
         plain "↓ Latest message" nav hint.
+
+        Rendered through a React portal to document.body so the button's
+        `position: fixed` anchors to the viewport. Without the portal the
+        button's fixed positioning is trapped by the chat log's
+        `backdrop-filter: blur(2px)` (applied when scene backgrounds are
+        enabled) — per CSS spec, backdrop-filter on an ancestor creates a
+        new containing block for fixed-positioned descendants. Result:
+        the button would scroll away with the chat, landing thousands of
+        pixels above the visible viewport. Portaling to <body> bypasses
+        that ancestor chain entirely.
       */}
-      {!isAtBottom && (
+      {isMounted && !isAtBottom && createPortal(
         <button
           onClick={scrollToBottom}
           className="fixed bottom-24 left-1/2 -translate-x-1/2 transform rounded-full border px-4 py-2 text-sm font-semibold uppercase tracking-widest transition-all hover:shadow-lg"
@@ -334,11 +352,12 @@ export function ChatLog({
             background: 'var(--dnd-charcoal)',
             borderColor: 'var(--dnd-gold)',
             color: 'var(--dnd-gold)',
-            zIndex: 10,
+            zIndex: 50,
           }}
         >
           {hasNewMessages ? '↓ New message' : '↓ Latest message'}
-        </button>
+        </button>,
+        document.body,
       )}
 
       <style jsx>{`
