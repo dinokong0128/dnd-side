@@ -24,6 +24,8 @@ import { CHAT_PAGE_SIZE } from '@/lib/constants/game'
 import { parseSceneTag } from '@/lib/scene'
 import type { SceneType, Mood } from '@/lib/scene'
 
+const EMPTY_BUNDLE: SuggestedActionsBundle = { acting_player_id: null, tailored: [], generic: [] }
+
 interface GameSessionViewProps {
   gameId: string
   game: Game
@@ -47,9 +49,8 @@ export function GameSessionView({
   const [isActionLoading, setIsActionLoading] = useState(false)
   const [showRetryTimeout, setShowRetryTimeout] = useState(false)
   const [lastPlayerAction, setLastPlayerAction] = useState<string | null>(null)
-  const _emptyBundle: SuggestedActionsBundle = { acting_player_id: null, tailored: [], generic: [] }
   const [suggestedBundle, setSuggestedBundle] = useState<SuggestedActionsBundle>(
-    game.suggested_actions ?? _emptyBundle
+    game.suggested_actions ?? EMPTY_BUNDLE
   )
   const [hasMoreMessages, setHasMoreMessages] = useState(true)
   const [oldestCreatedAt, setOldestCreatedAt] = useState<string | null>(null)
@@ -287,7 +288,7 @@ export function GameSessionView({
         (payload) => {
           const updatedGame = payload.new as Game
           setGameStatus(updatedGame.status)
-          setSuggestedBundle(updatedGame.suggested_actions ?? _emptyBundle)
+          setSuggestedBundle(updatedGame.suggested_actions ?? EMPTY_BUNDLE)
         }
       )
       .subscribe()

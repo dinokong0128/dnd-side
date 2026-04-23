@@ -490,7 +490,6 @@ describe('ChatInput', () => {
       expect(textarea).toBeInTheDocument()
     })
   })
-})
 
   describe('DIN-74 resize after handleCycle', () => {
     it('calls resize after handleCycle populates the textarea', () => {
@@ -521,3 +520,4 @@ describe('ChatInput', () => {
       rafSpy.mockRestore()
     })
   })
+})
