@@ -25,12 +25,21 @@ export function SceneBackground({ sceneType, sceneMood, enabled, reduceMotion }:
   const activeSlotRef = useRef<'a' | 'b'>('a')
 
   useEffect(() => {
-    if (!sceneType || !enabled) return
+    if (!enabled) return
 
-    const last = lastVariantRef.current[sceneType] ?? 0
-    const variant = pickVariantFor(sceneType, sceneMood, last)
-    lastVariantRef.current[sceneType] = variant
-    const src = `/scenes/${sceneType}/${variant}.webp`
+    // When the DM hasn't emitted a <scene> tag yet (brand-new game, or a
+    // game whose messages pre-date DIN-73), fall back to the neutral
+    // campfire image so the player isn't staring at black. Any later
+    // scene_type value from the DM will crossfade in normally.
+    let src: string
+    if (sceneType) {
+      const last = lastVariantRef.current[sceneType] ?? 0
+      const variant = pickVariantFor(sceneType, sceneMood, last)
+      lastVariantRef.current[sceneType] = variant
+      src = `/scenes/${sceneType}/${variant}.webp`
+    } else {
+      src = FALLBACK_SRC
+    }
 
     // Updating image slots is this effect's entire purpose.
     /* eslint-disable react-hooks/set-state-in-effect */
@@ -63,8 +72,25 @@ export function SceneBackground({ sceneType, sceneMood, enabled, reduceMotion }:
 
   return (
     <div
+      data-testid="scene-background-root"
       aria-hidden="true"
-      style={{ position: 'fixed', inset: 0, zIndex: 0, overflow: 'hidden' }}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        // z-index:-1 keeps the overlay strictly behind the page's in-flow,
+        // non-positioned content (header, chat, input). Combined with
+        // `.scene-bg-active { position: relative; isolation: isolate; }` in
+        // globals.css, the overlay sits inside .dnd-page-bg's own stacking
+        // context so its fixed positioning does not escape to the viewport
+        // root. Without that parent isolation + this negative z-index, the
+        // fixed overlay painted on top of the UI.
+        zIndex: -1,
+        overflow: 'hidden',
+        // Purely visual: belt-and-suspenders so the root cannot swallow
+        // pointer events even if a sibling's stacking rules somehow put it
+        // over interactive content.
+        pointerEvents: 'none',
+      }}
     >
       {/* Inactive slot (fading out) */}
       {inactiveSrc && (

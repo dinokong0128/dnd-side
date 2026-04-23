@@ -18,6 +18,20 @@ describe('SceneBackground', () => {
       ).not.toThrow()
     })
 
+    it('shows the neutral rest/default.webp fallback when sceneType is null', () => {
+      // Regression: previously the effect early-returned when sceneType was
+      // null and no image ever loaded. Players with pre-DIN-73 game histories
+      // (or brand-new games before the DM's first <scene> tag) saw pure
+      // black. The fallback image keeps the viewport populated until the DM
+      // emits a real scene.
+      const { container } = render(
+        <SceneBackground sceneType={null} sceneMood={null} enabled={true} reduceMotion={false} />
+      )
+      const activeImg = container.querySelector('img.scene-img-active') as HTMLImageElement | null
+      expect(activeImg).not.toBeNull()
+      expect(activeImg!.getAttribute('src')).toBe('/scenes/rest/default.webp')
+    })
+
     ALL_SCENE_TYPES.forEach((sceneType) => {
       it(`renders with sceneType=${sceneType} and no mood`, () => {
         expect(() =>
@@ -179,6 +193,46 @@ describe('SceneBackground', () => {
         <SceneBackground sceneType="tavern" sceneMood={null} enabled={true} reduceMotion={false} />
       )
       expect(container.querySelector('[data-testid="dim-overlay"]')).not.toBeNull()
+    })
+  })
+
+  describe('DIN-73 hotfix — root container must not block pointer events', () => {
+    // Regression guard: without pointer-events:none on the root, the fixed
+    // overlay covers the whole viewport and swallows every click. This left
+    // the game header and chat log unclickable in prod until the hotfix.
+    it('root container has pointer-events:none so it does not intercept clicks', () => {
+      const { getByTestId } = render(
+        <SceneBackground sceneType="tavern" sceneMood="combat" enabled={true} reduceMotion={false} />
+      )
+      const root = getByTestId('scene-background-root')
+      expect(root.style.pointerEvents).toBe('none')
+    })
+
+    it('root container sits at z-index:-1 so it stays behind in-flow siblings', () => {
+      // Regression guard: z-index:0 on a position:fixed element stacks above
+      // static (non-positioned) siblings. That made the dim overlay paint
+      // over the header and chat. The overlay must sit at z-index:-1 so
+      // that within .scene-bg-active's stacking context (position:relative +
+      // isolation:isolate in globals.css) it always renders behind content.
+      const { getByTestId } = render(
+        <SceneBackground sceneType="tavern" sceneMood={null} enabled={true} reduceMotion={false} />
+      )
+      const root = getByTestId('scene-background-root')
+      expect(root.style.zIndex).toBe('-1')
+    })
+
+    it('renders sibling interactive content that receives clicks', () => {
+      // Simulate the production layout: SceneBackground + a sibling button.
+      // The click must reach the button, not the fixed overlay.
+      const handleClick = jest.fn()
+      const { getByRole } = render(
+        <div>
+          <SceneBackground sceneType="forest" sceneMood={null} enabled={true} reduceMotion={false} />
+          <button onClick={handleClick}>click me</button>
+        </div>
+      )
+      getByRole('button', { name: 'click me' }).click()
+      expect(handleClick).toHaveBeenCalledTimes(1)
     })
   })
 })

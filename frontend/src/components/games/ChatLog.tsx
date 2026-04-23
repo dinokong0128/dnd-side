@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { GameMessage } from '@/lib/types/message'
 import type { StreamSegment } from '@/lib/types/streaming'
 import { ChatMessage } from './ChatMessage'
@@ -48,10 +49,28 @@ export function ChatLog({
   const topSentinelRef = useRef<HTMLDivElement>(null)
   const bottomSentinelRef = useRef<HTMLDivElement>(null)
   const prevScrollHeightRef = useRef(0)
-  // isAtBottom doesn't need to be state since it doesn't drive rendering directly.
-  // Using a ref avoids calling setState inside an effect when new messages arrive.
+  // Whether the user is currently scrolled to (or near) the bottom of the chat.
+  // This drives two behaviors:
+  //   1. Auto-scroll: when new messages arrive AND the user is at the bottom,
+  //      we smoothly follow them. When the user has scrolled up, we leave
+  //      their position alone and surface a "new message" notification.
+  //   2. Scroll-to-bottom button: the button is visible whenever the user is
+  //      NOT at the bottom, giving them a way back to the latest message.
+  //
+  // Using state (not a ref) is deliberate — the button's visibility depends
+  // on this value, so it must trigger a re-render when it changes. The
+  // state updates come from scroll events which the browser already
+  // throttles (~16ms), so this is cheap.
+  const [isAtBottom, setIsAtBottom] = useState(true)
   const isAtBottomRef = useRef(true)
   const [hasNewMessages, setHasNewMessages] = useState(false)
+  // Guards the scroll-to-bottom button's portal render: `createPortal` calls
+  // `document.body` which is undefined during SSR. Flipping to true in a
+  // useEffect ensures the portal only mounts client-side.
+  const [isMounted, setIsMounted] = useState(false)
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   useLayoutEffect(() => {
     if (!scrollContainerRef.current) return
@@ -67,6 +86,26 @@ export function ChatLog({
     prevScrollHeightRef.current = 0
   }, [messages])
 
+  // Refs mirror the latest props so the IntersectionObserver callback below
+  // always reads fresh values without needing to recreate the observer on
+  // every parent render. Without this, `handleLoadMore` (a new function
+  // identity each parent render) churned the effect and caused an infinite
+  // pagination loop when the top sentinel was in view — the recreated
+  // observer immediately re-fired `onLoadMore`, which triggered a parent
+  // re-render, which recreated the observer, which fired again, etc.
+  const hasMoreMessagesRef = useRef(hasMoreMessages)
+  const isLoadingMoreRef = useRef(isLoadingMore)
+  const onLoadMoreRef = useRef(onLoadMore)
+  useEffect(() => {
+    hasMoreMessagesRef.current = hasMoreMessages
+  }, [hasMoreMessages])
+  useEffect(() => {
+    isLoadingMoreRef.current = isLoadingMore
+  }, [isLoadingMore])
+  useEffect(() => {
+    onLoadMoreRef.current = onLoadMore
+  }, [onLoadMore])
+
   useEffect(() => {
     const sentinel = topSentinelRef.current
     const root = scrollContainerRef.current
@@ -75,11 +114,15 @@ export function ChatLog({
     const observer = new IntersectionObserver(
       (entries) => {
         const entry = entries[0]
-        if (entry.isIntersecting && hasMoreMessages && !isLoadingMore) {
+        if (
+          entry.isIntersecting &&
+          hasMoreMessagesRef.current &&
+          !isLoadingMoreRef.current
+        ) {
           if (scrollContainerRef.current) {
             prevScrollHeightRef.current = scrollContainerRef.current.scrollHeight
           }
-          onLoadMore()
+          onLoadMoreRef.current()
         }
       },
       {
@@ -91,7 +134,14 @@ export function ChatLog({
 
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [hasMoreMessages, isLoadingMore, onLoadMore])
+    // `isLoading` is the only dep: while isLoading is true the component
+    // renders a spinner (no sentinel/container in the DOM), and the effect
+    // can't attach. Once isLoading flips to false the real render tree
+    // appears and the effect re-runs, attaching the observer. All changing
+    // callback values are still read through refs so parent re-renders do
+    // not churn the observer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading])
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -111,7 +161,12 @@ export function ChatLog({
     const { scrollHeight, scrollTop, clientHeight } = scrollContainerRef.current
     const atBottom = scrollHeight - scrollTop - clientHeight < 100
 
+    // Mirror into both the ref (read by the auto-scroll effect without
+    // needing a dep) and the state (drives the scroll-to-bottom button's
+    // visibility). setState is a no-op when the value is unchanged so this
+    // isn't thrashing React on every scroll event.
     isAtBottomRef.current = atBottom
+    setIsAtBottom(atBottom)
     if (atBottom) {
       setHasNewMessages(false)
     }
@@ -122,6 +177,7 @@ export function ChatLog({
     if (bottomSentinelRef.current) {
       bottomSentinelRef.current.scrollIntoView({ behavior: 'smooth' })
       isAtBottomRef.current = true
+      setIsAtBottom(true)
       setHasNewMessages(false)
     }
   }
@@ -271,8 +327,24 @@ export function ChatLog({
 
       <div ref={bottomSentinelRef} />
 
-      {/* New message indicator */}
-      {hasNewMessages && (
+      {/*
+        Scroll-to-bottom button. Visible whenever the user is scrolled away
+        from the bottom of the chat, serving as both a general nav aid AND a
+        new-message notification. Label swaps to "↓ New message" when a DM
+        reply arrived while the user was scrolled up, otherwise shows the
+        plain "↓ Latest message" nav hint.
+
+        Rendered through a React portal to document.body so the button's
+        `position: fixed` anchors to the viewport. Without the portal the
+        button's fixed positioning is trapped by the chat log's
+        `backdrop-filter: blur(2px)` (applied when scene backgrounds are
+        enabled) — per CSS spec, backdrop-filter on an ancestor creates a
+        new containing block for fixed-positioned descendants. Result:
+        the button would scroll away with the chat, landing thousands of
+        pixels above the visible viewport. Portaling to <body> bypasses
+        that ancestor chain entirely.
+      */}
+      {isMounted && !isAtBottom && createPortal(
         <button
           onClick={scrollToBottom}
           className="fixed bottom-24 left-1/2 -translate-x-1/2 transform rounded-full border px-4 py-2 text-sm font-semibold uppercase tracking-widest transition-all hover:shadow-lg"
@@ -280,10 +352,12 @@ export function ChatLog({
             background: 'var(--dnd-charcoal)',
             borderColor: 'var(--dnd-gold)',
             color: 'var(--dnd-gold)',
+            zIndex: 50,
           }}
         >
-          ↓ New message
-        </button>
+          {hasNewMessages ? '↓ New message' : '↓ Latest message'}
+        </button>,
+        document.body,
       )}
 
       <style jsx>{`

@@ -256,4 +256,144 @@ describe('ChatLog', () => {
     fireEvent.click(screen.getByRole('button', { name: /retry last action/i }))
     expect(onRetry).toHaveBeenCalledTimes(1)
   })
+
+  describe('DIN-73 hotfix — infinite pagination guard', () => {
+    // Regression: the observer effect used to list `onLoadMore` in its deps,
+    // so each parent re-render (fresh handleLoadMore closure) recreated the
+    // observer and re-fired `onLoadMore` while the top sentinel was still in
+    // view. Result: the whole chat history loaded back to the first message.
+    //
+    // The fix moves `onLoadMore`, `hasMoreMessages`, and `isLoadingMore` into
+    // refs so the observer is created exactly once for the component's life.
+    it('does not re-call onLoadMore when parent passes a new function each render', () => {
+      const messages = [
+        makeMessage({ id: '1', role: 'dm', content: 'older' }),
+        makeMessage({ id: '2', role: 'dm', content: 'newer' }),
+      ]
+
+      // Parent-simulating wrapper that re-renders with a fresh onLoadMore
+      // reference on every render — the exact shape of the original bug.
+      const onLoadMore = jest.fn()
+      const { rerender } = render(
+        <ChatLog
+          messages={messages}
+          playerMap={new Map()}
+          isLoading={false}
+          hasMoreMessages={true}
+          isLoadingMore={false}
+          onLoadMore={() => onLoadMore()}
+        />
+      )
+
+      // Force three consecutive re-renders with a fresh handler each time.
+      for (let i = 0; i < 3; i++) {
+        rerender(
+          <ChatLog
+            messages={messages}
+            playerMap={new Map()}
+            isLoading={false}
+            hasMoreMessages={true}
+            isLoadingMore={false}
+            onLoadMore={() => onLoadMore()}
+          />
+        )
+      }
+
+      // Observer should have fired exactly once (on mount). Re-renders with
+      // a new onLoadMore identity must NOT recreate the observer.
+      expect(onLoadMore).toHaveBeenCalledTimes(1)
+    })
+
+    it('attaches observer after isLoading flips from true to false', () => {
+      // Regression: the observer effect had `[]` deps and so ran exactly
+      // once on mount. When the component first rendered with
+      // `isLoading={true}` it returned a spinner (no sentinel in the DOM),
+      // the effect ran, couldn't find the sentinel, and bailed. When
+      // isLoading later flipped to false, the effect never re-ran because
+      // of the empty deps — so the observer was never attached and
+      // scrolling to the top did nothing.
+      //
+      // Fix: include `isLoading` in the observer effect's deps so it
+      // re-runs when the real render tree (with the sentinel) appears.
+      const messages = [makeMessage({ id: '1', role: 'dm', content: 'older' })]
+      const onLoadMore = jest.fn()
+
+      const { rerender } = render(
+        <ChatLog
+          messages={messages}
+          playerMap={new Map()}
+          isLoading={true}
+          hasMoreMessages={true}
+          isLoadingMore={false}
+          onLoadMore={onLoadMore}
+        />
+      )
+      // Effect ran while isLoading=true; no sentinel, so no observer fired.
+      expect(onLoadMore).not.toHaveBeenCalled()
+
+      rerender(
+        <ChatLog
+          messages={messages}
+          playerMap={new Map()}
+          isLoading={false}
+          hasMoreMessages={true}
+          isLoadingMore={false}
+          onLoadMore={onLoadMore}
+        />
+      )
+
+      // Now the sentinel is in the DOM and the mocked IntersectionObserver
+      // fires immediately on observe(), so onLoadMore must have been called.
+      expect(onLoadMore).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('DIN-73 hotfix — scroll-to-bottom button visibility', () => {
+    // Regression: previously the button was gated on `hasNewMessages` only,
+    // so users who simply scrolled up (no new message arriving) had no way
+    // back to the latest message. Button now renders whenever `!isAtBottom`.
+    //
+    // Additionally: the button is rendered through a React portal to
+    // document.body so that its `position: fixed` anchors to the viewport
+    // (the chat log's `backdrop-filter` creates a containing block that
+    // would otherwise trap the button and scroll it offscreen).
+    it('renders the scroll-to-bottom button when user scrolls up', () => {
+      const messages = [
+        makeMessage({ id: '1', role: 'dm', content: 'first' }),
+        makeMessage({ id: '2', role: 'dm', content: 'second' }),
+        makeMessage({ id: '3', role: 'dm', content: 'third' }),
+      ]
+      const { container } = render(
+        <ChatLog
+          messages={messages}
+          playerMap={new Map()}
+          isLoading={false}
+          hasMoreMessages={false}
+          isLoadingMore={false}
+          onLoadMore={jest.fn()}
+        />
+      )
+
+      // Initial state: isAtBottom=true, button not present.
+      expect(
+        screen.queryByRole('button', { name: /latest message|new message/i }),
+      ).not.toBeInTheDocument()
+
+      // Fire a scroll event on the chat container with scrollTop such that
+      // scrollHeight - scrollTop - clientHeight >= 100 → atBottom becomes
+      // false → setIsAtBottom(false) → button renders.
+      const scrollContainer = container.querySelector('.dnd-chat-log') as HTMLDivElement
+      expect(scrollContainer).not.toBeNull()
+      Object.defineProperty(scrollContainer, 'scrollHeight', { configurable: true, value: 2000 })
+      Object.defineProperty(scrollContainer, 'scrollTop', { configurable: true, value: 500 })
+      Object.defineProperty(scrollContainer, 'clientHeight', { configurable: true, value: 400 })
+
+      fireEvent.scroll(scrollContainer)
+
+      // Button should now be in the document (rendered via portal to body).
+      // `screen` queries the whole document, so the portal is reachable.
+      const button = screen.getByRole('button', { name: /latest message/i })
+      expect(button).toBeInTheDocument()
+    })
+  })
 })
