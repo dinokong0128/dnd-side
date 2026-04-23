@@ -703,7 +703,26 @@ export function GameSessionView({
           reduceMotion={bgReduceMotion}
         />
       )}
-      <GameHeader
+      {/*
+        DIN-73 hotfix: position:relative + z-index:1 lifts all interactive
+        content above the fixed SceneBackground overlay (which sits at
+        z-index:0). Without this, the dim/mood overlays render on top of the
+        header and chat, blocking clicks. The inline styles preserve the
+        parent's flex-column layout — min-height:0 is required so flex-1
+        children (ChatLog) can shrink correctly inside a flex container.
+      */}
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          minHeight: 0,
+          minWidth: 0,
+        }}
+      >
+        <GameHeader
         gameName={game.name}
         gameStatus={gameStatus}
         isHost={isHost}
@@ -843,6 +862,7 @@ export function GameSessionView({
         variant="destructive"
         isLoading={isActionLoading}
       />
+      </div>
     </div>
   )
 }

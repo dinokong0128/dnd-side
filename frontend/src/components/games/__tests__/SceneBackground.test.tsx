@@ -181,4 +181,31 @@ describe('SceneBackground', () => {
       expect(container.querySelector('[data-testid="dim-overlay"]')).not.toBeNull()
     })
   })
+
+  describe('DIN-73 hotfix — root container must not block pointer events', () => {
+    // Regression guard: without pointer-events:none on the root, the fixed
+    // overlay covers the whole viewport and swallows every click. This left
+    // the game header and chat log unclickable in prod until the hotfix.
+    it('root container has pointer-events:none so it does not intercept clicks', () => {
+      const { getByTestId } = render(
+        <SceneBackground sceneType="tavern" sceneMood="combat" enabled={true} reduceMotion={false} />
+      )
+      const root = getByTestId('scene-background-root')
+      expect(root.style.pointerEvents).toBe('none')
+    })
+
+    it('renders sibling interactive content that receives clicks', () => {
+      // Simulate the production layout: SceneBackground + a sibling button.
+      // The click must reach the button, not the fixed overlay.
+      const handleClick = jest.fn()
+      const { getByRole } = render(
+        <div>
+          <SceneBackground sceneType="forest" sceneMood={null} enabled={true} reduceMotion={false} />
+          <button onClick={handleClick}>click me</button>
+        </div>
+      )
+      getByRole('button', { name: 'click me' }).click()
+      expect(handleClick).toHaveBeenCalledTimes(1)
+    })
+  })
 })

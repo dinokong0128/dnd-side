@@ -63,8 +63,18 @@ export function SceneBackground({ sceneType, sceneMood, enabled, reduceMotion }:
 
   return (
     <div
+      data-testid="scene-background-root"
       aria-hidden="true"
-      style={{ position: 'fixed', inset: 0, zIndex: 0, overflow: 'hidden' }}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 0,
+        overflow: 'hidden',
+        // Critical: the scene bg is purely visual. Without this, the fixed
+        // root intercepts every click/scroll event for the entire viewport
+        // (children have pointer-events:none but the root itself does not).
+        pointerEvents: 'none',
+      }}
     >
       {/* Inactive slot (fading out) */}
       {inactiveSrc && (
