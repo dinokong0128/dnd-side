@@ -392,6 +392,12 @@ export function GameSessionView({
       const detail = (event as CustomEvent).detail as LevelUpPayload
       setLevelUpPayload(detail)
     }
+    // Simulate Supabase Realtime UPDATE on the games row (e.g. suggested_actions bundle refresh)
+    const handleGameUpdate = (event: Event) => {
+      const updatedGame = (event as CustomEvent).detail as Game
+      setGameStatus(updatedGame.status)
+      setSuggestedBundle(updatedGame.suggested_actions ?? EMPTY_BUNDLE)
+    }
 
     window.addEventListener('player-message', addMessage)
     window.addEventListener('dm-message', addMessage)
@@ -400,6 +406,7 @@ export function GameSessionView({
     window.addEventListener('session-paused', handleSessionPaused)
     window.addEventListener('session-ended', handleSessionEnded)
     window.addEventListener('level-up-available', handleLevelUpAvailable)
+    window.addEventListener('game-update', handleGameUpdate)
 
     // Marker so Playwright can wait for listeners to be attached before
     // dispatching simulated events (avoids a hydration race). Defer via
@@ -420,6 +427,7 @@ export function GameSessionView({
       window.removeEventListener('session-paused', handleSessionPaused)
       window.removeEventListener('session-ended', handleSessionEnded)
       window.removeEventListener('level-up-available', handleLevelUpAvailable)
+      window.removeEventListener('game-update', handleGameUpdate)
       delete document.body.dataset.e2eListenersReady
     }
   }, [gameId])
