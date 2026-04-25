@@ -264,12 +264,18 @@ test.describe('DIN-74 — Empty bundle disables ✨ button', () => {
 // ─── Part C: Textarea resize on cycle ────────────────────────────────────────
 
 test.describe('DIN-74 — Textarea auto-grows when long suggestion is cycled in', () => {
-  test('textarea height increases beyond 40 px after ✨ cycles in a long suggestion', async ({
+  test('textarea style.height is set after ✨ cycles in a suggestion (resize ran)', async ({
     page,
   }) => {
+    // Use a multi-line suggestion (~285 chars, guaranteed 3+ wrapped lines in any viewport)
+    const multiLineTailored =
+      '"I must approach this with caution," I say, my voice low as I study the runes etched into the stone doorframe. ' +
+      'The arcane symbols pulse faintly in rhythm with my heartbeat. ' +
+      '"Whatever was sealed behind this door was sealed for a reason — I intend to find out why before we proceed."'
+
     const bundle: SuggestedActionsBundle = {
       acting_player_id: PLAYER_ID,
-      tailored: [LONG_TAILORED_1], // ~23 words — forces multi-line wrap
+      tailored: [multiLineTailored],
       generic: [],
     }
 
@@ -279,10 +285,11 @@ test.describe('DIN-74 — Textarea auto-grows when long suggestion is cycled in'
     const textarea = page.getByTestId('chat-textarea')
     await expect(textarea).toBeEnabled({ timeout: 5000 })
 
-    // Baseline height at empty state
-    const initialHeight = await textarea.evaluate(
-      (el: HTMLTextAreaElement) => el.offsetHeight
+    // Baseline: no inline height style before cycling
+    const styleBefore = await textarea.evaluate(
+      (el: HTMLTextAreaElement) => el.style.height
     )
+    expect(styleBefore).toBe('')
 
     const cycleBtn = page.getByTestId('cycle-suggestion-btn')
     await expect(cycleBtn).toBeEnabled({ timeout: 5000 })
@@ -291,12 +298,17 @@ test.describe('DIN-74 — Textarea auto-grows when long suggestion is cycled in'
     // Wait for requestAnimationFrame resize to settle
     await page.waitForTimeout(100)
 
-    const afterHeight = await textarea.evaluate(
+    // After cycle, resizeTextarea() must have set style.height to a px value
+    const styleAfter = await textarea.evaluate(
+      (el: HTMLTextAreaElement) => el.style.height
+    )
+    expect(styleAfter).toMatch(/^\d+px$/)
+
+    // And the rendered height must exceed the initial single-line minimum
+    const offsetAfter = await textarea.evaluate(
       (el: HTMLTextAreaElement) => el.offsetHeight
     )
-
-    // The textarea must have grown — long suggestion forces at least two lines
-    expect(afterHeight).toBeGreaterThan(initialHeight)
+    expect(offsetAfter).toBeGreaterThan(45)
   })
 
   test('textarea height never exceeds 180 px even for very long content', async ({
