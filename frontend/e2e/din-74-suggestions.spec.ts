@@ -641,3 +641,223 @@ test.describe('DIN-74 — Realtime game-update replaces bundle', () => {
     await expect(cycleBtn).toBeDisabled({ timeout: 5000 })
   })
 })
+
+// ─── Part B+C: Streaming bubble — no content leakage ─────────────────────────
+//
+// DIN-74 introduces two new `<suggested_actions>` attribute formats:
+//   character_id="<id>"  → tailored bucket for the acting player
+//   generic="true"       → generic bucket for all other players
+//
+// Both must be silently consumed by the SSE parser — their text content
+// must never surface inside the streaming DM bubble.
+
+test.describe('DIN-74 — Attributed suggested_actions blocks do not leak into chat bubble', () => {
+  test('tailored block (character_id attr) content does not appear in the streaming bubble', async ({
+    page,
+  }) => {
+    const tailoredContent =
+      '"I draw my blade slowly," I say, eyes fixed on the shadow lurking behind the altar.'
+    const genericContent = 'Wait and observe the others.'
+
+    await setupMocks(page, { suggestedActions: null })
+
+    await page.route(`**/api/games/${GAME_ID}/actions`, async (route) => {
+      if (route.request().method() === 'POST') {
+        await route.fulfill({
+          status: 202,
+          contentType: 'application/json',
+          body: JSON.stringify({ message_id: 'msg-1', status: 'queued' }),
+        })
+      } else {
+        await route.continue()
+      }
+    })
+
+    await page.route(`**/api/games/${GAME_ID}/events`, async (route) => {
+      if (route.request().method() !== 'GET') { await route.continue(); return }
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+        body: buildSseBody([
+          { type: 'chunk', text: 'The altar pulses with dark energy. ' },
+          {
+            type: 'block',
+            tag: 'suggested_actions',
+            attributes: { character_id: PLAYER_ID },
+            content: tailoredContent,
+          },
+          {
+            type: 'block',
+            tag: 'suggested_actions',
+            attributes: { generic: 'true' },
+            content: genericContent,
+          },
+          { type: 'chunk', text: 'You must decide quickly.' },
+          { type: 'done' },
+        ]),
+      })
+    })
+
+    await gotoGame(page)
+
+    await page.getByTestId('chat-textarea').fill('I approach the altar.')
+    await page.getByRole('button', { name: /Send/i }).click()
+
+    const bubble = page.getByTestId('streaming-dm-message')
+    await expect(bubble).toContainText('The altar pulses with dark energy.', { timeout: 3000 })
+    await expect(bubble).toContainText('You must decide quickly.')
+    await expect(bubble).not.toContainText('I draw my blade')
+    await expect(bubble).not.toContainText('Wait and observe')
+    await expect(bubble).not.toContainText('<suggested_actions')
+  })
+
+  test('generic block (generic="true" attr) content does not appear in the streaming bubble', async ({
+    page,
+  }) => {
+    const tailoredContent = '"Forward!" I shout, charging ahead with reckless abandon.'
+    const genericLine1 = 'Speak up with your own plan.'
+    const genericLine2 = 'Help the acting player.'
+
+    await setupMocks(page, { suggestedActions: null })
+
+    await page.route(`**/api/games/${GAME_ID}/actions`, async (route) => {
+      if (route.request().method() === 'POST') {
+        await route.fulfill({
+          status: 202,
+          contentType: 'application/json',
+          body: JSON.stringify({ message_id: 'msg-2', status: 'queued' }),
+        })
+      } else {
+        await route.continue()
+      }
+    })
+
+    await page.route(`**/api/games/${GAME_ID}/events`, async (route) => {
+      if (route.request().method() !== 'GET') { await route.continue(); return }
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+        body: buildSseBody([
+          { type: 'chunk', text: 'The fighter dashes forward. ' },
+          {
+            type: 'block',
+            tag: 'suggested_actions',
+            attributes: { character_id: PLAYER_ID },
+            content: tailoredContent,
+          },
+          {
+            type: 'block',
+            tag: 'suggested_actions',
+            attributes: { generic: 'true' },
+            content: [genericLine1, genericLine2].join('\n'),
+          },
+          { type: 'chunk', text: 'The corridor shakes.' },
+          { type: 'done' },
+        ]),
+      })
+    })
+
+    await gotoGame(page)
+
+    await page.getByTestId('chat-textarea').fill('I charge ahead.')
+    await page.getByRole('button', { name: /Send/i }).click()
+
+    const bubble = page.getByTestId('streaming-dm-message')
+    await expect(bubble).toContainText('The fighter dashes forward.', { timeout: 3000 })
+    await expect(bubble).toContainText('The corridor shakes.')
+    await expect(bubble).not.toContainText('Forward!')
+    await expect(bubble).not.toContainText('Speak up with your own plan')
+    await expect(bubble).not.toContainText('Help the acting player')
+    await expect(bubble).not.toContainText('<suggested_actions')
+  })
+})
+
+// ─── Part C: Status line visibility ──────────────────────────────────────────
+
+test.describe('DIN-74 — Suggestion status line is hidden when no suggestions exist', () => {
+  test('status line is not rendered when suggested_actions is null', async ({ page }) => {
+    await setupMocks(page, { suggestedActions: null })
+    await gotoGame(page)
+
+    // The "click ✨ to cycle" hint must not be present when there are no suggestions
+    await expect(
+      page.getByText(/click ✨ to cycle/i)
+    ).toHaveCount(0, { timeout: 5000 })
+  })
+
+  test('status line is not rendered when the visible list is empty for current player', async ({
+    page,
+  }) => {
+    // Non-acting player with empty generic list → nothing to show
+    const bundle: SuggestedActionsBundle = {
+      acting_player_id: 'player-other',
+      tailored: [LONG_TAILORED_1],
+      generic: [],
+    }
+
+    await setupMocks(page, { suggestedActions: bundle })
+    await gotoGame(page)
+
+    await expect(
+      page.getByText(/click ✨ to cycle/i)
+    ).toHaveCount(0, { timeout: 5000 })
+  })
+})
+
+// ─── Part C: Textarea resets after submit ─────────────────────────────────────
+
+test.describe('DIN-74 — Textarea height resets to auto after submitting a cycled suggestion', () => {
+  test('textarea style.height is cleared after sending a long cycled suggestion', async ({
+    page,
+  }) => {
+    const multiLineTailored =
+      '"Let us proceed with caution," I whisper, scanning the shadows for any sign of movement before taking a careful step through the threshold.'
+
+    const bundle: SuggestedActionsBundle = {
+      acting_player_id: PLAYER_ID,
+      tailored: [multiLineTailored],
+      generic: [],
+    }
+
+    await setupMocks(page, { suggestedActions: bundle })
+
+    // Action POST mock — needed to submit the form
+    await page.route(`**/api/games/${GAME_ID}/actions`, async (route) => {
+      if (route.request().method() === 'POST') {
+        await route.fulfill({
+          status: 202,
+          contentType: 'application/json',
+          body: JSON.stringify({ message_id: 'msg-reset', status: 'queued' }),
+        })
+      } else {
+        await route.continue()
+      }
+    })
+
+    await gotoGame(page)
+
+    const textarea = page.getByTestId('chat-textarea')
+    const cycleBtn = page.getByTestId('cycle-suggestion-btn')
+
+    await expect(cycleBtn).toBeEnabled({ timeout: 5000 })
+    await cycleBtn.click()
+
+    // Allow rAF resize to settle
+    await page.waitForTimeout(100)
+
+    // Textarea must have grown
+    const heightAfterCycle = await textarea.evaluate(
+      (el: HTMLTextAreaElement) => el.style.height
+    )
+    expect(heightAfterCycle).toMatch(/^\d+px$/)
+
+    // Submit the cycled suggestion
+    await page.getByRole('button', { name: /Send/i }).click()
+
+    // After submit, style.height must be cleared back to 'auto' or empty
+    const heightAfterSubmit = await textarea.evaluate(
+      (el: HTMLTextAreaElement) => el.style.height
+    )
+    expect(['auto', '']).toContain(heightAfterSubmit)
+  })
+})
