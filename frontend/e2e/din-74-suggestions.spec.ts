@@ -861,3 +861,190 @@ test.describe('DIN-74 — Textarea height resets to auto after submitting a cycl
     expect(['auto', '']).toContain(heightAfterSubmit)
   })
 })
+
+// ─── Part B: acting_player_id null ───────────────────────────────────────────
+//
+// When the bundle has acting_player_id: null (DM-initiated global suggestions,
+// no specific player is acting), isActing is always false for every player
+// because `currentPlayerRow.id === null` is never true. Everyone falls through
+// to the generic bucket.
+
+test.describe('DIN-74 — acting_player_id null means all players see generic suggestions', () => {
+  test('✨ enabled and generic shown when acting_player_id is null', async ({ page }) => {
+    const bundle: SuggestedActionsBundle = {
+      acting_player_id: null,
+      tailored: [LONG_TAILORED_1], // never shown — no player matches null
+      generic: [GENERIC_1, GENERIC_2],
+    }
+
+    await setupMocks(page, { suggestedActions: bundle })
+    await gotoGame(page)
+
+    const cycleBtn = page.getByTestId('cycle-suggestion-btn')
+    await expect(cycleBtn).toBeEnabled({ timeout: 5000 })
+
+    const textarea = page.getByTestId('chat-textarea')
+
+    // Cycles through generic list
+    await cycleBtn.click()
+    await expect(textarea).toHaveValue(GENERIC_1)
+
+    await cycleBtn.click()
+    await expect(textarea).toHaveValue(GENERIC_2)
+
+    // Tailored content must NOT appear (acting_player_id is null — nobody is acting)
+    await expect(textarea).not.toHaveValue(LONG_TAILORED_1)
+  })
+
+  test('✨ disabled when acting_player_id is null and generic list is empty', async ({
+    page,
+  }) => {
+    const bundle: SuggestedActionsBundle = {
+      acting_player_id: null,
+      tailored: [LONG_TAILORED_1], // non-empty tailored, but nobody can claim it
+      generic: [],
+    }
+
+    await setupMocks(page, { suggestedActions: bundle })
+    await gotoGame(page)
+
+    // Generic is empty → no visible suggestions for any player → ✨ disabled
+    await expect(page.getByTestId('cycle-suggestion-btn')).toBeDisabled({ timeout: 5000 })
+  })
+})
+
+// ─── Part B+C: Legacy SSE block (no attrs) → generic bucket ──────────────────
+//
+// Before DIN-74 the backend emitted plain <suggested_actions>…</suggested_actions>
+// blocks with no attributes. The SSE parser has a legacy fallback that routes
+// attribute-free blocks to the generic bucket so older stream payloads keep working.
+
+test.describe('DIN-74 — Legacy suggested_actions SSE block (no attrs) populates generic bucket', () => {
+  test('block without character_id or generic attr is routed to generic bucket', async ({
+    page,
+  }) => {
+    const legacySuggestion = 'Look around carefully before proceeding.'
+
+    await setupMocks(page, { suggestedActions: null })
+
+    await page.route(`**/api/games/${GAME_ID}/actions`, async (route) => {
+      if (route.request().method() === 'POST') {
+        await route.fulfill({
+          status: 202,
+          contentType: 'application/json',
+          body: JSON.stringify({ message_id: 'msg-legacy', status: 'queued' }),
+        })
+      } else {
+        await route.continue()
+      }
+    })
+
+    // SSE stream with a legacy block — no character_id, no generic="true"
+    await page.route(`**/api/games/${GAME_ID}/events`, async (route) => {
+      if (route.request().method() !== 'GET') {
+        await route.continue()
+        return
+      }
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+        body: buildSseBody([
+          { type: 'chunk', text: 'The shadows deepen around you.' },
+          {
+            type: 'block',
+            tag: 'suggested_actions',
+            attributes: {}, // no character_id, no generic="true" → legacy fallback
+            content: legacySuggestion,
+          },
+          { type: 'done' },
+        ]),
+      })
+    })
+
+    await gotoGame(page)
+
+    await page.getByTestId('chat-textarea').fill('I look around.')
+    await page.getByRole('button', { name: /Send/i }).click()
+
+    // Realtime DM INSERT to clear isWaitingForDm
+    await page.evaluate(({ gameId }) => {
+      window.dispatchEvent(
+        new CustomEvent('dm-message', {
+          detail: {
+            id: 'msg-dm-legacy',
+            game_id: gameId,
+            profile_id: null,
+            role: 'dm',
+            content: 'The shadows deepen around you.',
+            created_at: new Date().toISOString(),
+          },
+        })
+      )
+    }, { gameId: GAME_ID })
+
+    const cycleBtn = page.getByTestId('cycle-suggestion-btn')
+    await expect(cycleBtn).toBeEnabled({ timeout: 5000 })
+
+    // Legacy suggestion routed to generic bucket — all players can cycle it
+    const textarea = page.getByTestId('chat-textarea')
+    await cycleBtn.click()
+    await expect(textarea).toHaveValue(legacySuggestion)
+  })
+})
+
+// ─── Part C: Enter key submission clears textarea height ──────────────────────
+
+test.describe('DIN-74 — Enter key submission clears textarea height', () => {
+  test('textarea style.height is cleared after Enter key submits a long cycled suggestion', async ({
+    page,
+  }) => {
+    const multiLineTailored =
+      '"With all haste I sprint toward the gate," I say, drawing my blade and rallying my companions with a battle cry that echoes across the courtyard.'
+
+    const bundle: SuggestedActionsBundle = {
+      acting_player_id: PLAYER_ID,
+      tailored: [multiLineTailored],
+      generic: [],
+    }
+
+    await setupMocks(page, { suggestedActions: bundle })
+
+    await page.route(`**/api/games/${GAME_ID}/actions`, async (route) => {
+      if (route.request().method() === 'POST') {
+        await route.fulfill({
+          status: 202,
+          contentType: 'application/json',
+          body: JSON.stringify({ message_id: 'msg-enter', status: 'queued' }),
+        })
+      } else {
+        await route.continue()
+      }
+    })
+
+    await gotoGame(page)
+
+    const textarea = page.getByTestId('chat-textarea')
+    const cycleBtn = page.getByTestId('cycle-suggestion-btn')
+
+    await expect(cycleBtn).toBeEnabled({ timeout: 5000 })
+    await cycleBtn.click()
+
+    // Allow rAF resize to settle
+    await page.waitForTimeout(100)
+
+    // Textarea must have grown after cycling in a long suggestion
+    const heightAfterCycle = await textarea.evaluate(
+      (el: HTMLTextAreaElement) => el.style.height
+    )
+    expect(heightAfterCycle).toMatch(/^\d+px$/)
+
+    // Submit via Enter key (not the Send button)
+    await textarea.press('Enter')
+
+    // After submit, style.height must be cleared back to 'auto' or empty
+    const heightAfterSubmit = await textarea.evaluate(
+      (el: HTMLTextAreaElement) => el.style.height
+    )
+    expect(['auto', '']).toContain(heightAfterSubmit)
+  })
+})
