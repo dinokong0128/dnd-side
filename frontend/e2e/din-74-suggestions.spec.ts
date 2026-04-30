@@ -259,6 +259,80 @@ test.describe('DIN-74 — Empty bundle disables ✨ button', () => {
 
     await expect(page.getByTestId('cycle-suggestion-btn')).toBeDisabled({ timeout: 5000 })
   })
+
+  test('✨ button is disabled when acting player has an empty tailored list', async ({
+    page,
+  }) => {
+    // Current player IS the acting player, but tailored list is empty.
+    // visibleSuggestions = tailored = [] → button disabled.
+    const bundle: SuggestedActionsBundle = {
+      acting_player_id: PLAYER_ID, // current player is acting
+      tailored: [],                // but no tailored suggestions yet
+      generic: [GENERIC_1],       // generic exist but shouldn't be shown to acting player
+    }
+
+    await setupMocks(page, { suggestedActions: bundle })
+    await gotoGame(page)
+
+    await expect(page.getByTestId('cycle-suggestion-btn')).toBeDisabled({ timeout: 5000 })
+  })
+})
+
+// ─── Part B: ✨ button disabled while DM is writing ───────────────────────────
+
+test.describe('DIN-74 — ✨ cycle button disabled while waiting for DM response', () => {
+  test('cycle button becomes disabled after submitting an action (isWaitingForDm=true)', async ({
+    page,
+  }) => {
+    const bundle: SuggestedActionsBundle = {
+      acting_player_id: PLAYER_ID,
+      tailored: [LONG_TAILORED_1, LONG_TAILORED_2],
+      generic: [],
+    }
+
+    await setupMocks(page, { suggestedActions: bundle })
+
+    // Slow SSE so we can observe the disabled state while waiting
+    await page.route(`**/api/games/${GAME_ID}/actions`, async (route) => {
+      if (route.request().method() === 'POST') {
+        await route.fulfill({
+          status: 202,
+          contentType: 'application/json',
+          body: JSON.stringify({ message_id: 'msg-wait', status: 'queued' }),
+        })
+      } else {
+        await route.continue()
+      }
+    })
+
+    // SSE endpoint never resolves during this test — simulates DM still writing
+    await page.route(`**/api/games/${GAME_ID}/events`, async (route) => {
+      if (route.request().method() === 'GET') {
+        // Return a minimal SSE body with a long delay so isWaitingForDm stays true
+        await new Promise((r) => setTimeout(r, 5000))
+        await route.fulfill({
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+          body: buildSseBody([{ type: 'done' }]),
+        })
+      } else {
+        await route.continue()
+      }
+    })
+
+    await gotoGame(page)
+
+    const cycleBtn = page.getByTestId('cycle-suggestion-btn')
+    await expect(cycleBtn).toBeEnabled({ timeout: 5000 })
+
+    // Submit an action — sets isWaitingForDm=true
+    const textarea = page.getByTestId('chat-textarea')
+    await textarea.fill('I move forward cautiously.')
+    await page.getByRole('button', { name: /Send/i }).click()
+
+    // Cycle button must be disabled while DM is writing
+    await expect(cycleBtn).toBeDisabled({ timeout: 3000 })
+  })
 })
 
 // ─── Part C: Textarea resize on cycle ────────────────────────────────────────

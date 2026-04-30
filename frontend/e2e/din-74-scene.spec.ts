@@ -427,6 +427,41 @@ test.describe('DIN-74 Part A — Scene overlay updates when SSE stream carries n
   })
 })
 
+// ─── A3b: DB-loaded scene with type but no mood ────────────────────────────────
+//
+// When the most-recent DM message in the DB has scene_type but scene_mood=null,
+// the frontend should activate the scene background (scene-bg-active) but NOT
+// render a mood overlay. Complements A3 (which tests the same via SSE stream).
+
+test.describe('DIN-74 Part A — DB-loaded scene with type but no mood activates background without mood overlay', () => {
+  test('scene-bg-active set and mood-overlay absent when message has scene_type but null scene_mood', async ({
+    page,
+  }) => {
+    const priorDmMsg: GameMessage = {
+      id: 'msg-scene-no-mood',
+      game_id: GAME_ID,
+      profile_id: null,
+      role: 'dm',
+      content: 'You emerge into a vast coastal expanse.',
+      scene_type: 'coast',
+      scene_mood: null,
+      dice_rolls: null,
+      created_at: '2026-01-01T00:00:01Z',
+    }
+
+    await setupMocks(page, { messages: [priorDmMsg] })
+    await gotoGame(page)
+
+    // Scene overlay must activate (scene_type = 'coast')
+    await expect(page.locator('.dnd-page-bg')).toHaveClass(/scene-bg-active/, {
+      timeout: 5000,
+    })
+
+    // Mood overlay must NOT render (scene_mood is null)
+    await expect(page.getByTestId('mood-overlay')).toHaveCount(0)
+  })
+})
+
 // ─── A5: <scene> block does not leak tag text into the streaming bubble ────────
 
 test.describe('DIN-74 Part A — <scene> block tag does not appear in streaming bubble', () => {
