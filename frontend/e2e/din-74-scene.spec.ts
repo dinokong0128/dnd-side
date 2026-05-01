@@ -522,3 +522,81 @@ test.describe('DIN-74 Part A — <scene> block tag does not appear in streaming 
     await expect(bubble).not.toContainText('INVALID_SCENE')
   })
 })
+
+// ─── A6: Scene continuity — DB-loaded scene persists across a full turn ────────
+//
+// Core DIN-74 Part A scenario: the backend carries scene forward (no new <scene>
+// block in the SSE stream). Frontend must hold the DB-sourced scene through the
+// full action → SSE → Realtime cycle without resetting it.
+//
+// Setup: prior DM message in DB has scene_type='dungeon', scene_mood='tense'.
+// Turn:  SSE delivers only narrative chunks (no <scene> block).
+// After: Realtime DM INSERT arrives with scene_type=null (backend didn't
+//        re-emit the tag because it carried it forward implicitly).
+// Assert: scene overlay and mood class remain dungeon / tense throughout.
+
+test.describe('DIN-74 Part A — DB-loaded scene persists across a full turn when SSE has no <scene> block', () => {
+  test('scene remains dungeon/tense after a turn whose SSE emits no <scene> block', async ({
+    page,
+  }) => {
+    // Prior DM message carries the established scene
+    const priorDmMsg: GameMessage = {
+      id: 'msg-dungeon-prior',
+      game_id: GAME_ID,
+      profile_id: null,
+      role: 'dm',
+      content: 'The dungeon stretches ahead.',
+      scene_type: 'dungeon',
+      scene_mood: 'tense',
+      dice_rolls: null,
+      created_at: '2026-01-01T00:00:01Z',
+    }
+
+    await setupMocks(page, { messages: [priorDmMsg] })
+
+    // SSE for this turn has narrative only — the DM carried scene forward implicitly
+    await mockStreamingAction(page, [
+      { type: 'chunk', text: 'You press onward deeper into the dark.' },
+      { type: 'done' },
+    ])
+
+    await gotoGame(page)
+
+    // Scene must be active from DB on page load
+    const container = page.locator('.dnd-page-bg')
+    await expect(container).toHaveClass(/scene-bg-active/, { timeout: 5000 })
+    const moodOverlay = page.getByTestId('mood-overlay')
+    await expect(moodOverlay).toHaveClass(/dnd-mood-tense/, { timeout: 5000 })
+
+    // Submit an action — SSE fires with no scene block
+    await submitAction(page, 'I move deeper.')
+
+    // Wait for streaming bubble to appear and complete
+    const bubble = page.getByTestId('streaming-dm-message')
+    await expect(bubble).toContainText('You press onward', { timeout: 5000 })
+
+    // Simulate Realtime DM INSERT with scene_type: null
+    // (backend stored the narrative; scene tag was not re-persisted on this turn)
+    await page.evaluate(({ gameId }) => {
+      window.dispatchEvent(
+        new CustomEvent('dm-message', {
+          detail: {
+            id: 'msg-dungeon-turn2',
+            game_id: gameId,
+            profile_id: null,
+            role: 'dm',
+            content: 'You press onward deeper into the dark.',
+            scene_type: null,
+            scene_mood: null,
+            created_at: new Date().toISOString(),
+          },
+        })
+      )
+    }, { gameId: GAME_ID })
+
+    // Scene overlay and mood must still be dungeon/tense — not reset by the null
+    await expect(container).toHaveClass(/scene-bg-active/, { timeout: 3000 })
+    await expect(moodOverlay).toHaveClass(/dnd-mood-tense/)
+    await expect(moodOverlay).not.toHaveClass(/dnd-mood-mystery/)
+  })
+})

@@ -1122,3 +1122,78 @@ test.describe('DIN-74 — Enter key submission clears textarea height', () => {
     expect(['auto', '']).toContain(heightAfterSubmit)
   })
 })
+
+// ─── Part B: Acting player → observer transition ──────────────────────────────
+//
+// Multiplayer scenario: the current user was the acting player (tailored shown).
+// A new round starts — a different player takes an action. Realtime `game-update`
+// delivers a bundle where acting_player_id changed to the OTHER player.
+// The former acting player must now see generic suggestions, not tailored.
+
+test.describe('DIN-74 — Acting player transitions to observer when acting_player_id changes', () => {
+  test('switches from tailored to generic suggestions when Realtime game-update sets a new acting player', async ({
+    page,
+  }) => {
+    // Round 1: current user (PLAYER_ID / USER_ID) is the acting player
+    const round1Bundle: SuggestedActionsBundle = {
+      acting_player_id: PLAYER_ID,
+      tailored: [LONG_TAILORED_1, LONG_TAILORED_2],
+      generic: [GENERIC_1, GENERIC_2],
+    }
+
+    await setupMocks(page, { suggestedActions: round1Bundle })
+    await gotoGame(page)
+
+    const cycleBtn = page.getByTestId('cycle-suggestion-btn')
+    const textarea = page.getByTestId('chat-textarea')
+
+    // Verify round 1: acting player sees tailored suggestions
+    await expect(cycleBtn).toBeEnabled({ timeout: 5000 })
+    await cycleBtn.click()
+    await expect(textarea).toHaveValue(LONG_TAILORED_1)
+
+    // Clear the textarea before round 2 transition
+    await textarea.fill('')
+
+    // Round 2: a different player (player-other) becomes the acting player.
+    // Realtime game-update delivers the new bundle from the bookkeeping task.
+    const round2Bundle: SuggestedActionsBundle = {
+      acting_player_id: 'player-other',
+      tailored: [LONG_TAILORED_2],  // different player's tailored — must NOT show
+      generic: [GENERIC_1, GENERIC_2],
+    }
+
+    await page.evaluate(
+      ({ gameId, bundle }) => {
+        window.dispatchEvent(
+          new CustomEvent('game-update', {
+            detail: {
+              id: gameId,
+              name: 'The Continuity Keep',
+              dm_persona: 'A theatrical DM',
+              status: 'active',
+              created_by: 'user-1',
+              created_at: '2026-01-01T00:00:00Z',
+              updated_at: new Date().toISOString(),
+              suggested_actions: bundle,
+            },
+          })
+        )
+      },
+      { gameId: GAME_ID, bundle: round2Bundle }
+    )
+
+    // ✨ must still be enabled (generic list is non-empty)
+    await expect(cycleBtn).toBeEnabled({ timeout: 3000 })
+
+    // Now the former acting player (PLAYER_ID) sees generic suggestions
+    await cycleBtn.click()
+    await expect(textarea).toHaveValue(GENERIC_1)
+
+    await cycleBtn.click()
+    await expect(textarea).toHaveValue(GENERIC_2)
+
+    // The OTHER player's tailored suggestion must NOT appear
+    await expect(textarea).not.toHaveValue(LONG_TAILORED_2)
+  })
+})
