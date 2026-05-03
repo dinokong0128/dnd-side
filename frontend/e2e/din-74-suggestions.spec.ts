@@ -1197,3 +1197,167 @@ test.describe('DIN-74 — Acting player transitions to observer when acting_play
     await expect(textarea).not.toHaveValue(LONG_TAILORED_2)
   })
 })
+
+// ─── Part C: Edit-and-send flow ───────────────────────────────────────────────
+//
+// User cycles a suggestion into the textarea, edits it (appends words), then
+// sends. The POST body must contain the MODIFIED text, not the raw suggestion.
+// This verifies: (a) the textarea remains editable after cycling, (b) the Submit
+// button/Enter key use the current textarea value, not a stale suggestion cache.
+
+test.describe('DIN-74 — User edits a cycled suggestion before sending', () => {
+  test('POST body contains modified text when user edits suggestion before submit', async ({
+    page,
+  }) => {
+    const bundle: SuggestedActionsBundle = {
+      acting_player_id: PLAYER_ID,
+      tailored: [LONG_TAILORED_1],
+      generic: [],
+    }
+
+    await setupMocks(page, { suggestedActions: bundle })
+
+    let capturedRequestBody: string | null = null
+    await page.route(`**/api/games/${GAME_ID}/actions`, async (route) => {
+      if (route.request().method() === 'POST') {
+        capturedRequestBody = route.request().postData()
+        await route.fulfill({
+          status: 202,
+          contentType: 'application/json',
+          body: JSON.stringify({ message_id: 'msg-edited', status: 'queued' }),
+        })
+      } else {
+        await route.continue()
+      }
+    })
+
+    await gotoGame(page)
+
+    const cycleBtn = page.getByTestId('cycle-suggestion-btn')
+    const textarea = page.getByTestId('chat-textarea')
+
+    await expect(cycleBtn).toBeEnabled({ timeout: 5000 })
+    await cycleBtn.click()
+
+    // Verify suggestion loaded
+    await expect(textarea).toHaveValue(LONG_TAILORED_1)
+
+    // User appends additional context to the suggestion
+    const suffix = ' — but I keep my shield raised.'
+    await textarea.press('End')
+    await textarea.type(suffix)
+
+    const expectedText = LONG_TAILORED_1 + suffix
+    await expect(textarea).toHaveValue(expectedText)
+
+    // Send the modified text
+    await page.getByRole('button', { name: /Send/i }).click()
+
+    // The POST must carry the modified text, not just the raw suggestion
+    expect(capturedRequestBody).not.toBeNull()
+    const parsed = JSON.parse(capturedRequestBody!)
+    expect(parsed.action_text).toBe(expectedText)
+  })
+
+  test('Enter key submits the edited suggestion text', async ({ page }) => {
+    const bundle: SuggestedActionsBundle = {
+      acting_player_id: PLAYER_ID,
+      tailored: [LONG_TAILORED_1],
+      generic: [],
+    }
+
+    await setupMocks(page, { suggestedActions: bundle })
+
+    let capturedRequestBody: string | null = null
+    await page.route(`**/api/games/${GAME_ID}/actions`, async (route) => {
+      if (route.request().method() === 'POST') {
+        capturedRequestBody = route.request().postData()
+        await route.fulfill({
+          status: 202,
+          contentType: 'application/json',
+          body: JSON.stringify({ message_id: 'msg-enter-edited', status: 'queued' }),
+        })
+      } else {
+        await route.continue()
+      }
+    })
+
+    await gotoGame(page)
+
+    const cycleBtn = page.getByTestId('cycle-suggestion-btn')
+    const textarea = page.getByTestId('chat-textarea')
+
+    await expect(cycleBtn).toBeEnabled({ timeout: 5000 })
+    await cycleBtn.click()
+    await expect(textarea).toHaveValue(LONG_TAILORED_1)
+
+    // Append a clarification (avoids multi-line cursor-positioning issues)
+    const suffix = ', steeling myself for whatever comes next.'
+    await textarea.press('End')
+    await textarea.type(suffix)
+
+    const expectedText = LONG_TAILORED_1 + suffix
+    await expect(textarea).toHaveValue(expectedText)
+
+    // Submit via Enter
+    await textarea.press('Enter')
+
+    expect(capturedRequestBody).not.toBeNull()
+    const parsed = JSON.parse(capturedRequestBody!)
+    expect(parsed.action_text).toBe(expectedText)
+  })
+})
+
+// ─── Part C: Textarea shrinks when user manually clears text ──────────────────
+//
+// After cycling in a long suggestion (textarea expands), if the user
+// backspaces/clears the textarea, handleTextChange fires and resizeTextarea
+// must shrink the box back down. This verifies the two-way resize path:
+// not only does the textarea grow on cycle, it also shrinks on user clear.
+
+test.describe('DIN-74 — Textarea shrinks back when user clears cycled text', () => {
+  test('textarea height reduces after user clears a long cycled suggestion', async ({
+    page,
+  }) => {
+    const multiLineTailored =
+      '"We must act swiftly," I urge, drawing my blade as I scan the treeline for movement. ' +
+      '"Whatever lurks beyond those shadows will not wait for us to deliberate — I say we move now, together, before the light fails us."'
+
+    const bundle: SuggestedActionsBundle = {
+      acting_player_id: PLAYER_ID,
+      tailored: [multiLineTailored],
+      generic: [],
+    }
+
+    await setupMocks(page, { suggestedActions: bundle })
+    await gotoGame(page)
+
+    const textarea = page.getByTestId('chat-textarea')
+    const cycleBtn = page.getByTestId('cycle-suggestion-btn')
+
+    await expect(cycleBtn).toBeEnabled({ timeout: 5000 })
+    await cycleBtn.click()
+
+    // Allow rAF resize to settle
+    await page.waitForTimeout(100)
+
+    const heightAfterCycle = await textarea.evaluate(
+      (el: HTMLTextAreaElement) => el.offsetHeight
+    )
+    expect(heightAfterCycle).toBeGreaterThan(45)
+
+    // User clears the textarea with Ctrl+A then Delete
+    await textarea.press('ControlOrMeta+a')
+    await textarea.press('Delete')
+
+    // Wait for the resize triggered by onChange (handleTextChange)
+    await page.waitForTimeout(100)
+
+    const heightAfterClear = await textarea.evaluate(
+      (el: HTMLTextAreaElement) => el.offsetHeight
+    )
+
+    // Height must have shrunk back toward the single-line minimum
+    expect(heightAfterClear).toBeLessThan(heightAfterCycle)
+  })
+})

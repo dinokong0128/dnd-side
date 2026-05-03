@@ -600,3 +600,139 @@ test.describe('DIN-74 Part A — DB-loaded scene persists across a full turn whe
     await expect(moodOverlay).not.toHaveClass(/dnd-mood-mystery/)
   })
 })
+
+// ─── A7: Multi-turn scene persistence (two consecutive turns) ─────────────────
+//
+// The DIN-74 AC requires "scene tags remain sticky across 5+ turns of
+// same-location dialogue". Test A6 proves it holds for one turn. This test
+// runs TWO consecutive turns — each without a <scene> block — to verify the
+// React useState carries the scene forward across multiple action/stream/Realtime
+// cycles, not just within a single turn's lifecycle.
+//
+// Setup  : DB has dungeon/tense from prior DM message.
+// Turn 1 : SSE delivers narrative only (no <scene>). Realtime INSERT scene_type=null.
+//           → dungeon/tense still active.
+// Turn 2 : Second SSE (no <scene>). Second Realtime INSERT scene_type=null.
+//           → dungeon/tense must STILL be active.
+
+test.describe('DIN-74 Part A — Scene persists across two consecutive turns with no <scene> block', () => {
+  test('scene remains dungeon/tense after two turns whose SSE emits no <scene> block', async ({
+    page,
+  }) => {
+    const priorDmMsg: GameMessage = {
+      id: 'msg-multi-prior',
+      game_id: GAME_ID,
+      profile_id: null,
+      role: 'dm',
+      content: 'The dungeon corridor stretches ahead.',
+      scene_type: 'dungeon',
+      scene_mood: 'tense',
+      dice_rolls: null,
+      created_at: '2026-01-01T00:00:01Z',
+    }
+
+    await setupMocks(page, { messages: [priorDmMsg] })
+
+    // Both turns use the same SSE handler (narrative only, no scene block)
+    let actionCallCount = 0
+    await page.route(`**/api/games/${GAME_ID}/actions`, async (route) => {
+      if (route.request().method() === 'POST') {
+        actionCallCount++
+        await route.fulfill({
+          status: 202,
+          contentType: 'application/json',
+          body: JSON.stringify({ message_id: `msg-turn-${actionCallCount}`, status: 'queued' }),
+        })
+      } else {
+        await route.continue()
+      }
+    })
+
+    await page.route(`**/api/games/${GAME_ID}/events`, async (route) => {
+      if (route.request().method() !== 'GET') {
+        await route.continue()
+        return
+      }
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+        body: [
+          { type: 'chunk', text: 'You press deeper into the dungeon.' },
+          { type: 'done' },
+        ]
+          .map((e) => `data: ${JSON.stringify(e)}\n\n`)
+          .join(''),
+      })
+    })
+
+    await gotoGame(page)
+
+    const container = page.locator('.dnd-page-bg')
+    const moodOverlay = page.getByTestId('mood-overlay')
+
+    // Verify initial scene from DB
+    await expect(container).toHaveClass(/scene-bg-active/, { timeout: 5000 })
+    await expect(moodOverlay).toHaveClass(/dnd-mood-tense/, { timeout: 5000 })
+
+    // ── Turn 1 ──────────────────────────────────────────────────────────────
+
+    await submitAction(page, 'I move forward.')
+
+    const bubble1 = page.getByTestId('streaming-dm-message')
+    await expect(bubble1).toContainText('You press deeper', { timeout: 5000 })
+
+    await page.evaluate(({ gameId }) => {
+      window.dispatchEvent(
+        new CustomEvent('dm-message', {
+          detail: {
+            id: 'msg-turn-1-confirmed',
+            game_id: gameId,
+            profile_id: null,
+            role: 'dm',
+            content: 'You press deeper into the dungeon.',
+            scene_type: null,
+            scene_mood: null,
+            created_at: new Date().toISOString(),
+          },
+        })
+      )
+    }, { gameId: GAME_ID })
+
+    // After turn 1: scene must still be dungeon/tense
+    await expect(container).toHaveClass(/scene-bg-active/, { timeout: 3000 })
+    await expect(moodOverlay).toHaveClass(/dnd-mood-tense/)
+
+    // ── Turn 2 ──────────────────────────────────────────────────────────────
+
+    const textarea = page.getByTestId('chat-textarea')
+    await expect(textarea).toBeEnabled({ timeout: 5000 })
+    await textarea.fill('I listen carefully.')
+    await page.getByRole('button', { name: /Send/i }).click()
+
+    const bubble2 = page.getByTestId('streaming-dm-message')
+    await expect(bubble2).toContainText('You press deeper', { timeout: 5000 })
+
+    await page.evaluate(({ gameId }) => {
+      window.dispatchEvent(
+        new CustomEvent('dm-message', {
+          detail: {
+            id: 'msg-turn-2-confirmed',
+            game_id: gameId,
+            profile_id: null,
+            role: 'dm',
+            content: 'You press deeper into the dungeon.',
+            scene_type: null,
+            scene_mood: null,
+            created_at: new Date().toISOString(),
+          },
+        })
+      )
+    }, { gameId: GAME_ID })
+
+    // After turn 2: scene STILL dungeon/tense — not reset across either turn
+    await expect(container).toHaveClass(/scene-bg-active/, { timeout: 3000 })
+    await expect(moodOverlay).toHaveClass(/dnd-mood-tense/)
+    await expect(moodOverlay).not.toHaveClass(/dnd-mood-mystery/)
+    await expect(moodOverlay).not.toHaveClass(/dnd-mood-combat/)
+  })
+})
