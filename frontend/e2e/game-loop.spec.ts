@@ -165,9 +165,9 @@ test.describe('Core Game Loop — Submit Action + Receive DM Response', () => {
       window.dispatchEvent(event)
     })
 
-    // Player message should appear in chat
+    // Player message should appear in chat (may appear in both optimistic UI and Realtime event)
     await expect(
-      page.getByText(/I approach the merchant and ask about the mysterious amulet/)
+      page.getByText(/I approach the merchant and ask about the mysterious amulet/).first()
     ).toBeVisible({ timeout: 5000 })
 
     // Simulate Realtime: DM response arrives
@@ -447,6 +447,16 @@ test.describe('DIN-42 — DM action suggestions (✨ cycling)', () => {
     'Press your ear to the door and listen carefully.',
   ]
 
+  // DIN-74: suggested_actions is now a SuggestedActionsBundle jsonb object.
+  // acting_player_id:null → visibleSuggestions = generic for all players,
+  // so the cycle button is enabled as soon as hasCharacter=true regardless
+  // of whether currentPlayerRow has loaded yet.
+  const SUGGESTION_BUNDLE = {
+    acting_player_id: null,
+    tailored: [],
+    generic: SUGGESTIONS,
+  }
+
   test.beforeEach(async ({ page }) => {
     await page.route('**/auth/v1/user', (route) =>
       route.fulfill({
@@ -492,14 +502,34 @@ test.describe('DIN-42 — DM action suggestions (✨ cycling)', () => {
       }
     })
 
+    await page.route('**.supabase.co/rest/v1/player_inventory**', (route) => {
+      if (route.request().method() === 'GET') {
+        route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) })
+      }
+    })
+
     // Mock game_messages: return DM message → isWaitingForDm=false → cycle button enabled
     await page.route('**.supabase.co/rest/v1/game_messages**', (route) => {
       if (route.request().method() === 'GET') {
-        route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify([{ id: 'msg-dm', role: 'dm', created_at: '2026-01-01T00:00:00Z' }]),
-        })
+        const url = route.request().url()
+        if (url.includes('select=role')) {
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([{ id: 'msg-dm', role: 'dm', created_at: '2026-01-01T00:00:00Z' }]),
+          })
+        } else {
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([{
+              id: 'msg-dm',
+              role: 'dm',
+              content: 'Welcome to the adventure.',
+              created_at: '2026-01-01T00:00:00Z',
+            }]),
+          })
+        }
       }
     })
   })
@@ -552,7 +582,7 @@ test.describe('DIN-42 — DM action suggestions (✨ cycling)', () => {
               status: 'active',
               created_by: userId,
               updated_at: '2026-01-01T00:00:00Z',
-              suggested_actions: SUGGESTIONS,
+              suggested_actions: SUGGESTION_BUNDLE,
             },
           ]),
         })
@@ -602,7 +632,7 @@ test.describe('DIN-42 — DM action suggestions (✨ cycling)', () => {
               status: 'active',
               created_by: userId,
               updated_at: '2026-01-01T00:00:00Z',
-              suggested_actions: SUGGESTIONS,
+              suggested_actions: SUGGESTION_BUNDLE,
             },
           ]),
         })

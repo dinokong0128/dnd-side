@@ -514,3 +514,58 @@ class TestStreamToRedis:
 
         system_inserts = [r for r in captured_inserts if r.get("role") == "system"]
         assert len(system_inserts) == 1
+
+
+# ---------------------------------------------------------------------------
+# DIN-74 regression: _strip_all_known_tags must remove attributed blocks
+# ---------------------------------------------------------------------------
+
+class TestStripAllKnownTags:
+    """Regression tests for _strip_all_known_tags (DIN-74 fix: attributed tags)."""
+
+    def _strip(self, text: str) -> str:
+        from api.routes.actions import _strip_all_known_tags
+        return _strip_all_known_tags(text)
+
+    def test_strips_bare_suggested_actions(self):
+        raw = "Narrative.\n<suggested_actions>\nPick lock.\n</suggested_actions>"
+        assert "<suggested_actions" not in self._strip(raw)
+        assert "Narrative." in self._strip(raw)
+
+    def test_strips_character_id_attributed_suggested_actions(self):
+        """DIN-74: attributed <suggested_actions character_id="..."> must be stripped."""
+        raw = (
+            'Narrative.\n'
+            '<suggested_actions character_id="abc-123">\n'
+            '"I attack," I shout.\n'
+            '</suggested_actions>'
+        )
+        result = self._strip(raw)
+        assert "<suggested_actions" not in result
+        assert "abc-123" not in result
+        assert "Narrative." in result
+
+    def test_strips_generic_attributed_suggested_actions(self):
+        """DIN-74: <suggested_actions generic="true"> must be stripped."""
+        raw = (
+            'Narrative.\n'
+            '<suggested_actions generic="true">\n'
+            'Wait and watch.\n'
+            '</suggested_actions>'
+        )
+        result = self._strip(raw)
+        assert "<suggested_actions" not in result
+        assert "Wait and watch." not in result
+        assert "Narrative." in result
+
+    def test_strips_both_attributed_blocks_in_one_response(self):
+        """DIN-74: both tailored and generic blocks stripped in one pass."""
+        raw = (
+            'Narrative.\n'
+            '<suggested_actions character_id="abc-123">Tailored.</suggested_actions>\n'
+            '<suggested_actions generic="true">Generic.</suggested_actions>'
+        )
+        result = self._strip(raw)
+        assert "<suggested_actions" not in result
+        assert "Tailored." not in result
+        assert "Generic." not in result

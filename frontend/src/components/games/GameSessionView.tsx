@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { GameMessage } from '@/lib/types/message'
 import {
@@ -8,7 +8,7 @@ import {
   type SseEvent,
   appendTextChunk,
 } from '@/lib/types/streaming'
-import { Game } from '@/lib/supabase/games'
+import { Game, SuggestedActionsBundle } from '@/lib/supabase/games'
 import { GameHeader } from './GameHeader'
 import { ChatLog } from './ChatLog'
 import { ChatInput } from './ChatInput'
@@ -23,6 +23,8 @@ import type { PlayerRow } from '@/lib/types/player'
 import { CHAT_PAGE_SIZE } from '@/lib/constants/game'
 import { parseSceneTag } from '@/lib/scene'
 import type { SceneType, Mood } from '@/lib/scene'
+
+const EMPTY_BUNDLE: SuggestedActionsBundle = { acting_player_id: null, tailored: [], generic: [] }
 
 interface GameSessionViewProps {
   gameId: string
@@ -47,8 +49,8 @@ export function GameSessionView({
   const [isActionLoading, setIsActionLoading] = useState(false)
   const [showRetryTimeout, setShowRetryTimeout] = useState(false)
   const [lastPlayerAction, setLastPlayerAction] = useState<string | null>(null)
-  const [suggestedActions, setSuggestedActions] = useState<string[]>(
-    game.suggested_actions ?? []
+  const [suggestedBundle, setSuggestedBundle] = useState<SuggestedActionsBundle>(
+    game.suggested_actions ?? EMPTY_BUNDLE
   )
   const [hasMoreMessages, setHasMoreMessages] = useState(true)
   const [oldestCreatedAt, setOldestCreatedAt] = useState<string | null>(null)
@@ -57,6 +59,16 @@ export function GameSessionView({
   const [levelUpPayload, setLevelUpPayload] = useState<LevelUpPayload | null>(null)
   const [showLevelUpModal, setShowLevelUpModal] = useState(false)
   const [currentPlayerRow, setCurrentPlayerRow] = useState<PlayerRow | null>(null)
+
+  // DIN-74: derive which suggestions this user sees.
+  // Acting player → tailored (first-person POV); others → generic observer prompts.
+  const visibleSuggestions = useMemo(() => {
+    const isActing =
+      currentPlayerRow?.id != null &&
+      currentPlayerRow.id === suggestedBundle.acting_player_id
+    return isActing ? suggestedBundle.tailored : suggestedBundle.generic
+  }, [suggestedBundle, currentPlayerRow?.id])
+
   // DIN-66 live DM bubble. null = no active stream; non-null = bubble rendered
   // below the chat list until Realtime DM INSERT reconciles (clears to null).
   const [streamingSegments, setStreamingSegments] =
@@ -276,7 +288,7 @@ export function GameSessionView({
         (payload) => {
           const updatedGame = payload.new as Game
           setGameStatus(updatedGame.status)
-          setSuggestedActions(updatedGame.suggested_actions ?? [])
+          setSuggestedBundle(updatedGame.suggested_actions ?? EMPTY_BUNDLE)
         }
       )
       .subscribe()
@@ -380,6 +392,12 @@ export function GameSessionView({
       const detail = (event as CustomEvent).detail as LevelUpPayload
       setLevelUpPayload(detail)
     }
+    // Simulate Supabase Realtime UPDATE on the games row (e.g. suggested_actions bundle refresh)
+    const handleGameUpdate = (event: Event) => {
+      const updatedGame = (event as CustomEvent).detail as Game
+      setGameStatus(updatedGame.status)
+      setSuggestedBundle(updatedGame.suggested_actions ?? EMPTY_BUNDLE)
+    }
 
     window.addEventListener('player-message', addMessage)
     window.addEventListener('dm-message', addMessage)
@@ -388,6 +406,7 @@ export function GameSessionView({
     window.addEventListener('session-paused', handleSessionPaused)
     window.addEventListener('session-ended', handleSessionEnded)
     window.addEventListener('level-up-available', handleLevelUpAvailable)
+    window.addEventListener('game-update', handleGameUpdate)
 
     // Marker so Playwright can wait for listeners to be attached before
     // dispatching simulated events (avoids a hydration race). Defer via
@@ -408,6 +427,7 @@ export function GameSessionView({
       window.removeEventListener('session-paused', handleSessionPaused)
       window.removeEventListener('session-ended', handleSessionEnded)
       window.removeEventListener('level-up-available', handleLevelUpAvailable)
+      window.removeEventListener('game-update', handleGameUpdate)
       delete document.body.dataset.e2eListenersReady
     }
   }, [gameId])
@@ -556,7 +576,18 @@ export function GameSessionView({
                   .split('\n')
                   .map((line) => line.trim())
                   .filter(Boolean)
-                setSuggestedActions(lines)
+                const charId = event.attributes?.character_id
+                const isGeneric = event.attributes?.generic === 'true'
+                setSuggestedBundle((prev) => {
+                  if (charId) {
+                    return { ...prev, acting_player_id: charId, tailored: lines }
+                  }
+                  if (isGeneric) {
+                    return { ...prev, generic: lines }
+                  }
+                  // Legacy fallback: no attributes → generic bucket
+                  return { ...prev, generic: lines }
+                })
               } else if (event.tag === 'scene') {
                 // Update scene background immediately during streaming.
                 const sceneResult = parseSceneTag(
@@ -796,7 +827,7 @@ export function GameSessionView({
             isWaitingForDm={isWaitingForDm}
             hasCharacter={hasCharacter}
             onSubmit={handleSubmit}
-            suggestedActions={suggestedActions}
+            suggestedActions={visibleSuggestions}
           />
         </div>
 

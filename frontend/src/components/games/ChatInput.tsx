@@ -10,6 +10,12 @@ interface ChatInputProps {
   suggestedActions?: string[]
 }
 
+function resizeTextarea(el: HTMLTextAreaElement) {
+  el.style.height = 'auto'
+  const maxPx = 180
+  el.style.height = `${Math.min(el.scrollHeight, maxPx)}px`
+}
+
 export function ChatInput({
   gameStatus,
   isWaitingForDm,
@@ -55,6 +61,9 @@ export function ChatInput({
     if (!suggestedActions || suggestedActions.length === 0) return
     setText(suggestedActions[suggestionIdx])
     setSuggestionIdx((prev) => (prev + 1) % suggestedActions.length)
+    requestAnimationFrame(() => {
+      if (textareaRef.current) resizeTextarea(textareaRef.current)
+    })
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -83,12 +92,7 @@ export function ChatInput({
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setText(e.target.value)
-
-    // Auto-grow textarea (max 4 lines)
-    const textarea = e.target
-    textarea.style.height = 'auto'
-    const newHeight = Math.min(textarea.scrollHeight, 6 * 16) // ~4 lines at default font
-    textarea.style.height = `${newHeight}px`
+    resizeTextarea(e.target)
   }
 
   return (
@@ -112,7 +116,7 @@ export function ChatInput({
             }}
           >
             Suggestion {suggestionIdx === 0 ? suggestedActions!.length : suggestionIdx} of{' '}
-            {suggestedActions!.length} · click ✨ to cycle
+            {suggestedActions!.length} · click ✨ to cycle · edit or send as-is
           </div>
         )}
         <form onSubmit={handleSubmit} className="flex gap-3 items-end">
@@ -128,7 +132,7 @@ export function ChatInput({
             rows={1}
             style={{
               minHeight: '40px',
-              maxHeight: '96px',
+              maxHeight: '180px',
             }}
           />
           <button

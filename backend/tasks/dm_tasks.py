@@ -77,9 +77,9 @@ def dm_response_task(
             return supabase_client.table("players").select("*").match({"game_id": game_id}).execute()
 
         def _fetch_recent_messages():
-            return supabase_client.table("game_messages").select("role, profile_id, content").eq(
-                "game_id", game_id
-            ).order("created_at", desc=True).limit(20).execute()
+            return supabase_client.table("game_messages").select(
+                "role, profile_id, content, scene_type, scene_mood"
+            ).eq("game_id", game_id).order("created_at", desc=True).limit(20).execute()
 
         with ThreadPoolExecutor(max_workers=3) as executor:
             f_game = executor.submit(_fetch_game)
@@ -143,23 +143,11 @@ def dm_response_task(
         dice_rolls = extract_dice_rolls(dm_response)
         logger.info(f"[dm_response_task] Extracted {len(dice_rolls)} dice rolls")
 
-        # Step 5: Parse and strip suggested_actions block
-        suggested_match = re.search(
-            r'<suggested_actions>(.*?)</suggested_actions>',
-            dm_response,
-            flags=re.DOTALL,
-        )
-        suggested_actions: list[str] = []
-        if suggested_match:
-            suggested_actions = [
-                line.strip()
-                for line in suggested_match.group(1).splitlines()
-                if line.strip()
-            ]
+        # Step 5: Parse and strip suggested_actions block(s)
+        suggested_actions = extract_suggested_actions(dm_response)
 
-        # Strip suggested_actions block from response before further processing
         dm_response_no_suggestions = re.sub(
-            r'<suggested_actions>.*?</suggested_actions>',
+            r'<suggested_actions[^>]*>.*?</suggested_actions>',
             '',
             dm_response,
             flags=re.DOTALL,
@@ -201,7 +189,7 @@ def dm_response_task(
         supabase_client.table("game_messages").insert(response_message).execute()
         logger.info("[dm_response_task] Inserted DM response")
 
-        # Step 7: Update game state (suggested_actions, timestamp) — also unblocked
+        # Step 7: Update game state (suggested_actions jsonb, timestamp)
         supabase_client.table("games").update(
             {
                 "updated_at": datetime.utcnow().isoformat(),
@@ -650,6 +638,45 @@ _SCENE_TAG_RE = re.compile(r"<scene(\s[^>]*)?\/>")
 _SCENE_TYPE_ATTR_RE = re.compile(r'type=["\']([^"\']+)["\']')
 _SCENE_MOOD_ATTR_RE = re.compile(r'mood=["\']([^"\']+)["\']')
 
+_SUGGESTED_ACTIONS_RE = re.compile(
+    r'<suggested_actions([^>]*)>(.*?)</suggested_actions>',
+    re.DOTALL,
+)
+_CHAR_ID_RE = re.compile(r'character_id=["\']([^"\']+)["\']')
+_GENERIC_RE = re.compile(r'generic=["\']true["\']')
+
+
+def extract_suggested_actions(dm_response: str) -> dict:
+    """
+    Parse <suggested_actions> blocks from a DM response (DIN-74 Part B).
+
+    Handles the new dual-block format:
+      <suggested_actions character_id="...">tailored lines</suggested_actions>
+      <suggested_actions generic="true">generic lines</suggested_actions>
+
+    Also handles legacy single-block format (no attributes) for backward compat.
+
+    Returns:
+        {
+            "acting_player_id": str | None,
+            "tailored": list[str],
+            "generic": list[str],
+        }
+    """
+    result: dict = {"acting_player_id": None, "tailored": [], "generic": []}
+    for attrs, body in _SUGGESTED_ACTIONS_RE.findall(dm_response):
+        lines = [ln.strip() for ln in body.strip().splitlines() if ln.strip()]
+        char_match = _CHAR_ID_RE.search(attrs)
+        if char_match:
+            result["acting_player_id"] = char_match.group(1)
+            result["tailored"] = lines
+        elif _GENERIC_RE.search(attrs):
+            result["generic"] = lines
+        else:
+            # Legacy fallback: no attributes → treat as generic
+            result["generic"] = lines
+    return result
+
 
 def _extract_scene_from_response(dm_response: str) -> tuple[str | None, str | None]:
     """Extract scene_type and scene_mood from a raw DM response string."""
@@ -706,23 +733,12 @@ def dm_bookkeeping_task(game_id: str, dm_response: str) -> None:
             supabase_client.table("game_events").insert(event_rows).execute()
             logger.info(f"[dm_bookkeeping_task] Inserted {len(event_rows)} events")
 
-        suggested_match = re.search(
-            r"<suggested_actions>(.*?)</suggested_actions>",
-            dm_response,
-            flags=re.DOTALL,
-        )
-        suggested_actions: list[str] = []
-        if suggested_match:
-            suggested_actions = [
-                line.strip()
-                for line in suggested_match.group(1).splitlines()
-                if line.strip()
-            ]
+        suggested = extract_suggested_actions(dm_response)
 
         supabase_client.table("games").update(
             {
                 "updated_at": datetime.utcnow().isoformat(),
-                "suggested_actions": suggested_actions,
+                "suggested_actions": suggested,
             }
         ).match({"id": game_id}).execute()
 

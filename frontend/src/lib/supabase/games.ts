@@ -1,5 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
 
+export type SuggestedActionsBundle = {
+  acting_player_id: string | null
+  tailored: string[]
+  generic: string[]
+}
+
 export type Game = {
   id: string
   name: string
@@ -8,7 +14,7 @@ export type Game = {
   created_by: string
   created_at: string
   updated_at: string
-  suggested_actions: string[] | null
+  suggested_actions: SuggestedActionsBundle | null
 }
 
 export type CreateGameInput = {

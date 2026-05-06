@@ -64,6 +64,7 @@ jest.mock('../ChatInput', () => ({
       <div data-testid="is-waiting">{isWaitingForDm ? 'true' : 'false'}</div>
       <div data-testid="has-on-submit">{onSubmit ? 'true' : 'false'}</div>
       <div data-testid="suggested-actions-count">{suggestedActions ? suggestedActions.length : 0}</div>
+      <div data-testid="first-suggested-action">{suggestedActions?.[0] ?? ''}</div>
       <button data-testid="submit-action" onClick={() => onSubmit?.('I attack the dragon')}>Submit</button>
     </div>
   ),
@@ -512,7 +513,11 @@ describe('GameSessionView', () => {
           cb({
             new: {
               ...mockGame,
-              suggested_actions: ['Attack the goblin', 'Search the room'],
+              suggested_actions: {
+                acting_player_id: null,
+                tailored: [],
+                generic: ['Attack the goblin', 'Search the room'],
+              },
             },
           })
         }
@@ -1386,6 +1391,123 @@ describe('GameSessionView', () => {
           })
         )
       })
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// DIN-74 Part C — suggested actions selection (tailored vs generic)
+// ---------------------------------------------------------------------------
+
+describe('DIN-74 suggested actions selection', () => {
+  let mockSupabaseClientDin74: any
+
+  beforeEach(() => {
+    mockSupabaseClientDin74 = {
+      from: jest.fn().mockImplementation((table: string) => {
+        if (table === 'players') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockResolvedValue({ data: [], error: null }),
+            }),
+          }
+        }
+        return {
+          select: jest.fn().mockImplementation(() => ({
+            eq: jest.fn().mockImplementation(() => ({
+              order: jest.fn().mockReturnValue({
+                limit: jest.fn().mockResolvedValue({ data: [], error: null }),
+              }),
+            })),
+          })),
+        }
+      }),
+      channel: jest.fn().mockImplementation(() => ({
+        on: jest.fn().mockReturnThis(),
+        subscribe: jest.fn().mockReturnValue({ unsubscribe: jest.fn() }),
+      })),
+    }
+    ;(supabaseModule.createClient as jest.Mock).mockReturnValue(mockSupabaseClientDin74)
+  })
+
+  const makeBundleGame = (bundle: any) => ({
+    id: 'game-1',
+    name: 'Test',
+    dm_persona: 'DM',
+    status: 'active',
+    created_at: '2026-01-01T00:00:00Z',
+    created_by: 'user-1',
+    updated_at: '2026-01-01T00:00:00Z',
+    suggested_actions: bundle,
+  })
+
+  it('shows tailored suggestions when current user is the acting player', async () => {
+    const bundle = {
+      acting_player_id: 'player-abc',
+      tailored: ['"I attack," I shout, raising my sword.', 'I duck behind cover.'],
+      generic: ['Wait and watch.', 'Speak up.'],
+    }
+    mockSupabaseClientDin74.from.mockImplementation((table: string) => {
+      if (table === 'players') {
+        return {
+          select: jest.fn().mockReturnValue({
+            eq: jest.fn().mockResolvedValue({
+              data: [{ id: 'player-abc', profile_id: 'user-1', character_name: 'Hero', character_class: 'Fighter', race: 'Human', level: 1, hp_current: 10, hp_max: 10, stats: {}, status: 'alive' }],
+              error: null,
+            }),
+          }),
+        }
+      }
+      return {
+        select: jest.fn().mockImplementation(() => ({
+          eq: jest.fn().mockImplementation(() => ({
+            order: jest.fn().mockReturnValue({
+              limit: jest.fn().mockResolvedValue({ data: [], error: null }),
+            }),
+          })),
+        })),
+      }
+    })
+
+    render(<GameSessionView gameId="game-1" game={makeBundleGame(bundle)} userId="user-1" />)
+
+    // Wait until currentPlayerRow is set and visibleSuggestions switches to tailored
+    await waitFor(() => {
+      expect(screen.getByTestId('first-suggested-action')).toHaveTextContent('"I attack," I shout')
+    })
+    expect(screen.getByTestId('suggested-actions-count')).toHaveTextContent('2')
+  })
+
+  it('shows generic suggestions when current user is not the acting player', async () => {
+    const bundle = {
+      acting_player_id: 'someone-else',
+      tailored: ['"I attack," I shout.'],
+      generic: ['Wait and watch.', 'Speak up.'],
+    }
+
+    render(<GameSessionView gameId="game-1" game={makeBundleGame(bundle)} userId="user-1" />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('first-suggested-action')).toHaveTextContent('Wait and watch.')
+    })
+    expect(screen.getByTestId('suggested-actions-count')).toHaveTextContent('2')
+  })
+
+  it('shows no suggestions when both lists are empty', async () => {
+    const bundle = { acting_player_id: null, tailored: [], generic: [] }
+
+    render(<GameSessionView gameId="game-1" game={makeBundleGame(bundle)} userId="user-1" />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('suggested-actions-count')).toHaveTextContent('0')
+    })
+  })
+
+  it('handles null suggested_actions gracefully', async () => {
+    render(<GameSessionView gameId="game-1" game={makeBundleGame(null)} userId="user-1" />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('suggested-actions-count')).toHaveTextContent('0')
     })
   })
 })

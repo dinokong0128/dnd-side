@@ -66,6 +66,7 @@ def build_dm_system_prompt(
     recent_messages: list[dict],
     rag_context: list[dict],
     action_text: str,
+    acting_player: dict | None = None,
 ) -> str:
     """
     Build the Claude system prompt for a player action (DIN-66).
@@ -74,6 +75,10 @@ def build_dm_system_prompt(
     (non-streaming narration paths). Pure function — no I/O. `recent_messages`
     must be in newest-first order (matches the DB ordering); this function
     reverses it internally for chronological prompt inclusion.
+
+    `acting_player` (DIN-74 Part B): the player row that submitted the current
+    action. When provided, Rule 9 emits a tailored first-person block for that
+    player plus a generic observer block for others.
     """
     message_history: list[str] = []
     for msg in reversed(recent_messages or []):
@@ -176,6 +181,59 @@ def build_dm_system_prompt(
         for die, results in _pool.items()
     )
 
+    # DIN-74 Part A: inject the most recent scene so Claude defaults to continuity.
+    current_scene_block = ""
+    for msg in (recent_messages or []):
+        if msg.get("role") == "dm" and msg.get("scene_type"):
+            lines = [f"type: {msg['scene_type']}"]
+            if msg.get("scene_mood"):
+                lines.append(f"mood: {msg['scene_mood']}")
+            lines.append(
+                "(Default: carry this forward unless the party moves or mood shifts meaningfully.)"
+            )
+            current_scene_block = "CURRENT SCENE:\n" + "\n".join(lines) + "\n\n"
+            break
+
+    # DIN-74 Part B: Rule 9 — dual suggested_actions blocks when acting_player is known.
+    if acting_player:
+        acting_name = acting_player.get("character_name", "the acting player")
+        acting_id = acting_player.get("id", "")
+        rule_9 = f"""9. SUGGESTED ACTIONS: After your narrative response, produce TWO separate blocks.
+
+   BLOCK A — TAILORED suggestions for the acting player ({acting_name}, ID: {acting_id}):
+   - 2–10 first-person POV actions {acting_name} might plausibly take next
+   - Each 20–30 words, including dialogue (in quotes), body language, or tactical reasoning
+   - Must be consistent with {acting_name}'s class, stats, HP, and equipment shown above
+   - NEVER suggest a spell this character cannot cast (check spell slots above)
+   - Example: "Can you tell me more about the dragon?" I ask the ranger, studying her face for any flicker of hesitation.
+
+   Format:
+   <suggested_actions character_id="{acting_id}">
+   "Let me examine these runes," I say, lowering my wizard's eye to the stone.
+   I raise my staff and whisper an incantation, feeling mana stir in the air.
+   </suggested_actions>
+
+   BLOCK B — GENERIC observer prompts for other players at the table:
+   - 2–5 short, character-agnostic prompts (~10 words each)
+   - Invite non-acting players into the scene without referencing specific abilities
+   - Do NOT name any character or class
+
+   Format:
+   <suggested_actions generic="true">
+   Wait and observe the others.
+   Speak up with your own plan.
+   Offer support to the acting player.
+   </suggested_actions>
+
+   Emit BOTH blocks every turn. Block A goes first, Block B second."""
+    else:
+        rule_9 = """9. After your narrative response, produce 2–10 short suggested actions the player could
+   take next (imperative mood, ~10 words each). Wrap them in:
+   <suggested_actions>
+   Pick the lock using your thieves' tools.
+   Search the walls for a hidden mechanism.
+   </suggested_actions>"""
+
     return f"""You are {game['dm_persona']}. You are the Dungeon Master for a D&D 5e campaign called "{game['name']}".
 
 CURRENT PARTY:
@@ -186,7 +244,7 @@ RECENT SESSION HISTORY (last 20 messages, oldest first):
 {message_history_text}
 ---
 
-RELEVANT PAST EVENTS (Context from RAG):
+{current_scene_block}RELEVANT PAST EVENTS (Context from RAG):
 {json.dumps(rag_context, indent=2) if rag_context else "No past events yet."}
 
 PRE-ROLLED DICE POOL — use these values in order, never invent your own results:
@@ -214,12 +272,7 @@ RULES:
    All fields are optional — only include fields that changed. Omit the block entirely if no state changes occur.
    character_id must be the exact UUID from the party list above (e.g. [ID: abc-123]).
    delta is signed: negative for damage, positive for healing.
-9. After your narrative response, produce 2–10 short suggested actions the player could
-   take next (imperative mood, ~10 words each). Wrap them in:
-   <suggested_actions>
-   Pick the lock using your thieves' tools.
-   Search the walls for a hidden mechanism.
-   </suggested_actions>
+{rule_9}
 10. DICE ROLLS: When you resolve a dice roll (ability check, saving throw, attack, or damage),
    take the next value from the appropriate column in the PRE-ROLLED DICE POOL above.
    NEVER invent your own result — always consume the next unused pool value in order.
@@ -263,9 +316,21 @@ RULES:
    Award XP to all players present.
    Format: "xp_awards": [{{"character_id": "<ID>", "amount": 100, "reason": "Defeated goblin"}}]
    Typical values: Goblin 50 XP, Bandit 100 XP, Orc 100 XP, completing a minor quest 150–300 XP.
-13. SCENE TAG: At the END of every response, emit exactly one self-closing <scene> tag that
-   describes the current location and optional mood. Place it on its own line after all
-   narrative text, dice rolls, state changes, and suggested actions.
+13. SCENE TAG: Emit exactly one self-closing <scene type="..." mood="..."/> tag
+   at the end of every response (after all narrative text, dice rolls, state
+   changes, and suggested actions, on its own line).
+
+   CONTINUITY RULES:
+   - If a CURRENT SCENE is shown above, default to emitting exactly that
+     scene_type and mood. Do NOT change them without narrative justification.
+   - Change scene_type ONLY when the party physically moves to a different
+     location this turn.
+   - Change mood ONLY on a meaningful narrative shift: combat starting,
+     danger passing, mystery revealed, victory earned. Ordinary dialogue
+     or minor beats should NOT trigger a mood change.
+   - If no CURRENT SCENE is shown (game start), choose a scene_type and
+     optional mood that fits the opening narration.
+
    Format: <scene type="SCENE_TYPE" mood="MOOD"/>
    - mood is optional — omit the mood attribute entirely if none applies.
    - SCENE_TYPE must be exactly one of:

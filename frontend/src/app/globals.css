@@ -138,6 +138,23 @@ body {
 .dnd-textarea {
   resize: vertical;
   min-height: 6rem;
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: #8a7234 #1a1612;
+}
+.dnd-textarea::-webkit-scrollbar {
+  width: 8px;
+}
+.dnd-textarea::-webkit-scrollbar-track {
+  background: #1a1612;
+  border-radius: 4px;
+}
+.dnd-textarea::-webkit-scrollbar-thumb {
+  background: #8a7234;
+  border-radius: 4px;
+}
+.dnd-textarea::-webkit-scrollbar-thumb:hover {
+  background: #c9a84c;
 }
 
 .dnd-helper {

@@ -24,6 +24,7 @@ with patch("config.supabase_client", MagicMock()), patch(
         generate_pause_message,
         generate_end_message,
         generate_resume_narration,
+        extract_suggested_actions,
     )
     from services.dm_service import apply_state_changes
 
@@ -721,7 +722,10 @@ class TestDmResponseTaskSuggestedActions:
             dm_response_task.fn("game-1", "msg-1", "I examine the door.")
 
         assert "suggested_actions" in captured_update_payload
-        assert captured_update_payload["suggested_actions"] == [
+        sa = captured_update_payload["suggested_actions"]
+        assert sa["acting_player_id"] is None
+        assert sa["tailored"] == []
+        assert sa["generic"] == [
             "Pick the lock using your thieves' tools.",
             "Search the walls for a hidden mechanism.",
             "Force the door open with a Strength check.",
@@ -879,7 +883,8 @@ class TestDmResponseTaskSuggestedActions:
 
             dm_response_task.fn("game-1", "msg-1", "I attack!")
 
-        assert captured_update_payload.get("suggested_actions") == []
+        sa = captured_update_payload.get("suggested_actions")
+        assert sa == {"acting_player_id": None, "tailored": [], "generic": []}
 
 
 class TestGeneratePauseMessage:
@@ -1998,7 +2003,10 @@ class TestDmBookkeepingTask:
 
         assert len(captured) == 1
         assert "updated_at" in captured[0]
-        assert captured[0]["suggested_actions"] == ["Go left.", "Go right."]
+        sa = captured[0]["suggested_actions"]
+        assert sa["acting_player_id"] is None
+        assert sa["tailored"] == []
+        assert sa["generic"] == ["Go left.", "Go right."]
 
     def test_embeds_events_and_inserts_to_game_events(self):
         raw_response = (
@@ -2063,7 +2071,9 @@ class TestDmBookkeepingTask:
             mock_embed.assert_not_called()
 
         assert len(captured_updates) == 1
-        assert captured_updates[0]["suggested_actions"] == ["Look around."]
+        sa = captured_updates[0]["suggested_actions"]
+        assert sa["acting_player_id"] is None
+        assert sa["generic"] == ["Look around."]
 
     def test_exception_reraised_for_dramatiq_retry(self):
         raw_response = 'Thing. <event type="combat">x</event>'
@@ -2170,3 +2180,63 @@ class TestDmBookkeepingTask:
 
         assert captured_rows[0][0]["scene_type"] is None
         assert captured_rows[0][0]["scene_mood"] is None
+
+
+# ---------------------------------------------------------------------------
+# DIN-74 Part B — extract_suggested_actions
+# ---------------------------------------------------------------------------
+
+class TestExtractSuggestedActions:
+    """DIN-74 Part B: extract_suggested_actions parses dual-block format."""
+
+    def test_parses_tailored_and_generic_blocks(self):
+        """Parser must split both block types into the jsonb structure."""
+        dm_response = """
+Some narrative text.
+
+<suggested_actions character_id="abc-123">
+"Let me examine these runes," I say, lowering my wizard's eye to the stone.
+I raise my staff and whisper an incantation, feeling mana stir in the air.
+</suggested_actions>
+<suggested_actions generic="true">
+Wait and observe the others.
+Speak up with your own plan.
+</suggested_actions>
+
+<scene type="dungeon"/>
+"""
+        result = extract_suggested_actions(dm_response)
+        assert result["acting_player_id"] == "abc-123"
+        assert len(result["tailored"]) == 2
+        assert "examine these runes" in result["tailored"][0]
+        assert len(result["generic"]) == 2
+        assert result["generic"][0] == "Wait and observe the others."
+
+    def test_handles_missing_generic_block(self):
+        """Missing generic block yields empty generic list."""
+        dm_response = """
+<suggested_actions character_id="xyz">
+I draw my sword and ready myself.
+</suggested_actions>
+"""
+        result = extract_suggested_actions(dm_response)
+        assert result["acting_player_id"] == "xyz"
+        assert len(result["tailored"]) == 1
+        assert result["generic"] == []
+
+    def test_handles_no_blocks(self):
+        """No suggested_actions blocks yields empty structure."""
+        result = extract_suggested_actions("Just narrative, no blocks.")
+        assert result == {"acting_player_id": None, "tailored": [], "generic": []}
+
+    def test_handles_missing_tailored_block(self):
+        """Missing tailored block yields empty tailored list."""
+        dm_response = """
+<suggested_actions generic="true">
+Watch and wait.
+</suggested_actions>
+"""
+        result = extract_suggested_actions(dm_response)
+        assert result["acting_player_id"] is None
+        assert result["tailored"] == []
+        assert result["generic"] == ["Watch and wait."]
