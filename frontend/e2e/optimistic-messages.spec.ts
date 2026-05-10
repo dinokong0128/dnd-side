@@ -195,9 +195,14 @@ test.describe('DIN-64 — Optimistic player messages', () => {
     await expect(page.getByText(ACTION_TEXT)).toBeVisible({ timeout: 3000 })
 
     // Read the id the client minted so Realtime can dedupe by the same id.
+    // Use .last() — messages are sorted ascending by created_at, so the
+    // optimistic player message (just added, newest timestamp) is always the
+    // last [data-message-id] element in the DOM.  .first() would grab the
+    // initial DM message's id, causing addMessage to replace the DM entry
+    // instead of the optimistic one and leaving two copies in the log.
     const optimisticId = await page
       .locator('[data-message-id]')
-      .first()
+      .last()
       .getAttribute('data-message-id')
 
     // Simulate Supabase Realtime INSERT for the same player message (real DB row)
@@ -252,11 +257,12 @@ test.describe('DIN-64 — Optimistic player messages', () => {
   test('optimistic message is removed and input re-enabled on network failure', async ({
     page,
   }) => {
-    // Simulate a hard network failure (connection refused) with a tiny delay so the
-    // optimistic message is painted before the abort arrives
+    // Simulate a hard network failure (connection refused) with a delay so the
+    // optimistic message is painted before the abort arrives.  50ms was too tight
+    // under full-suite parallel load — 200ms gives React a full render cycle.
     await page.route(`**/api/games/${GAME_ID}/actions`, async (route) => {
       if (route.request().method() === 'POST') {
-        await new Promise((resolve) => setTimeout(resolve, 50))
+        await new Promise((resolve) => setTimeout(resolve, 200))
         route.abort('connectionrefused')
       }
     })

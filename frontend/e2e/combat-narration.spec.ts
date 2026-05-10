@@ -674,6 +674,11 @@ test.describe('DIN-26 — HP bar updates after combat damage', () => {
     await page.getByTestId('sheet-button').click()
     const sheet = page.getByRole('dialog', { name: 'Character Sheet' })
     await expect(sheet).toBeVisible({ timeout: 3000 })
+
+    // Ensure player data has loaded before dispatching the HP update — the hp-bar
+    // being present confirms the async fetch completed and setPlayer(playerData)
+    // was called.  Without this, prev is null and the E2E update is silently dropped.
+    await expect(sheet.getByTestId('hp-bar').last()).toBeAttached({ timeout: 3000 })
     await waitForSheetListener(page)
 
     // Character drops to 0 HP

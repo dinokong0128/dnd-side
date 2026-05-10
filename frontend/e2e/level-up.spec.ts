@@ -203,6 +203,12 @@ test.describe('DIN-28 — Level badge in CharacterSheetPanel', () => {
     await gotoGame(page)
     await openSheet(page)
 
+    // Wait for player data to load before dispatching — level-badge visible means
+    // the async fetch completed and setPlayer(playerData) was called.  Without this,
+    // prev is null and the E2E update is silently dropped.
+    const badge = page.getByTestId('level-badge')
+    await expect(badge).toBeVisible({ timeout: 3000 })
+
     // Simulate level-up side effect — player row updates to level 2
     await page.evaluate((playerId) => {
       window.dispatchEvent(
@@ -212,7 +218,6 @@ test.describe('DIN-28 — Level badge in CharacterSheetPanel', () => {
       )
     }, PLAYER_ID)
 
-    const badge = page.getByTestId('level-badge')
     await expect(badge).toContainText('2', { timeout: 2000 })
   })
 })
