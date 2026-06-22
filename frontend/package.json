@@ -17,7 +17,7 @@
     "@hookform/resolvers": "^5.2.2",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.103.0",
-    "next": "^16.2.9",
+    "next": "^9.3.3",
     "react": "19.2.5",
     "react-dom": "19.2.5",
     "react-hook-form": "^7.72.1",
@@ -36,10 +36,10 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.3",
-    "jest": "^30.3.0",
+    "jest": "^25.0.0",
     "jest-environment-jsdom": "^30.3.0",
     "tailwindcss": "^4",
-    "ts-jest": "^29.4.9",
+    "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",
     "typescript": "^5"
   }
