@@ -1,5 +1,4 @@
 npm warn using --force Recommended protections disabled.
-npm warn audit Updating next to 16.3.0, which is a SemVer major change.
 npm warn ERESOLVE overriding peer dependency
 npm warn While resolving: ts-jest@27.0.3
 npm warn Found: jest@30.4.2
@@ -20,11 +19,8 @@ npm warn ERESOLVE overriding peer dependency
 npm warn While resolving: ts-jest@27.0.3
 npm warn Found: typescript@5.9.3
 npm warn node_modules/typescript
-npm warn   peer typescript@">=4.8.4 <6.1.0" from @typescript-eslint/eslint-plugin@8.58.1
-npm warn   node_modules/@typescript-eslint/eslint-plugin
-npm warn     @typescript-eslint/eslint-plugin@"8.58.1" from typescript-eslint@8.58.1
-npm warn     node_modules/typescript-eslint
-npm warn   11 more (@typescript-eslint/parser, ...)
+npm warn   dev typescript@"^5" from the root project
+npm warn   11 more (@typescript-eslint/eslint-plugin, ...)
 npm warn
 npm warn Could not resolve dependency:
 npm warn peer typescript@">=3.8 <5.0" from ts-jest@27.0.3
@@ -41,9 +37,9 @@ npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and cont
 npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
 npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
-added 800 packages, and audited 801 packages in 15s
+added 803 packages, and audited 804 packages in 19s
 
-186 packages are looking for funding
+188 packages are looking for funding
   run `npm fund` for details
 
 found 0 vulnerabilities
