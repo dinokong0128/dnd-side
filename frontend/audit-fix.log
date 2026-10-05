@@ -1,4 +1,25 @@
 npm warn using --force Recommended protections disabled.
+npm warn audit Updating eslint-config-next to 14.2.35, which is a SemVer major change.
+npm warn ERESOLVE overriding peer dependency
+npm warn While resolving: eslint-config-next@14.2.35
+npm warn Found: eslint@9.39.4
+npm warn node_modules/eslint
+npm warn   peer eslint@"^6.0.0 || ^7.0.0 || >=8.0.0" from @eslint-community/eslint-utils@4.9.1
+npm warn   node_modules/@eslint-community/eslint-utils
+npm warn     @eslint-community/eslint-utils@"^4.8.0" from eslint@9.39.4
+npm warn   7 more (eslint-import-resolver-typescript, ...)
+npm warn
+npm warn Could not resolve dependency:
+npm warn peer eslint@"^7.23.0 || ^8.0.0" from eslint-config-next@14.2.35
+npm warn node_modules/eslint-config-next
+npm warn   dev eslint-config-next@"14.2.35" from the root project
+npm warn
+npm warn Conflicting peer dependency: eslint@8.57.1
+npm warn node_modules/eslint
+npm warn   peer eslint@"^7.23.0 || ^8.0.0" from eslint-config-next@14.2.35
+npm warn   node_modules/eslint-config-next
+npm warn     dev eslint-config-next@"14.2.35" from the root project
+npm warn ERESOLVE overriding peer dependency
 npm warn ERESOLVE overriding peer dependency
 npm warn While resolving: ts-jest@27.0.3
 npm warn Found: jest@30.4.2
@@ -19,8 +40,12 @@ npm warn ERESOLVE overriding peer dependency
 npm warn While resolving: ts-jest@27.0.3
 npm warn Found: typescript@5.9.3
 npm warn node_modules/typescript
-npm warn   dev typescript@"^5" from the root project
-npm warn   11 more (@typescript-eslint/eslint-plugin, ...)
+npm warn   peer typescript@">=2.7" from ts-node@10.9.2
+npm warn   node_modules/ts-node
+npm warn     peerOptional ts-node@">=9.0.0" from jest-config@30.4.2
+npm warn     node_modules/jest-config
+npm warn     1 more (the root project)
+npm warn   10 more (the root project, eslint-config-next, ...)
 npm warn
 npm warn Could not resolve dependency:
 npm warn peer typescript@">=3.8 <5.0" from ts-jest@27.0.3
@@ -35,11 +60,41 @@ npm warn     dev ts-jest@"^27.0.3" from the root project
 npm warn deprecated whatwg-encoding@3.1.1: Use @exodus/bytes instead for a more spec-conformant and faster implementation
 npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated glob@10.3.10: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
-added 804 packages, and audited 805 packages in 10s
+added 787 packages, and audited 788 packages in 27s
 
-188 packages are looking for funding
+186 packages are looking for funding
   run `npm fund` for details
 
-found 0 vulnerabilities
+# npm audit report
+
+brace-expansion  <=1.1.20
+Severity: high
+brace-expansion: Quadratic-time expansion of the `{a},b}` rewrite causes CPU denial of service - https://github.com/advisories/GHSA-q2hr-2g5m-vwhr
+brace-expansion: DoS via uncontrolled recursion on nested brace groups causing stack exhaustion - https://github.com/advisories/GHSA-qhr7-859c-m2p7
+brace-expansion: DoS via uncontrolled recursion in parseCommaParts causing stack exhaustion - https://github.com/advisories/GHSA-6j4f-fj2g-mc7p
+fix available via `npm audit fix`
+node_modules/brace-expansion
+
+glob  10.2.0 - 10.4.5
+Severity: high
+glob CLI: Command injection via -c/--cmd executes matches with shell:true - https://github.com/advisories/GHSA-5j98-mcp5-4vw2
+fix available via `npm audit fix --force`
+Will install eslint-config-next@16.3.8, which is a breaking change
+node_modules/@next/eslint-plugin-next/node_modules/glob
+  @next/eslint-plugin-next  14.0.5-canary.0 - 15.0.0-rc.1
+  Depends on vulnerable versions of glob
+  node_modules/@next/eslint-plugin-next
+    eslint-config-next  14.0.5-canary.0 - 15.0.0-rc.1
+    Depends on vulnerable versions of @next/eslint-plugin-next
+    node_modules/eslint-config-next
+
+4 high severity vulnerabilities
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
